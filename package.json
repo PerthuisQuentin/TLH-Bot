@@ -12,14 +12,15 @@
     "start": "node app.js",
     "register": "node commands.js",
     "register:local": "NODE_TLS_REJECT_UNAUTHORIZED=0  node commands.js",
-    "dev": "nodemon app.js"
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon app.js"
   },
   "author": "Shay DeWael",
   "license": "MIT",
   "dependencies": {
     "discord-interactions": "^4.4.0",
     "dotenv": "^17.2.3",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "ollama": "^0.6.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"
