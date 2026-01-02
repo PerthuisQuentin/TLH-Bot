@@ -1,22 +1,18 @@
 import 'dotenv/config';
 import express from 'express';
 import {
-  ButtonStyleTypes,
   InteractionResponseFlags,
   InteractionResponseType,
   InteractionType,
   MessageComponentTypes,
   verifyKeyMiddleware,
 } from 'discord-interactions';
-import { getRandomEmoji, DiscordRequest } from './utils.js';
-import { getShuffledOptions, getResult } from './game.js';
 
 // Create an express app
 const app = express();
 // Get port, or default to 3000
 const PORT = process.env.PORT || 3000;
 // To keep track of our active games
-const activeGames = {};
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
@@ -24,7 +20,7 @@ const activeGames = {};
  */
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
   // Interaction id, type and data
-  const { id, type, data } = req.body;
+  const { type, data } = req.body;
 
   /**
    * Handle verification requests
@@ -41,7 +37,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
     const { name } = data;
 
     // "test" command
-    if (name === 'test') {
+    if (name === 'ping') {
       // Send a message into the channel where command was triggered from
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -50,8 +46,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
           components: [
             {
               type: MessageComponentTypes.TEXT_DISPLAY,
-              // Fetches a random emoji to send from a helper function
-              content: `hello world ${getRandomEmoji()}`
+              content: 'Pong !'
             }
           ]
         },
