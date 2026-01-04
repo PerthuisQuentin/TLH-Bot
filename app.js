@@ -87,7 +87,7 @@ app.post(
               components: [
                 {
                   type: MessageComponentTypes.TEXT_DISPLAY,
-                  content: response.message.content,
+                  content: `**Question:** ${userQuestion}\n\n${response.message.content}`,
                 },
               ],
             }),
