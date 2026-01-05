@@ -5,8 +5,7 @@ import {
   InteractionType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
-import { handlePingCommand } from './commands/ping.js';
-import { handleOllamaCommand } from './commands/ollama.js';
+import { commands } from './commands/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,12 +27,11 @@ app.post(
     if (type === InteractionType.APPLICATION_COMMAND) {
       const { name } = data;
 
-      if (name === 'ping') {
-        return handlePingCommand(req, res);
-      }
-
-      if (name === 'ollama') {
-        return handleOllamaCommand(req, res);
+      // Find and execute the matching command
+      const command = commands.find((cmd) => cmd.definition.name === name);
+      
+      if (command) {
+        return command.handler(req, res);
       }
 
       console.error(`unknown command: ${name}`);

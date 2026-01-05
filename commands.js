@@ -1,8 +1,7 @@
 import 'dotenv/config';
 import { InstallGlobalCommands } from './commons/utils.js';
-import { PING_COMMAND } from './commands/ping.js';
-import { OLLAMA_COMMAND } from './commands/ollama.js';
+import { commands } from './commands/index.js';
 
-const ALL_COMMANDS = [PING_COMMAND, OLLAMA_COMMAND];
+const commandDefinitions = commands.map((cmd) => cmd.definition);
 
-InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
+InstallGlobalCommands(process.env.APP_ID, commandDefinitions);
