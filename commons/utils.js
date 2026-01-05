@@ -1,3 +1,4 @@
+import { InteractionResponseFlags, MessageComponentTypes } from 'discord-interactions';
 import 'dotenv/config';
 
 export async function DiscordRequest(endpoint, options) {
@@ -10,9 +11,10 @@ export async function DiscordRequest(endpoint, options) {
     headers: {
       Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
       'Content-Type': 'application/json; charset=UTF-8',
-      'User-Agent': 'DiscordBot (https://github.com/discord/discord-example-app, 1.0.0)',
+      'User-Agent':
+        'DiscordBot (https://github.com/discord/discord-example-app, 1.0.0)',
     },
-    ...options
+    ...options,
   });
   // throw API errors
   if (!res.ok) {
@@ -34,4 +36,35 @@ export async function InstallGlobalCommands(appId, commands) {
   } catch (err) {
     console.error(err);
   }
+}
+
+/**
+ * Updates an interaction response via webhook
+ * @param {string} interactionToken - The interaction token from Discord
+ * @param {Object} messageBody - The message body to send
+ */
+export async function updateInteractionResponse(interactionToken, messageBody) {
+  const endpoint = `webhooks/${process.env.APP_ID}/${interactionToken}/messages/@original`;
+
+  await DiscordRequest(endpoint, {
+    method: 'PATCH',
+    body: messageBody,
+  });
+}
+
+/**
+ * Creates a message body with Discord components
+ * @param {string} content - The text content to display
+ * @returns {Object} Message body object
+ */
+export function createMessageBody(content) {
+  return {
+    flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+    components: [
+      {
+        type: MessageComponentTypes.TEXT_DISPLAY,
+        content,
+      },
+    ],
+  };
 }
