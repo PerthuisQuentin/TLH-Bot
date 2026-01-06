@@ -92,7 +92,7 @@ async function handleOllamaCommand(req, res) {
         ...(conversationContext
           ? [
               {
-                role: 'system',
+                role: 'user',
                 content: `Voici les 20 derniers messages du canal pour contexte :\n${conversationContext}`,
               },
             ]
