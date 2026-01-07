@@ -6,7 +6,7 @@ import {
   DiscordRequest,
 } from '../commons/utils.js';
 import {
-  SYSTEM_PROMPT,
+  createSystemPrompt,
   CONTEXT_MESSAGES_LIMIT,
   createUserPrompt,
 } from '../commons/prompts.js';
@@ -73,10 +73,23 @@ async function handleOllamaCommand(req, res) {
             content = msg.components[0].content;
           }
 
+          if (!content) return null;
+
           // Use display name (global_name) if available, fallback to username
           const displayName = msg.author.global_name || msg.author.username;
 
-          return content ? `👤 ${displayName}\n${content}` : null;
+          // Format timestamp
+          const timestamp = new Date(msg.timestamp);
+          const dateStr = timestamp.toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+          });
+          const timeStr = timestamp.toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+
+          return `👤 ${displayName} • 🕐 ${dateStr} ${timeStr}\n${content}`;
         })
         .filter((line) => line !== null)
         .join('\n\n---\n\n');
@@ -93,12 +106,14 @@ async function handleOllamaCommand(req, res) {
       userQuestion
     );
 
+    console.log('User Prompt:', userPrompt);
+
     const response = await ollama.chat({
       model: 'gemini-3-flash-preview:cloud',
       messages: [
         {
           role: 'system',
-          content: SYSTEM_PROMPT,
+          content: createSystemPrompt(),
         },
         {
           role: 'user',
