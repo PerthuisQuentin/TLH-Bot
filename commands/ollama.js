@@ -106,8 +106,6 @@ async function handleOllamaCommand(req, res) {
       userQuestion
     );
 
-    console.log('User Prompt:', userPrompt);
-
     const response = await ollama.chat({
       model: 'gemini-3-flash-preview:cloud',
       messages: [
