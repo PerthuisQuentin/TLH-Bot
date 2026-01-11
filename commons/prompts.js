@@ -1,3 +1,5 @@
+import { readContextFile } from './files.js';
+
 /**
  * Creates the system prompt with current date and time
  * @returns {string} The system prompt
@@ -48,17 +50,30 @@ export const CONTEXT_MESSAGES_LIMIT = 50;
  * @param {string} conversationContext - The formatted conversation history
  * @param {string} userName - The name of the user asking the question
  * @param {string} userQuestion - The question asked by the user
- * @returns {string} The formatted user prompt
+ * @returns {Promise<string>} The formatted user prompt
  */
-export function createUserPrompt(
+export async function createUserPrompt(
   channelName,
   conversationContext,
   userName,
   userQuestion
 ) {
+  // Read additional context from file
+  let fileContext = '';
+  try {
+    fileContext = await readContextFile();
+  } catch (error) {
+    console.error('Error reading context file:', error);
+    // Continue without file context if it fails
+  }
+
   return `
 📍 CONTEXTE :
 Canal : #${channelName}
+
+${fileContext}
+
+════════════════════════════════════════
 
 📜 HISTORIQUE DES ${CONTEXT_MESSAGES_LIMIT} DERNIERS MESSAGES :
 ${conversationContext}
