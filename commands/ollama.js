@@ -99,7 +99,7 @@ async function handleOllamaCommand(req, res) {
     }
 
     // Build user prompt with context and question
-    const userPrompt = createUserPrompt(
+    const userPrompt = await createUserPrompt(
       channelName,
       conversationContext,
       userName,
