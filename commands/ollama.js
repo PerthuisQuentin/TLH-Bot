@@ -111,7 +111,7 @@ async function handleOllamaCommand(req, res) {
       messages: [
         {
           role: 'system',
-          content: createSystemPrompt(),
+          content: await createSystemPrompt(),
         },
         {
           role: 'user',

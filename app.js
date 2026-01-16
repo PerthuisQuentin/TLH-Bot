@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { verifyKeyMiddleware } from 'discord-interactions';
 import { handleInteraction } from './routes/interactions.js';
-import { getContextFile, writeContextFileRoute } from './routes/files.js';
+import { getFile, writeFile } from './routes/files.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,8 +36,8 @@ app.post(
 
 // File routes
 app.use('/files', express.text({ type: 'text/plain' }));
-app.get('/files/context', verifyFileAccess, getContextFile);
-app.post('/files/context', verifyFileAccess, writeContextFileRoute);
+app.get('/files/:fileType', verifyFileAccess, getFile);
+app.post('/files/:fileType', verifyFileAccess, writeFile);
 
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);
