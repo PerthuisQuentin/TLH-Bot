@@ -1,29 +1,61 @@
-import { readContextFile, writeContextFile } from '../commons/files.js';
+import {
+  AllowedFiles,
+  readFileContent,
+  writeFileContent,
+} from '../commons/files.js';
 
 /**
- * Handles reading the context file
- * GET /files/context
+ * Handles reading a file based on the route parameter
+ * GET /files/:fileType
  */
-export async function getContextFile(req, res) {
+export async function getFile(req, res) {
+  const { fileType } = req.params;
+
+  // Validate file type
+  if (!Object.values(AllowedFiles).includes(fileType)) {
+    return res
+      .status(400)
+      .set('Content-Type', 'text/plain')
+      .send(
+        `Invalid file type. Allowed values: ${Object.values(AllowedFiles).join(
+          ', '
+        )}`
+      );
+  }
+
   try {
-    const content = await readContextFile();
+    const content = await readFileContent(fileType);
     res.set('Content-Type', 'text/plain; charset=utf-8');
     res.send(content);
   } catch (error) {
-    console.error('Error reading context file:', error);
+    console.error(`Error reading ${fileType} file:`, error);
     res
       .status(500)
       .set('Content-Type', 'text/plain')
-      .send('Failed to read context file');
+      .send(`Failed to read ${fileType} file`);
   }
 }
 
 /**
- * Handles writing to the context file
- * POST /files/context
+ * Handles writing to a file based on the route parameter
+ * POST /files/:fileType
  * Body: plain text content
  */
-export async function writeContextFileRoute(req, res) {
+export async function writeFile(req, res) {
+  const { fileType } = req.params;
+
+  // Validate file type
+  if (!Object.values(AllowedFiles).includes(fileType)) {
+    return res
+      .status(400)
+      .set('Content-Type', 'text/plain')
+      .send(
+        `Invalid file type. Allowed values: ${Object.values(AllowedFiles).join(
+          ', '
+        )}`
+      );
+  }
+
   try {
     const content = req.body;
 
@@ -32,14 +64,14 @@ export async function writeContextFileRoute(req, res) {
       return res.send('Content must be plain text');
     }
 
-    await writeContextFile(content);
+    await writeFileContent(fileType, content);
     res.set('Content-Type', 'text/plain; charset=utf-8');
-    res.send('Context file updated successfully');
+    res.send(`${fileType} file updated successfully`);
   } catch (error) {
-    console.error('Error writing context file:', error);
+    console.error(`Error writing ${fileType} file:`, error);
     res
       .status(500)
       .set('Content-Type', 'text/plain')
-      .send('Failed to write context file');
+      .send(`Failed to write ${fileType} file`);
   }
 }
