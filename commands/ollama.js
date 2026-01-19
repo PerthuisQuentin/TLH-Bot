@@ -10,6 +10,7 @@ import {
   CONTEXT_MESSAGES_LIMIT,
   createUserPrompt,
 } from '../commons/prompts.js';
+import { formatMessagesContext } from '../commons/messages.js';
 
 /**
  * Handles the ollama command
@@ -57,42 +58,8 @@ async function handleOllamaCommand(req, res) {
       );
       const messages = await messagesResponse.json();
 
-      // Format messages for context (reverse to get chronological order)
-      // Type 0 = normal messages, Type 20 = interaction responses
-      conversationContext = messages
-        .reverse()
-        .map((msg) => {
-          let content = '';
-
-          // Normal messages have content directly
-          if (msg.type === 0 && msg.content) {
-            content = msg.content;
-          }
-          // Interaction responses have content in components
-          else if (msg.type === 20 && msg.components?.[0]?.content) {
-            content = msg.components[0].content;
-          }
-
-          if (!content) return null;
-
-          // Use display name (global_name) if available, fallback to username
-          const displayName = msg.author.global_name || msg.author.username;
-
-          // Format timestamp
-          const timestamp = new Date(msg.timestamp);
-          const dateStr = timestamp.toLocaleDateString('fr-FR', {
-            day: '2-digit',
-            month: '2-digit',
-          });
-          const timeStr = timestamp.toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-
-          return `👤 ${displayName} • 🕐 ${dateStr} ${timeStr}\n${content}`;
-        })
-        .filter((line) => line !== null)
-        .join('\n\n---\n\n');
+      // Format messages for context
+      conversationContext = formatMessagesContext(messages);
     } catch (error) {
       console.error('Error fetching messages:', error);
       // Continue without context if fetching fails
@@ -123,12 +90,14 @@ async function handleOllamaCommand(req, res) {
     // Edit the response with Ollama's result
     const interactionToken = req.body.token;
 
-    await updateInteractionResponse(
+    const updatedMessage = await updateInteractionResponse(
       interactionToken,
       createMessageBody(
         `**Question de ${userName} :** ${userQuestion}\n\n${response.message.content}`
       )
     );
+
+    console.log('Bot message posted with ID:', updatedMessage?.id);
   } catch (error) {
     const interactionToken = req.body.token;
 

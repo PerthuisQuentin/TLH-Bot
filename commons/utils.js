@@ -1,4 +1,7 @@
-import { InteractionResponseFlags, MessageComponentTypes } from 'discord-interactions';
+import {
+  InteractionResponseFlags,
+  MessageComponentTypes,
+} from 'discord-interactions';
 import 'dotenv/config';
 
 export async function DiscordRequest(endpoint, options) {
@@ -42,14 +45,17 @@ export async function InstallGlobalCommands(appId, commands) {
  * Updates an interaction response via webhook
  * @param {string} interactionToken - The interaction token from Discord
  * @param {Object} messageBody - The message body to send
+ * @returns {Promise<Object>} The updated message object
  */
 export async function updateInteractionResponse(interactionToken, messageBody) {
   const endpoint = `webhooks/${process.env.APP_ID}/${interactionToken}/messages/@original`;
 
-  await DiscordRequest(endpoint, {
+  const response = await DiscordRequest(endpoint, {
     method: 'PATCH',
     body: messageBody,
   });
+
+  return await response.json();
 }
 
 /**
