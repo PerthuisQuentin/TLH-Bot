@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 
 // Security middleware for file routes
 function verifyFileAccess(req, res, next) {
-  const apiKey = req.headers['x-context-key'];
+  const apiKey = req.headers['x-files-key'];
 
   if (!apiKey) {
     return res
@@ -18,7 +18,7 @@ function verifyFileAccess(req, res, next) {
       .send('Unauthorized: API key required');
   }
 
-  if (apiKey !== process.env.CONTEXT_FILE_KEY) {
+  if (apiKey !== process.env.FILES_KEY) {
     return res
       .status(403)
       .set('Content-Type', 'text/plain')

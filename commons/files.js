@@ -11,14 +11,7 @@ const __dirname = dirname(__filename);
 export const AllowedFiles = {
   CONTEXT: 'context',
   SYSTEM: 'system',
-};
-
-/**
- * Mapping of allowed files to their environment variable keys
- */
-const FILE_ENV_MAP = {
-  [AllowedFiles.CONTEXT]: 'CONTEXT_FILE_PATH',
-  [AllowedFiles.SYSTEM]: 'SYSTEM_FILE_PATH',
+  MEMORY: 'memory',
 };
 
 /**
@@ -32,14 +25,10 @@ function getFilePath(fileType) {
     throw new Error(`Invalid file type: ${fileType}`);
   }
 
-  const envKey = FILE_ENV_MAP[fileType];
-  const filePath = process.env[envKey];
+  const filesDir = process.env.FILES_DIR || 'files';
+  const fileName = `${fileType}.txt`;
 
-  if (!filePath) {
-    throw new Error(`${envKey} environment variable is not set`);
-  }
-
-  return resolve(__dirname, '..', filePath);
+  return resolve(__dirname, '..', filesDir, fileName);
 }
 
 /**
