@@ -49,22 +49,25 @@ export async function createUserPrompt(
   channelName,
   conversationContext,
   userName,
-  userQuestion
+  userQuestion,
 ) {
-  // Read additional context from file
-  let fileContext = '';
+  // Read memory from file
+  let memory = '';
   try {
-    fileContext = await readFileContent(AllowedFiles.CONTEXT);
+    memory = await readFileContent(AllowedFiles.MEMORY);
   } catch (error) {
-    console.error('Error reading context file:', error);
-    // Continue without file context if it fails
+    console.error('Error reading memory file:', error);
+    // Continue without memory if it fails
   }
 
   return `
 📍 CONTEXTE :
 Canal : #${channelName}
 
-${fileContext}
+════════════════════════════════════════
+
+📚 TA MÉMOIRE ACTUELLE :
+${memory.trim() ? memory : 'Aucune mémoire enregistrée.'}
 
 ════════════════════════════════════════
 
