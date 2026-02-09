@@ -11,6 +11,32 @@ import {
   createUserPrompt,
 } from '../commons/prompts.js';
 import { formatMessagesContext } from '../commons/messages.js';
+import {
+  readFileContent,
+  writeFileContent,
+  AllowedFiles,
+} from '../commons/files.js';
+
+/**
+ * Parses the bot response to extract the actual response and memory section
+ * @param {string} fullResponse - The full response from Ollama
+ * @returns {Object} Object with { response: string, memory: string }
+ */
+function parseResponse(fullResponse) {
+  const memoryMarker = '### [MÉMOIRE]';
+  const markerIndex = fullResponse.indexOf(memoryMarker);
+
+  if (markerIndex !== -1) {
+    const response = fullResponse.substring(0, markerIndex).trim();
+    const memory = fullResponse
+      .substring(markerIndex + memoryMarker.length)
+      .trim();
+    return { response, memory };
+  }
+
+  // Fallback if marker not found
+  return { response: fullResponse, memory: '' };
+}
 
 /**
  * Handles the ollama command
@@ -22,7 +48,7 @@ async function handleOllamaCommand(req, res) {
 
   // Get the user's question
   const userQuestion = data.options?.find(
-    (opt) => opt.name === 'question'
+    (opt) => opt.name === 'question',
   )?.value;
 
   // Respond immediately to Discord to avoid timeout
@@ -54,7 +80,7 @@ async function handleOllamaCommand(req, res) {
 
       const messagesResponse = await DiscordRequest(
         `channels/${channelId}/messages?limit=${CONTEXT_MESSAGES_LIMIT}`,
-        { method: 'GET' }
+        { method: 'GET' },
       );
       const messages = await messagesResponse.json();
 
@@ -70,7 +96,7 @@ async function handleOllamaCommand(req, res) {
       channelName,
       conversationContext,
       userName,
-      userQuestion
+      userQuestion,
     );
 
     const response = await ollama.chat({
@@ -87,14 +113,29 @@ async function handleOllamaCommand(req, res) {
       ],
     });
 
-    // Edit the response with Ollama's result
+    // Parse the response to separate the actual response from memory
+    const { response: botResponse, memory: botMemory } = parseResponse(
+      response.message.content,
+    );
+
+    // Save memory if there's new content
+    if (botMemory) {
+      try {
+        await writeFileContent(AllowedFiles.MEMORY, botMemory);
+        console.log('Memory updated successfully');
+      } catch (error) {
+        console.error('Error writing memory:', error);
+      }
+    }
+
+    // Edit the response with only the bot response (without memory section)
     const interactionToken = req.body.token;
 
     const updatedMessage = await updateInteractionResponse(
       interactionToken,
       createMessageBody(
-        `**Question de ${userName} :** ${userQuestion}\n\n${response.message.content}`
-      )
+        `**Question de ${userName} :** ${userQuestion}\n\n${botResponse}`,
+      ),
     );
 
     console.log('Bot message posted with ID:', updatedMessage?.id);
@@ -103,7 +144,7 @@ async function handleOllamaCommand(req, res) {
 
     await updateInteractionResponse(
       interactionToken,
-      createMessageBody('Une erreur est survenue lors de la requête Ollama.')
+      createMessageBody('Une erreur est survenue lors de la requête Ollama.'),
     );
   }
 }
