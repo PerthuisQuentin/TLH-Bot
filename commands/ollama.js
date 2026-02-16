@@ -45,6 +45,7 @@ function parseResponse(fullResponse) {
  */
 async function handleOllamaCommand(req, res) {
   const { data } = req.body;
+  const guildId = req.body.guild_id || 'dm';
 
   // Get the user's question
   const userQuestion = data.options?.find(
@@ -97,6 +98,7 @@ async function handleOllamaCommand(req, res) {
       conversationContext,
       userName,
       userQuestion,
+      guildId,
     );
 
     const response = await ollama.chat({
@@ -104,7 +106,7 @@ async function handleOllamaCommand(req, res) {
       messages: [
         {
           role: 'system',
-          content: await createSystemPrompt(),
+          content: await createSystemPrompt(guildId),
         },
         {
           role: 'user',
@@ -121,7 +123,7 @@ async function handleOllamaCommand(req, res) {
     // Save memory if there's new content
     if (botMemory) {
       try {
-        await writeFileContent(AllowedFiles.MEMORY, botMemory);
+        await writeFileContent(guildId, AllowedFiles.MEMORY, botMemory);
         console.log('Memory updated successfully');
       } catch (error) {
         console.error('Error writing memory:', error);

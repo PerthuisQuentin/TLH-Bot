@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { verifyKeyMiddleware } from 'discord-interactions';
 import { handleInteraction } from './routes/interactions.js';
-import { getFile, writeFile } from './routes/files.js';
+import { getFile, listFiles, writeFile } from './routes/files.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,13 +31,14 @@ function verifyFileAccess(req, res, next) {
 app.post(
   '/interactions',
   verifyKeyMiddleware(process.env.PUBLIC_KEY),
-  handleInteraction
+  handleInteraction,
 );
 
 // File routes
 app.use('/files', express.text({ type: 'text/plain' }));
-app.get('/files/:fileType', verifyFileAccess, getFile);
-app.post('/files/:fileType', verifyFileAccess, writeFile);
+app.get('/files', verifyFileAccess, listFiles);
+app.get('/files/:guildId/:fileType', verifyFileAccess, getFile);
+app.post('/files/:guildId/:fileType', verifyFileAccess, writeFile);
 
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);
