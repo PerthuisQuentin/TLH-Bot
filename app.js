@@ -40,6 +40,23 @@ app.get('/files', verifyFileAccess, listFiles);
 app.get('/files/:guildId/:fileType', verifyFileAccess, getFile);
 app.post('/files/:guildId/:fileType', verifyFileAccess, writeFile);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log('Listening on port', PORT);
 });
+
+function shutdown(signal) {
+  console.log(`Received ${signal}, shutting down gracefully...`);
+  server.close(() => {
+    console.log('HTTP server closed. Exiting.');
+    process.exit(0);
+  });
+
+  // Force exit after 10s
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout.');
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
