@@ -6,6 +6,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
+ * Gets the absolute path to the files directory
+ * @returns {string} The absolute directory path
+ */
+export function getFilesDirectory() {
+  const filesDir = process.env.FILES_DIR || 'files';
+  return resolve(__dirname, '..', filesDir);
+}
+
+/**
  * Enum for allowed files
  */
 export const AllowedFiles = {
@@ -15,40 +24,46 @@ export const AllowedFiles = {
 };
 
 /**
- * Gets the file path for a given file type
+ * Gets the file path for a given guild ID and file type
+ * @param {string} guildId - The Discord guild ID
  * @param {string} fileType - The file type from AllowedFiles enum
  * @returns {string} The absolute file path
- * @throws {Error} If file type is invalid or environment variable is not set
+ * @throws {Error} If file type is invalid or guildId is missing
  */
-function getFilePath(fileType) {
+export function getFilePath(guildId, fileType) {
   if (!Object.values(AllowedFiles).includes(fileType)) {
     throw new Error(`Invalid file type: ${fileType}`);
   }
 
-  const filesDir = process.env.FILES_DIR || 'files';
-  const fileName = `${fileType}.txt`;
+  if (!guildId || typeof guildId !== 'string') {
+    throw new Error('guildId is required to resolve file path');
+  }
 
-  return resolve(__dirname, '..', filesDir, fileName);
+  const fileName = `${guildId}-${fileType}.txt`;
+
+  return resolve(getFilesDirectory(), fileName);
 }
 
 /**
  * Writes content to a specified file
+ * @param {string} guildId - The Discord guild ID
  * @param {string} fileType - The file type from AllowedFiles enum
  * @param {string} content - Content to write to the file
  * @returns {Promise<void>}
  */
-export async function writeFileContent(fileType, content) {
-  const absolutePath = getFilePath(fileType);
+export async function writeFileContent(guildId, fileType, content) {
+  const absolutePath = getFilePath(guildId, fileType);
   await writeFile(absolutePath, content, 'utf-8');
 }
 
 /**
  * Reads content from a specified file
+ * @param {string} guildId - The Discord guild ID
  * @param {string} fileType - The file type from AllowedFiles enum
  * @returns {Promise<string>} The file content
  */
-export async function readFileContent(fileType) {
-  const absolutePath = getFilePath(fileType);
+export async function readFileContent(guildId, fileType) {
+  const absolutePath = getFilePath(guildId, fileType);
   const content = await readFile(absolutePath, 'utf-8');
   return content;
 }

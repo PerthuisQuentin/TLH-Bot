@@ -1,10 +1,11 @@
-import { readFileContent, AllowedFiles } from './files.js';
+import { getFilePath, readFileContent, AllowedFiles } from './files.js';
 
 /**
  * Creates the system prompt with current date and time
+ * @param {string} guildId - The Discord guild ID
  * @returns {Promise<string>} The system prompt
  */
-export async function createSystemPrompt() {
+export async function createSystemPrompt(guildId) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('fr-FR', {
     weekday: 'long',
@@ -20,9 +21,15 @@ export async function createSystemPrompt() {
   // Read system prompt from file
   let systemContent = '';
   try {
-    systemContent = await readFileContent(AllowedFiles.SYSTEM);
+    systemContent = await readFileContent(guildId, AllowedFiles.SYSTEM);
   } catch (error) {
-    console.error('Error reading system file:', error);
+    console.error(
+      `Error reading system file (${getFilePath(
+        guildId,
+        AllowedFiles.SYSTEM,
+      )}):`,
+      error,
+    );
     // Fallback to a basic prompt if file cannot be read
     systemContent = "Tu es Gérard, le bot du serveur Discord 'The Local Host'.";
   }
@@ -43,6 +50,7 @@ export const CONTEXT_MESSAGES_LIMIT = 50;
  * @param {string} conversationContext - The formatted conversation history
  * @param {string} userName - The name of the user asking the question
  * @param {string} userQuestion - The question asked by the user
+ * @param {string} guildId - The Discord guild ID
  * @returns {Promise<string>} The formatted user prompt
  */
 export async function createUserPrompt(
@@ -50,13 +58,20 @@ export async function createUserPrompt(
   conversationContext,
   userName,
   userQuestion,
+  guildId,
 ) {
   // Read memory from file
   let memory = '';
   try {
-    memory = await readFileContent(AllowedFiles.MEMORY);
+    memory = await readFileContent(guildId, AllowedFiles.MEMORY);
   } catch (error) {
-    console.error('Error reading memory file:', error);
+    console.error(
+      `Error reading memory file (${getFilePath(
+        guildId,
+        AllowedFiles.MEMORY,
+      )}):`,
+      error,
+    );
     // Continue without memory if it fails
   }
 
