@@ -16,6 +16,11 @@ import {
   writeFileContent,
   AllowedFiles,
 } from '../commons/files.js';
+import {
+  weatherTool,
+  getWeather,
+  formatWeatherData,
+} from '../commons/weather.js';
 
 /**
  * Parses the bot response to extract the actual response and memory section
@@ -101,7 +106,8 @@ async function handleOllamaCommand(req, res) {
       guildId,
     );
 
-    const response = await ollama.chat({
+    // First call to Ollama with tools
+    let response = await ollama.chat({
       model: 'gemini-3-flash-preview:cloud',
       messages: [
         {
@@ -113,7 +119,51 @@ async function handleOllamaCommand(req, res) {
           content: userPrompt,
         },
       ],
+      tools: [weatherTool],
     });
+
+    // Handle tool calls if present
+    const messages = [
+      {
+        role: 'system',
+        content: await createSystemPrompt(guildId),
+      },
+      {
+        role: 'user',
+        content: userPrompt,
+      },
+      response.message,
+    ];
+
+    // Process tool calls
+    if (response.message.tool_calls && response.message.tool_calls.length > 0) {
+      for (const tool of response.message.tool_calls) {
+        if (tool.function.name === 'get_weather') {
+          try {
+            const { city } = tool.function.arguments;
+            const weatherData = await getWeather(city);
+            const formattedWeather = formatWeatherData(weatherData);
+
+            messages.push({
+              role: 'tool',
+              content: formattedWeather,
+            });
+          } catch (error) {
+            messages.push({
+              role: 'tool',
+              content: `Erreur lors de la récupération de la météo: ${error.message}`,
+            });
+          }
+        }
+      }
+
+      // Make second call with tool results
+      response = await ollama.chat({
+        model: 'gemini-3-flash-preview:cloud',
+        messages: messages,
+        tools: [weatherTool],
+      });
+    }
 
     // Parse the response to separate the actual response from memory
     const { response: botResponse, memory: botMemory } = parseResponse(
