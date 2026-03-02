@@ -3,6 +3,7 @@ import express from 'express';
 import { verifyKeyMiddleware } from 'discord-interactions';
 import { handleInteraction } from './routes/interactions.js';
 import { getFile, listFiles, writeFile } from './routes/files.js';
+import { deleteMessage } from './routes/messages.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +40,9 @@ app.use('/files', express.text({ type: 'text/plain' }));
 app.get('/files', verifyFileAccess, listFiles);
 app.get('/files/:guildId/:fileType', verifyFileAccess, getFile);
 app.post('/files/:guildId/:fileType', verifyFileAccess, writeFile);
+
+// Message routes
+app.delete('/messages/:channelId/:messageId', verifyFileAccess, deleteMessage);
 
 const server = app.listen(PORT, () => {
   console.log('Listening on port', PORT);
