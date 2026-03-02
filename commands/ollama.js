@@ -140,7 +140,11 @@ async function handleOllamaCommand(req, res) {
       ),
     );
 
-    console.log('Bot message posted with ID:', updatedMessage?.id);
+    const logTimestamp = new Date().toISOString();
+    const questionPreview = (userQuestion || '').substring(0, 20);
+    console.log(
+      `Bot message posted | channel=${channelId} | id=${updatedMessage?.id} | date=${logTimestamp} | question="${questionPreview}"`,
+    );
   } catch (error) {
     const interactionToken = req.body.token;
 
