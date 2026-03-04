@@ -4,6 +4,7 @@ import { verifyKeyMiddleware } from 'discord-interactions';
 import { handleInteraction } from './routes/interactions.js';
 import { getFile, listFiles, writeFile } from './routes/files.js';
 import { deleteMessage } from './routes/messages.js';
+import { startBot } from './bot.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +47,12 @@ app.delete('/messages/:channelId/:messageId', verifyFileAccess, deleteMessage);
 
 const server = app.listen(PORT, () => {
   console.log('Listening on port', PORT);
+});
+
+// Start the Discord bot
+startBot().catch((error) => {
+  console.error('Failed to start bot:', error);
+  process.exit(1);
 });
 
 function shutdown(signal) {
