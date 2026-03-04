@@ -75,6 +75,75 @@ export function getXpLeaderboard(guildId) {
 }
 
 /**
+ * Get paginated XP leaderboard data for a guild
+ * @param {string} guildId - Discord guild ID
+ * @param {number} requestedPage - Requested page number
+ * @param {number} pageSize - Number of users per page
+ */
+export function getPaginatedXpLeaderboard(
+  guildId,
+  requestedPage = 1,
+  pageSize = 10,
+) {
+  const leaderboard = getXpLeaderboard(guildId);
+
+  if (leaderboard.length === 0) {
+    return {
+      users: [],
+      totalUsers: 0,
+      totalPages: 0,
+      currentPage: 1,
+      startIndex: 0,
+      pageSize,
+    };
+  }
+
+  const safePageSize =
+    Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 10;
+  const safeRequestedPage =
+    Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+
+  const totalUsers = leaderboard.length;
+  const totalPages = Math.ceil(totalUsers / safePageSize);
+  const currentPage = Math.min(safeRequestedPage, totalPages);
+  const startIndex = (currentPage - 1) * safePageSize;
+  const users = leaderboard.slice(startIndex, startIndex + safePageSize);
+
+  return {
+    users,
+    totalUsers,
+    totalPages,
+    currentPage,
+    startIndex,
+    pageSize: safePageSize,
+  };
+}
+
+/**
+ * Get user rank and XP in guild leaderboard
+ * @param {string} guildId - Discord guild ID
+ * @param {string} userId - Discord user ID
+ */
+export function getUserLeaderboardEntry(guildId, userId) {
+  if (!userId) {
+    return null;
+  }
+
+  const leaderboard = getXpLeaderboard(guildId);
+  const userIndex = leaderboard.findIndex((user) => user.userId === userId);
+
+  if (userIndex === -1) {
+    return null;
+  }
+
+  return {
+    rank: userIndex + 1,
+    xp: leaderboard[userIndex].xp,
+    userId,
+  };
+}
+
+/**
  * Get user XP in a guild
  * @param {string} userId - Discord user ID
  * @param {string} guildId - Discord guild ID
