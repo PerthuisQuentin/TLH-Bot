@@ -1,17 +1,15 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
+import { getFilesDirectory } from './files.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const XP_DIR = `${__dirname}/../files`;
+const XP_DIR = getFilesDirectory();
 
 /**
  * Get the XP file path for a guild
  * @param {string} guildId - Discord guild ID
  */
 function getXpFilePath(guildId) {
-  return `${XP_DIR}/${guildId}-xp.json`;
+  return resolve(XP_DIR, `${guildId}-xp.json`);
 }
 
 /**
