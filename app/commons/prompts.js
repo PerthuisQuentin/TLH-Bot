@@ -12,11 +12,21 @@ export async function createSystemPrompt(guildId) {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: 'Europe/Paris',
   });
   const timeStr = now.toLocaleTimeString('fr-FR', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Europe/Paris',
   });
+
+  // Calculate UTC offset for Europe/Paris
+  const parisTime = new Date(
+    now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }),
+  );
+  const utcTime = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const offsetHours = Math.round((parisTime - utcTime) / (1000 * 60 * 60));
+  const offsetStr = offsetHours >= 0 ? `+${offsetHours}` : `${offsetHours}`;
 
   // Read system prompt from file
   let systemContent = '';
@@ -38,7 +48,9 @@ export async function createSystemPrompt(guildId) {
 ${systemContent}
 
 INFORMATIONS TEMPORELLES :
-Nous sommes le ${dateStr} et il est ${timeStr}.
+Nous sommes le ${dateStr} et il est ${timeStr} (Europe/Paris, UTC${offsetStr}).
+Quand tu génères des dates ISO 8601 (pour les rappels par exemple), tu DOIS convertir l'heure locale en UTC.
+Par exemple, si l'utilisateur demande un rappel à 14h30 heure locale et qu'on est en UTC${offsetStr}, la date ISO doit être ${offsetHours > 0 ? '13:30:00.000Z (14:30 - 1h)' : '15:30:00.000Z (14:30 + 1h)'}.
 `.trim();
 }
 

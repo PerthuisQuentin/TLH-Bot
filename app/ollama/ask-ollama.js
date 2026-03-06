@@ -7,6 +7,11 @@ import {
   getWeather,
   formatWeatherData,
 } from '../tools/weather.js';
+import {
+  reminderToolOllama,
+  createReminder,
+  formatReminderResponse,
+} from '../tools/reminder.js';
 
 /**
  * Asks a question to Ollama with context and tool support
@@ -52,7 +57,7 @@ export async function ask({
         content: userPrompt,
       },
     ],
-    tools: [weatherToolOllama],
+    tools: [weatherToolOllama, reminderToolOllama],
   });
 
   // Process tool calls
@@ -86,6 +91,27 @@ export async function ask({
             content: `Erreur lors de la récupération de la météo: ${error.message}`,
           });
         }
+      } else if (tool.function.name === 'create_reminder') {
+        try {
+          const { question, reminder_date } = tool.function.arguments;
+          const reminder = await createReminder(
+            guildId,
+            userId,
+            channelId,
+            question,
+            reminder_date,
+          );
+
+          messages.push({
+            role: 'tool',
+            content: formatReminderResponse(reminder),
+          });
+        } catch (error) {
+          messages.push({
+            role: 'tool',
+            content: `Erreur lors de la création du rappel: ${error.message}`,
+          });
+        }
       }
     }
 
@@ -93,7 +119,7 @@ export async function ask({
     response = await ollama.chat({
       model: DEFAULT_MODEL,
       messages: messages,
-      tools: [weatherToolOllama],
+      tools: [weatherToolOllama, reminderToolOllama],
     });
   }
 

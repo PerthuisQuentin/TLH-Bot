@@ -5,6 +5,7 @@ import { handleInteraction } from './app/routes/interactions.js';
 import { getFile, listFiles, writeFile } from './app/routes/files.js';
 import { deleteMessage } from './app/routes/messages.js';
 import { startBot } from './bot.js';
+import { startReminderJob } from './app/jobs/reminder-job.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -54,6 +55,9 @@ startBot().catch((error) => {
   console.error('Failed to start bot:', error);
   process.exit(1);
 });
+
+// Start the reminder job (runs every minute)
+startReminderJob();
 
 function shutdown(signal) {
   console.log(`Received ${signal}, shutting down gracefully...`);

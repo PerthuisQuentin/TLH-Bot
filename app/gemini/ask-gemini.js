@@ -7,13 +7,18 @@ import {
   formatWeatherData,
   weatherToolGemini,
 } from '../tools/weather.js';
+import {
+  createReminder,
+  formatReminderResponse,
+  reminderToolGemini,
+} from '../tools/reminder.js';
 
 /**
  * Tool definitions for Google GenAI format
  */
 const tools = [
   {
-    functionDeclarations: [weatherToolGemini],
+    functionDeclarations: [weatherToolGemini, reminderToolGemini],
   },
 ];
 
@@ -37,6 +42,26 @@ async function processFunctionCall(functionCall, context) {
       return {
         name,
         response: `Erreur lors de la récupération de la météo: ${error.message}`,
+      };
+    }
+  } else if (name === 'create_reminder') {
+    try {
+      const { question, reminder_date } = args;
+      const reminder = await createReminder(
+        context.guildId,
+        context.userId,
+        context.channelId,
+        question,
+        reminder_date,
+      );
+      return {
+        name,
+        response: formatReminderResponse(reminder),
+      };
+    } catch (error) {
+      return {
+        name,
+        response: `Erreur lors de la création du rappel: ${error.message}`,
       };
     }
   }
