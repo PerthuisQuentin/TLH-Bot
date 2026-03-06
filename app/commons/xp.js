@@ -1,26 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
-import { getFilesDirectory } from './files.js';
-
-const XP_DIR = getFilesDirectory();
-
-/**
- * Get the XP file path for a guild
- * @param {string} guildId - Discord guild ID
- */
-function getXpFilePath(guildId) {
-  return resolve(XP_DIR, `${guildId}-xp.json`);
-}
-
-/**
- * Initialize XP file for a guild if it doesn't exist
- */
-function initializeXpFile(guildId) {
-  const filePath = getXpFilePath(guildId);
-  if (!existsSync(filePath)) {
-    writeFileSync(filePath, JSON.stringify([], null, 2));
-  }
-}
+import { readJsonFileSync, writeJsonFileSync, AllowedFiles } from './files.js';
 
 /**
  * Add XP to a user in a guild
@@ -30,13 +8,10 @@ function initializeXpFile(guildId) {
  */
 export function addXP(userId, guildId, xpAmount = null) {
   try {
-    initializeXpFile(guildId);
-
     // Generate random XP between 1 and 10 if not specified
     const finalXpAmount = xpAmount ?? Math.floor(Math.random() * 10) + 1;
 
-    const filePath = getXpFilePath(guildId);
-    let users = JSON.parse(readFileSync(filePath, 'utf-8'));
+    let users = readJsonFileSync(guildId, AllowedFiles.XP, []);
 
     const userIndex = users.findIndex((u) => u.userId === userId);
 
@@ -46,7 +21,7 @@ export function addXP(userId, guildId, xpAmount = null) {
       users[userIndex].xp += finalXpAmount;
     }
 
-    writeFileSync(filePath, JSON.stringify(users, null, 2));
+    writeJsonFileSync(guildId, AllowedFiles.XP, users);
 
     console.log(
       `[XP] +${finalXpAmount} XP for userId=${userId} in guildId=${guildId}`,
@@ -62,11 +37,7 @@ export function addXP(userId, guildId, xpAmount = null) {
  */
 export function getXpLeaderboard(guildId) {
   try {
-    initializeXpFile(guildId);
-
-    const filePath = getXpFilePath(guildId);
-    const users = JSON.parse(readFileSync(filePath, 'utf-8'));
-
+    const users = readJsonFileSync(guildId, AllowedFiles.XP, []);
     return users.sort((a, b) => b.xp - a.xp);
   } catch (error) {
     console.error('Error getting XP leaderboard:', error);
@@ -150,10 +121,7 @@ export function getUserLeaderboardEntry(guildId, userId) {
  */
 export function getUserXp(userId, guildId) {
   try {
-    initializeXpFile(guildId);
-
-    const filePath = getXpFilePath(guildId);
-    const users = JSON.parse(readFileSync(filePath, 'utf-8'));
+    const users = readJsonFileSync(guildId, AllowedFiles.XP, []);
     const user = users.find((u) => u.userId === userId);
 
     return user ? user.xp : 0;
