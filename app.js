@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
 import { verifyKeyMiddleware } from 'discord-interactions';
-import { handleInteraction } from './routes/interactions.js';
-import { getFile, listFiles, writeFile } from './routes/files.js';
-import { deleteMessage } from './routes/messages.js';
+import { handleInteraction } from './app/routes/interactions.js';
+import { getFile, listFiles, writeFile } from './app/routes/files.js';
+import { deleteMessage } from './app/routes/messages.js';
 import { startBot } from './bot.js';
 
 const app = express();

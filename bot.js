@@ -1,6 +1,6 @@
-import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
-import { addXP } from './commons/xp.js';
-import { memoryCache } from './commons/memory.js';
+import { Client, GatewayIntentBits } from 'discord.js';
+import { addXP } from './app/commons/xp.js';
+import { memoryCache } from './app/commons/memory.js';
 
 const client = new Client({
   intents: [

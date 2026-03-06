@@ -11,7 +11,7 @@ const __dirname = dirname(__filename);
  */
 export function getFilesDirectory() {
   const filesDir = process.env.FILES_DIR || 'files';
-  return resolve(__dirname, '..', filesDir);
+  return resolve(__dirname, '../..', filesDir);
 }
 
 /**
