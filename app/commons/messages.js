@@ -51,6 +51,7 @@ function formatMessage(msg) {
     displayName = msg.author.global_name || msg.author.username;
   }
   const username = msg.author.username;
+  const userId = msg.author.id;
 
   // Format timestamp
   const timestamp = new Date(msg.timestamp);
@@ -63,7 +64,7 @@ function formatMessage(msg) {
     minute: '2-digit',
   });
 
-  return `👤 ${displayName} (@${username}) • 🕐 ${dateStr} ${timeStr}\n${content}`;
+  return `👤 ${displayName} (@${username}) [ID:${userId}] • 🕐 ${dateStr} ${timeStr}\n${content}`;
 }
 
 /**
