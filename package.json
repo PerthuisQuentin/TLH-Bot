@@ -17,8 +17,9 @@
   "author": "Shay DeWael",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^14.25.1",
+    "@google/genai": "^1.44.0",
     "discord-interactions": "^4.4.0",
+    "discord.js": "^14.25.1",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "node-cache": "^5.1.2",

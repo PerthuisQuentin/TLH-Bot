@@ -1,8 +1,8 @@
 import { pingCommand } from './ping.js';
-import { ollamaCommand } from './ollama.js';
+import { askCommand } from './ask.js';
 import { leaderboardCommand } from './leaderboard.js';
 
 /**
  * All available commands
  */
-export const commands = [pingCommand, ollamaCommand, leaderboardCommand];
+export const commands = [pingCommand, askCommand, leaderboardCommand];

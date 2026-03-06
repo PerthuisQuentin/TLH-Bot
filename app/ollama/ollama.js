@@ -8,3 +8,8 @@ export const ollama = new Ollama({
   host: 'https://ollama.com',
   headers: { Authorization: 'Bearer ' + process.env.OLLAMA_API_KEY },
 });
+
+/**
+ * Default model to use for chat
+ */
+export const DEFAULT_MODEL = 'gemini-3-flash-preview:cloud';
