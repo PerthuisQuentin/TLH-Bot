@@ -6,7 +6,7 @@ import {
 } from '../commons/utils.js';
 import { CONTEXT_MESSAGES_LIMIT } from '../commons/prompts.js';
 import { formatMessagesContext } from '../commons/messages.js';
-import { ask } from '../ollama/ask-ollama.js';
+import { ask } from '../gemini/ask-gemini.js';
 
 /**
  * Handles the ask command
@@ -28,7 +28,8 @@ async function handleAskCommand(req, res) {
   });
 
   try {
-    // Get user name early
+    // Get user info early
+    const userId = req.body.member?.user?.id || req.body.user?.id;
     const userName =
       req.body.member?.nick ||
       req.body.member?.user?.global_name ||
@@ -62,9 +63,11 @@ async function handleAskCommand(req, res) {
       // Continue without context if fetching fails
     }
 
-    // Ask Ollama with context and tools
+    // Ask Gemini with context and tools
     const { response: botResponse } = await ask({
       guildId,
+      userId,
+      channelId,
       channelName,
       conversationContext,
       userName,
@@ -87,6 +90,7 @@ async function handleAskCommand(req, res) {
       `Bot message posted | channel=${channelId} | id=${updatedMessage?.id} | date=${logTimestamp} | question="${questionPreview}"`,
     );
   } catch (error) {
+    console.error('Error handling ask command:', error);
     const interactionToken = req.body.token;
 
     await updateInteractionResponse(
