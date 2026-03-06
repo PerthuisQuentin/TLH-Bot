@@ -49,6 +49,16 @@ export function getFilePath(guildId, fileType, extension = 'txt') {
 }
 
 /**
+ * Gets the file extension for a given file type
+ * @param {string} fileType - The file type from AllowedFiles enum
+ * @returns {string} The file extension
+ */
+function getExtensionForFileType(fileType) {
+  const jsonFileTypes = [AllowedFiles.REMINDER, AllowedFiles.XP];
+  return jsonFileTypes.includes(fileType) ? 'json' : 'txt';
+}
+
+/**
  * Writes content to a specified file
  * @param {string} guildId - The Discord guild ID
  * @param {string} fileType - The file type from AllowedFiles enum
@@ -56,7 +66,8 @@ export function getFilePath(guildId, fileType, extension = 'txt') {
  * @returns {Promise<void>}
  */
 export async function writeFileContent(guildId, fileType, content) {
-  const absolutePath = getFilePath(guildId, fileType);
+  const extension = getExtensionForFileType(fileType);
+  const absolutePath = getFilePath(guildId, fileType, extension);
   await writeFile(absolutePath, content, 'utf-8');
 }
 
@@ -67,7 +78,8 @@ export async function writeFileContent(guildId, fileType, content) {
  * @returns {Promise<string>} The file content
  */
 export async function readFileContent(guildId, fileType) {
-  const absolutePath = getFilePath(guildId, fileType);
+  const extension = getExtensionForFileType(fileType);
+  const absolutePath = getFilePath(guildId, fileType, extension);
   const content = await readFile(absolutePath, 'utf-8');
   return content;
 }
