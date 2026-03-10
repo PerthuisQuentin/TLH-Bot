@@ -87,15 +87,24 @@ async function handleAskCommand(req, res) {
     const logTimestamp = new Date().toISOString();
     const questionPreview = (userQuestion || '').substring(0, 20);
     console.log(
-      `Bot message posted | channel=${channelId} | id=${updatedMessage?.id} | date=${logTimestamp} | question="${questionPreview}"`,
+      `[Bot] Message posted | channelId=${channelId} | messageId=${updatedMessage?.id} | date=${logTimestamp} | question="${questionPreview}"`,
     );
   } catch (error) {
-    console.error('Error handling ask command:', error);
+    console.error(`[Bot] Error handling ask command | channelId=${channelId}`, error);
     const interactionToken = req.body.token;
+
+    // Check if it's a Gemini overload error (503)
+    const isOverloaded = error?.status === 503 || 
+      error?.message?.includes('503') || 
+      error?.message?.includes('UNAVAILABLE');
+
+    const errorMessage = isOverloaded
+      ? 'Mon cerveau Google est surchargé 🧠💥 Réessaie dans quelques instants !'
+      : 'Une erreur est survenue lors de la requête.';
 
     await updateInteractionResponse(
       interactionToken,
-      createMessageBody('Une erreur est survenue lors de la requête.'),
+      createMessageBody(errorMessage),
     );
   }
 }

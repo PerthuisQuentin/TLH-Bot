@@ -1,5 +1,10 @@
 import { genai, DEFAULT_MODEL } from './gemini.js';
-import { createSystemPrompt, createUserPrompt } from '../commons/prompts.js';
+import {
+  createSystemPrompt,
+  createUserPrompt,
+  createQuestionInstruction,
+  createRolePromotionInstruction,
+} from '../commons/prompts.js';
 import { writeFileContent, AllowedFiles } from '../commons/files.js';
 import { parseResponse } from '../commons/response.js';
 import {
@@ -73,35 +78,22 @@ async function processFunctionCall(functionCall, context) {
 }
 
 /**
- * Asks a question to Gemini with context and tool support
+ * Common chat function with Gemini
  * @param {Object} params - Parameters object
- * @param {string} params.guildId - The guild ID (or 'dm')
- * @param {string} params.userId - The user ID
- * @param {string} params.channelId - The channel ID
- * @param {string} params.channelName - The channel name
- * @param {string} params.conversationContext - The formatted conversation history
- * @param {string} params.userName - The user's name
- * @param {string} params.userQuestion - The user's question
+ * @param {string} params.guildId - The guild ID
+ * @param {string} params.userId - The user ID (optional, for tools)
+ * @param {string} params.channelId - The channel ID (optional, for tools)
+ * @param {string} params.userPrompt - The user prompt to send
+ * @param {boolean} params.saveMemory - Whether to save memory (default: true)
  * @returns {Promise<Object>} Object with { response: string, memory: string }
  */
-export async function ask({
+async function chatWithGemini({
   guildId,
-  userId,
-  channelId,
-  channelName,
-  conversationContext,
-  userName,
-  userQuestion,
+  userId = null,
+  channelId = null,
+  userPrompt,
+  saveMemory = true,
 }) {
-  // Build user prompt with context and question
-  const userPrompt = await createUserPrompt(
-    channelName,
-    conversationContext,
-    userName,
-    userQuestion,
-    guildId,
-  );
-
   const systemPrompt = await createSystemPrompt(guildId);
 
   // Create chat with Gemini
@@ -153,15 +145,98 @@ export async function ask({
   const { response: botResponse, memory: botMemory } =
     parseResponse(fullResponse);
 
-  // Save memory if there's new content
-  if (botMemory) {
+  // Save memory if there's new content and saveMemory is true
+  if (saveMemory && botMemory) {
     try {
       await writeFileContent(guildId, AllowedFiles.MEMORY, botMemory);
-      console.log('Memory updated successfully');
+      console.log(`[Memory] Updated | guildId=${guildId}`);
     } catch (error) {
-      console.error('Error writing memory:', error);
+      console.error(`[Memory] Error writing | guildId=${guildId}`, error);
     }
   }
 
   return { response: botResponse, memory: botMemory };
+}
+
+/**
+ * Asks a question to Gemini with context and tool support
+ * @param {Object} params - Parameters object
+ * @param {string} params.guildId - The guild ID (or 'dm')
+ * @param {string} params.userId - The user ID
+ * @param {string} params.channelId - The channel ID
+ * @param {string} params.channelName - The channel name
+ * @param {string} params.conversationContext - The formatted conversation history
+ * @param {string} params.userName - The user's name
+ * @param {string} params.userQuestion - The user's question
+ * @returns {Promise<Object>} Object with { response: string, memory: string }
+ */
+export async function ask({
+  guildId,
+  userId,
+  channelId,
+  channelName,
+  conversationContext,
+  userName,
+  userQuestion,
+}) {
+  const instruction = createQuestionInstruction(userName, userQuestion);
+  const userPrompt = await createUserPrompt(
+    channelName,
+    conversationContext,
+    instruction,
+    guildId,
+  );
+
+  return chatWithGemini({
+    guildId,
+    userId,
+    channelId,
+    userPrompt,
+    saveMemory: true,
+  });
+}
+
+/**
+ * Generates a role promotion message using Gemini
+ * @param {Object} params - Parameters object
+ * @param {string} params.guildId - The guild ID
+ * @param {string} params.channelName - The channel name
+ * @param {string} params.conversationContext - The formatted conversation history
+ * @param {string} params.userName - The user's display name
+ * @param {string} params.roleName - The new role name
+ * @returns {Promise<string>} The generated message
+ */
+export async function generateRolePromotionMessage({
+  guildId,
+  channelName,
+  conversationContext,
+  userName,
+  roleName,
+}) {
+  try {
+    const instruction = createRolePromotionInstruction(userName, roleName);
+    const userPrompt = await createUserPrompt(
+      channelName,
+      conversationContext,
+      instruction,
+      guildId,
+    );
+
+    const { response } = await chatWithGemini({
+      guildId,
+      userPrompt,
+      saveMemory: false,
+    });
+
+    return (
+      response ||
+      `Félicitations ${userName} ! Tu as obtenu le rôle ${roleName} !`
+    );
+  } catch (error) {
+    console.error(
+      `[Bot] Error generating promotion | guildId=${guildId}`,
+      error,
+    );
+    return `Félicitations ${userName} ! Tu as obtenu le rôle ${roleName} !`;
+  }
 }

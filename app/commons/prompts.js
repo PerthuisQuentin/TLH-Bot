@@ -60,16 +60,14 @@ export const CONTEXT_MESSAGES_LIMIT = 50;
  * Creates a user prompt with context and question
  * @param {string} channelName - The name of the Discord channel
  * @param {string} conversationContext - The formatted conversation history
- * @param {string} userName - The name of the user asking the question
- * @param {string} userQuestion - The question asked by the user
+ * @param {string} instruction - The instruction/question for the bot
  * @param {string} guildId - The Discord guild ID
  * @returns {Promise<string>} The formatted user prompt
  */
 export async function createUserPrompt(
   channelName,
   conversationContext,
-  userName,
-  userQuestion,
+  instruction,
   guildId,
 ) {
   // Read memory from file
@@ -103,9 +101,32 @@ ${conversationContext}
 
 ════════════════════════════════════════
 
-❓ QUESTION DE ${userName} :
+${instruction}
+`.trim();
+}
+
+/**
+ * Creates an instruction for asking a question
+ * @param {string} userName - The name of the user asking the question
+ * @param {string} userQuestion - The question asked by the user
+ * @returns {string} The formatted instruction
+ */
+export function createQuestionInstruction(userName, userQuestion) {
+  return `❓ QUESTION DE ${userName} :
 ${userQuestion}
 
-Réponds à cette question en tenant compte de l'historique si pertinent.
-`.trim();
+Réponds à cette question en tenant compte de l'historique si pertinent.`;
+}
+
+/**
+ * Creates an instruction for role promotion message
+ * @param {string} userName - The user's display name
+ * @param {string} roleName - The new role name
+ * @returns {string} The formatted instruction
+ */
+export function createRolePromotionInstruction(userName, roleName) {
+  return `🎉 PROMOTION DE RÔLE :
+${userName} vient d'obtenir le rôle "${roleName}" grâce à son activité sur le serveur.
+
+Génère un court message de félicitations (1-2 phrases max) pour ${userName}. Sois créatif et enthousiaste ! Ne mets pas de balises <response> ou <memory>.`;
 }
