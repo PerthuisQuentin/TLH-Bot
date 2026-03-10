@@ -24,6 +24,7 @@ export const AllowedFiles = {
   MEMORY: 'memory',
   REMINDER: 'reminder',
   XP: 'xp',
+  CONFIG: 'config',
 };
 
 /**
@@ -54,7 +55,11 @@ export function getFilePath(guildId, fileType, extension = 'txt') {
  * @returns {string} The file extension
  */
 function getExtensionForFileType(fileType) {
-  const jsonFileTypes = [AllowedFiles.REMINDER, AllowedFiles.XP];
+  const jsonFileTypes = [
+    AllowedFiles.REMINDER,
+    AllowedFiles.XP,
+    AllowedFiles.CONFIG,
+  ];
   return jsonFileTypes.includes(fileType) ? 'json' : 'txt';
 }
 

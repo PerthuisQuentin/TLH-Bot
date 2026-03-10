@@ -24,7 +24,7 @@ export async function processReminders() {
       for (const reminder of expiredReminders) {
         try {
           console.log(
-            `Processing reminder ${reminder.id} for user ${reminder.userId}`,
+            `[Reminder] Processing | reminderId=${reminder.id} | userId=${reminder.userId}`,
           );
 
           // Call ask to generate a reminder response
@@ -49,14 +49,17 @@ export async function processReminders() {
           // Delete the processed reminder
           await deleteReminder(guildId, reminder.id);
 
-          console.log(`Reminder ${reminder.id} processed and deleted`);
+          console.log(`[Reminder] Processed | reminderId=${reminder.id}`);
         } catch (error) {
-          console.error(`Error processing reminder ${reminder.id}:`, error);
+          console.error(
+            `[Reminder] Error processing | reminderId=${reminder.id}`,
+            error,
+          );
         }
       }
     }
   } catch (error) {
-    console.error('Error in processReminders job:', error);
+    console.error('[Reminder] Error in job', error);
   }
 }
 

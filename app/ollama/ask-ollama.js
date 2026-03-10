@@ -132,9 +132,9 @@ export async function ask({
   if (botMemory) {
     try {
       await writeFileContent(guildId, AllowedFiles.MEMORY, botMemory);
-      console.log('Memory updated successfully');
+      console.log(`[Memory] Updated | guildId=${guildId}`);
     } catch (error) {
-      console.error('Error writing memory:', error);
+      console.error(`[Memory] Error writing | guildId=${guildId}`, error);
     }
   }
 

@@ -80,9 +80,30 @@ function formatMessagesContext(messages) {
     .join('\n\n---\n\n');
 }
 
+/**
+ * Formats a discord.js Message object for context
+ * @param {import('discord.js').Message} message - Discord.js message object
+ * @returns {string|null} Formatted message string or null if no content
+ */
+function formatDiscordJsMessage(message) {
+  return formatMessage({
+    type: 0,
+    content: message.content,
+    author: {
+      bot: message.author.bot,
+      global_name: message.author.globalName,
+      username: message.author.username,
+      id: message.author.id,
+    },
+    mentions: [],
+    timestamp: message.createdAt.toISOString(),
+  });
+}
+
 export {
   replaceMentions,
   extractContent,
   formatMessage,
   formatMessagesContext,
+  formatDiscordJsMessage,
 };

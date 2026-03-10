@@ -4,15 +4,16 @@ import { verifyKeyMiddleware } from 'discord-interactions';
 import { handleInteraction } from './app/routes/interactions.js';
 import { getFile, listFiles, writeFile } from './app/routes/files.js';
 import { deleteMessage } from './app/routes/messages.js';
+import { listRoles } from './app/routes/guilds.js';
 import { startBot } from './bot.js';
 import { startReminderJob } from './app/jobs/reminder-job.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security middleware for file routes
-function verifyFileAccess(req, res, next) {
-  const apiKey = req.headers['x-files-key'];
+// Security middleware for API routes
+function verifyApiKey(req, res, next) {
+  const apiKey = req.headers['x-api-key'];
 
   if (!apiKey) {
     return res
@@ -21,7 +22,7 @@ function verifyFileAccess(req, res, next) {
       .send('Unauthorized: API key required');
   }
 
-  if (apiKey !== process.env.FILES_KEY) {
+  if (apiKey !== process.env.API_KEY) {
     return res
       .status(403)
       .set('Content-Type', 'text/plain')
@@ -31,6 +32,10 @@ function verifyFileAccess(req, res, next) {
   next();
 }
 
+// API router with authentication
+const apiRouter = express.Router();
+apiRouter.use(verifyApiKey);
+
 app.post(
   '/interactions',
   verifyKeyMiddleware(process.env.PUBLIC_KEY),
@@ -38,13 +43,19 @@ app.post(
 );
 
 // File routes
-app.use('/files', express.text({ type: 'text/plain' }));
-app.get('/files', verifyFileAccess, listFiles);
-app.get('/files/:guildId/:fileType', verifyFileAccess, getFile);
-app.post('/files/:guildId/:fileType', verifyFileAccess, writeFile);
+apiRouter.use('/files', express.text({ type: 'text/plain' }));
+apiRouter.get('/files', listFiles);
+apiRouter.get('/files/:guildId/:fileType', getFile);
+apiRouter.post('/files/:guildId/:fileType', writeFile);
 
 // Message routes
-app.delete('/messages/:channelId/:messageId', verifyFileAccess, deleteMessage);
+apiRouter.delete('/messages/:channelId/:messageId', deleteMessage);
+
+// Guild routes
+apiRouter.get('/guilds/:guildId/roles', listRoles);
+
+// Mount API router
+app.use('/api', apiRouter);
 
 const server = app.listen(PORT, () => {
   console.log('Listening on port', PORT);
