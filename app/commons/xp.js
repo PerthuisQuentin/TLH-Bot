@@ -51,12 +51,12 @@ export function getRoleForXp(guildId, xp) {
 }
 
 /**
- * Update XP roles for a guild member
+ * Update XP roles for a guild member based on maxXp
  * @param {import('discord.js').GuildMember} member - Discord guild member
- * @param {number} newXp - User's new XP amount
+ * @param {number} maxXp - User's max XP amount (highest ever reached)
  * @returns {Promise<{added: string|null, removed: string[]}>} Role changes made
  */
-export async function updateMemberXpRoles(member, newXp) {
+export async function updateMemberXpRoles(member, maxXp) {
   const guildId = member.guild.id;
   const xpRoles = getXpRolesConfig(guildId);
 
@@ -65,7 +65,7 @@ export async function updateMemberXpRoles(member, newXp) {
   }
 
   const xpRoleIds = xpRoles.map((r) => r.roleId);
-  const targetRole = getRoleForXp(guildId, newXp);
+  const targetRole = getRoleForXp(guildId, maxXp);
   const targetRoleId = targetRole?.roleId || null;
 
   // Get current XP roles the member has
@@ -116,7 +116,7 @@ export async function updateMemberXpRoles(member, newXp) {
  * @param {string} guildId - Discord guild ID
  * @param {number} xpAmount - Amount of XP to add (default: random 1-10)
  * @param {import('discord.js').GuildMember} [member] - Optional guild member for role updates
- * @returns {Promise<{newXp: number, roleChanges: {added: string|null, addedRoleName: string|null, removed: string[]}}>}
+ * @returns {Promise<{newXp: number, maxXp: number, roleChanges: {added: string|null, addedRoleName: string|null, removed: string[]}}>}
  */
 export async function addXP(userId, guildId, xpAmount = null, member = null) {
   try {
@@ -127,26 +127,32 @@ export async function addXP(userId, guildId, xpAmount = null, member = null) {
 
     const userIndex = users.findIndex((u) => u.userId === userId);
     let newXp;
+    let maxXp;
 
     if (userIndex === -1) {
       newXp = finalXpAmount;
-      users.push({ userId, xp: newXp });
+      maxXp = finalXpAmount;
+      users.push({ userId, xp: newXp, maxXp });
     } else {
       users[userIndex].xp += finalXpAmount;
       newXp = users[userIndex].xp;
+      // Update maxXp if current xp exceeds it
+      const currentMaxXp = users[userIndex].maxXp ?? users[userIndex].xp;
+      maxXp = Math.max(currentMaxXp, newXp);
+      users[userIndex].maxXp = maxXp;
     }
 
     writeJsonFileSync(guildId, AllowedFiles.XP, users);
 
     console.log(
-      `[XP] Added | userId=${userId} | guildId=${guildId} | amount=${finalXpAmount} | total=${newXp}`,
+      `[XP] Added | userId=${userId} | guildId=${guildId} | amount=${finalXpAmount} | total=${newXp} | maxXp=${maxXp}`,
     );
 
-    // Update XP roles if member is provided
+    // Update XP roles based on maxXp if member is provided
     let roleChanges = { added: null, addedRoleName: null, removed: [] };
     if (member) {
       try {
-        roleChanges = await updateMemberXpRoles(member, newXp);
+        roleChanges = await updateMemberXpRoles(member, maxXp);
       } catch (roleError) {
         console.error(
           `[XP] Error updating roles | userId=${userId}`,
@@ -155,7 +161,7 @@ export async function addXP(userId, guildId, xpAmount = null, member = null) {
       }
     }
 
-    return { newXp, roleChanges };
+    return { newXp, maxXp, roleChanges };
   } catch (error) {
     console.error(
       `[XP] Error adding | userId=${userId} | guildId=${guildId}`,
@@ -163,6 +169,7 @@ export async function addXP(userId, guildId, xpAmount = null, member = null) {
     );
     return {
       newXp: 0,
+      maxXp: 0,
       roleChanges: { added: null, addedRoleName: null, removed: [] },
     };
   }
@@ -247,6 +254,7 @@ export function getUserLeaderboardEntry(guildId, userId) {
   return {
     rank: userIndex + 1,
     xp: leaderboard[userIndex].xp,
+    maxXp: leaderboard[userIndex].maxXp ?? leaderboard[userIndex].xp,
     userId,
   };
 }
