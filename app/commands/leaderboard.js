@@ -1,9 +1,9 @@
 import { InteractionResponseType } from 'discord-interactions';
 import {
-  getPaginatedXpLeaderboard,
+  getPaginatedShellsLeaderboard,
   getUserLeaderboardEntry,
-  getUserXp,
-} from '../commons/xp.js';
+  getUserShells,
+} from '../idle/shells.js';
 
 /**
  * Builds leaderboard embed description
@@ -16,12 +16,12 @@ function formatLeaderboardDescription({
   pageSize,
   requesterId,
   requesterEntry,
-  requesterXp,
+  requesterShells,
 }) {
   const leaderboardText = pageUsers
     .map((user, index) => {
       const rank = startIndex + index + 1;
-      const line = `#${rank} <@${user.userId}> - ${user.xp} XP`;
+      const line = `#${rank} <@${user.userId}> - ${user.shells} 🐚`;
 
       if (requesterId && user.userId === requesterId) {
         return `**${line}**`;
@@ -45,10 +45,10 @@ function formatLeaderboardDescription({
   }
 
   if (requesterEntry) {
-    return `${leaderboardText}\n—\n**#${requesterEntry.rank} <@${requesterId}> - ${requesterEntry.xp} XP**`;
+    return `${leaderboardText}\n—\n**#${requesterEntry.rank} <@${requesterId}> - ${requesterEntry.shells} 🐚**`;
   }
 
-  return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}> - ${requesterXp} XP**`;
+  return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}> - ${requesterShells} 🐚**`;
 }
 
 /**
@@ -74,13 +74,17 @@ async function handleLeaderboardCommand(req, res) {
     const requestedPage =
       Number.isInteger(pageOption) && pageOption > 0 ? pageOption : 1;
 
-    const paginated = getPaginatedXpLeaderboard(guild_id, requestedPage, 10);
+    const paginated = getPaginatedShellsLeaderboard(
+      guild_id,
+      requestedPage,
+      10,
+    );
 
     if (paginated.totalUsers === 0) {
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: "Aucun utilisateur avec de l'XP pour le moment.",
+          content: 'Aucun utilisateur avec des coquillages pour le moment.',
         },
       });
     }
@@ -92,14 +96,16 @@ async function handleLeaderboardCommand(req, res) {
     const requesterEntry = requesterId
       ? getUserLeaderboardEntry(guild_id, requesterId)
       : null;
-    const requesterXp = requesterId ? getUserXp(requesterId, guild_id) : 0;
+    const requesterShells = requesterId
+      ? getUserShells(guild_id, requesterId)
+      : 0;
     const description = formatLeaderboardDescription({
       pageUsers,
       startIndex,
       pageSize: paginated.pageSize,
       requesterId,
       requesterEntry,
-      requesterXp,
+      requesterShells,
     });
 
     return res.send({
@@ -107,7 +113,7 @@ async function handleLeaderboardCommand(req, res) {
       data: {
         embeds: [
           {
-            title: '🏆 Classement XP',
+            title: '🐚 Classement Coquillages',
             description,
             color: 0xffd700, // Gold color
             timestamp: new Date().toISOString(),
@@ -135,7 +141,7 @@ async function handleLeaderboardCommand(req, res) {
 export const leaderboardCommand = {
   definition: {
     name: 'leaderboard',
-    description: 'Affiche le classement XP du serveur',
+    description: 'Affiche le classement Coquillages du serveur',
     type: 1,
     integration_types: [0, 1],
     contexts: [0, 1, 2],

@@ -1,5 +1,5 @@
 import { Client, GatewayIntentBits } from 'discord.js';
-import { addXP } from './app/commons/xp.js';
+import { addShells } from './app/idle/shells.js';
 import { memoryCache } from './app/commons/memory.js';
 import { generateRolePromotionMessage } from './app/gemini/ask-gemini.js';
 import { formatDiscordJsMessage } from './app/commons/messages.js';
@@ -14,7 +14,7 @@ const client = new Client({
   ],
 });
 
-const XP_COOLDOWN = 10; // 10 seconds
+const SHELLS_COOLDOWN = 10; // 10 seconds
 
 client.once('clientReady', () => {
   console.log(`[Bot] Logged in as ${client.user.tag}`);
@@ -32,14 +32,14 @@ client.on('messageCreate', async (message) => {
   }
 
   // Check for spam (cooldown)
-  const cacheKey = `xp:${message.guildId}:${message.author.id}`;
+  const cacheKey = `shells:${message.guildId}:${message.author.id}`;
   if (memoryCache.has(cacheKey)) {
-    // User is on cooldown, no XP
+    // User is on cooldown, no shells
     return;
   }
 
-  // Add XP to user (random 1-10) with role updates
-  const { roleChanges } = await addXP(
+  // Add shells to user (random 1-10) with role updates
+  const { roleChanges } = await addShells(
     message.author.id,
     message.guildId,
     null,
@@ -68,7 +68,7 @@ client.on('messageCreate', async (message) => {
   }
 
   // Set cooldown (TTL in seconds)
-  memoryCache.set(cacheKey, true, XP_COOLDOWN);
+  memoryCache.set(cacheKey, true, SHELLS_COOLDOWN);
 });
 
 client.on('error', (error) => {
