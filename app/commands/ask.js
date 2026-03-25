@@ -7,6 +7,7 @@ import {
 import { CONTEXT_MESSAGES_LIMIT } from '../commons/prompts.js';
 import { formatMessagesContext } from '../commons/messages.js';
 import { ask } from '../gemini/ask-gemini.js';
+import { readJsonFile, AllowedFiles } from '../commons/files.js';
 
 /**
  * Handles the ask command
@@ -16,6 +17,17 @@ import { ask } from '../gemini/ask-gemini.js';
 async function handleAskCommand(req, res) {
   const { data } = req.body;
   const guildId = req.body.guild_id || 'dm';
+  const channelId = req.body.channel_id;
+
+  // Check if channel is excluded from the ask command
+  const config = await readJsonFile(guildId, AllowedFiles.CONFIG, {});
+  const noAskChannels = config.noAskChannels ?? [];
+  if (noAskChannels.includes(channelId)) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: { content: "Je ne suis pas autorisé à répondre dans ce canal.", flags: 64 },
+    });
+  }
 
   // Get the user's question
   const userQuestion = data.options?.find(
@@ -38,7 +50,6 @@ async function handleAskCommand(req, res) {
       req.body.user?.username;
 
     // Fetch previous messages for context
-    const channelId = req.body.channel_id;
     let conversationContext = '';
     let channelName = 'canal inconnu';
 
