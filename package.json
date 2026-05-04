@@ -3,30 +3,36 @@
   "private": true,
   "version": "1.0.0",
   "description": "Discord example app",
-  "main": "app.js",
+  "main": "dist/app.js",
   "type": "module",
   "engines": {
     "node": ">=18.x"
   },
   "scripts": {
-    "start": "node app.js",
-    "register": "node commands.js",
-    "register:local": "NODE_TLS_REJECT_UNAUTHORIZED=0  node commands.js",
-    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon app.js"
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "register": "tsx commands.ts",
+    "register:local": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx commands.ts",
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx watch app.ts"
   },
   "author": "Shay DeWael",
   "license": "MIT",
   "dependencies": {
-    "@google/genai": "^1.44.0",
+    "@google/genai": "^1.48.0",
+    "discord-api-types": "^0.38.43",
     "discord-interactions": "^4.4.0",
-    "discord.js": "^14.25.1",
-    "dotenv": "^17.2.3",
+    "discord.js": "^14.26.0",
+    "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "node-cache": "^5.1.2",
     "ollama": "^0.6.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
   },
   "nodemonConfig": {
     "ignore": [
