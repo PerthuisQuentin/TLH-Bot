@@ -1,6 +1,7 @@
 import { pingCommand } from './ping.js';
 import { askCommand } from './ask.js';
 import { leaderboardCommand } from './leaderboard.js';
+import { rankCommand } from './rank.js';
 import type { Command } from './types.js';
 
-export const commands: Command[] = [pingCommand, askCommand, leaderboardCommand];
+export const commands: Command[] = [pingCommand, askCommand, leaderboardCommand, rankCommand];
