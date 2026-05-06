@@ -1,23 +1,23 @@
-export interface ShellsUser {
+export type ShellsUser = {
     userId: string;
     shells: number;
     maxShells?: number;
 }
 
-export interface RoleChanges {
+export type RoleChanges = {
     added: string | null;
     addedRoleName: string | null;
     removed: string[];
 }
 
-export interface LeaderboardEntry {
+export type LeaderboardEntry = {
     rank: number;
     shells: number;
     maxShells: number;
     userId: string;
 }
 
-export interface PaginatedLeaderboard {
+export type PaginatedLeaderboard = {
     users: ShellsUser[];
     totalUsers: number;
     totalPages: number;

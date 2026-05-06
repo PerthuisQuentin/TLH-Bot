@@ -3,12 +3,12 @@ import { memoryCache } from '../commons/memory.js';
 import type { GuildMember } from 'discord.js';
 import type { RoleChanges } from './types.js';
 
-interface ShellsRoleConfig {
+type ShellsRoleConfig = {
     roleId: string;
     threshold: number;
 }
 
-interface GuildConfig {
+type GuildConfig = {
     shellsRoles?: ShellsRoleConfig[];
 }
 

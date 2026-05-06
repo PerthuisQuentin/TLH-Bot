@@ -13,7 +13,7 @@ import {
     formatReminderResponse,
 } from '../tools/reminder.js';
 
-interface AskParams {
+type AskParams = {
     guildId: string;
     userId: string;
     channelId: string;

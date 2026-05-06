@@ -14,7 +14,7 @@ import {
 import type { ShellsUser, LeaderboardEntry } from '../idle/types.js';
 import type { Command } from './types.js';
 
-interface FormatLeaderboardParams {
+type FormatLeaderboardParams = {
     pageUsers: ShellsUser[];
     startIndex: number;
     pageSize: number;
