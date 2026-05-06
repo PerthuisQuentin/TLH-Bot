@@ -1,22 +1,22 @@
 import type { Message as DjsMessage } from 'discord.js';
 
-interface DiscordMessageAuthor {
+type DiscordMessageAuthor = {
     id: string;
     username: string;
     global_name?: string;
     bot?: boolean;
 }
 
-interface DiscordMessageComponent {
+type DiscordMessageComponent = {
     content?: string;
 }
 
-interface DiscordMention {
+type DiscordMention = {
     id: string;
     username: string;
 }
 
-interface DiscordRawMessage {
+type DiscordRawMessage = {
     type: number;
     content?: string;
     author: DiscordMessageAuthor;

@@ -4,7 +4,7 @@ import {
 } from 'discord-interactions';
 import 'dotenv/config';
 
-interface DiscordRequestOptions {
+type DiscordRequestOptions = {
     method: string;
     body?: unknown;
 }

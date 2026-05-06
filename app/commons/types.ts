@@ -1,4 +1,4 @@
-export interface ReminderObject {
+export type ReminderObject = {
     id: string;
     userId: string;
     channelId: string;

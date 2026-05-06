@@ -18,7 +18,7 @@ All code, comments, variable names, and documentation must be written in **Engli
 - **Strict mode** is enabled (`"strict": true` in `tsconfig.json`). No implicit `any`.
 - Target is **ES2022**, module system is **NodeNext** (`import`/`export`, `.js` extensions in imports).
 - Each domain folder exposes its types in a local `types.ts` file. Keep types co-located with their domain, not in a global types file.
-- Use `interface` for object shapes, `type` for unions and aliases.
+- Use `type` for all data shapes (objects, function params, return types, unions, intersections). Use `interface` only for class/function contracts (i.e. when a class implements it).
 - No default exports — use named exports throughout.
 
 ## Project organisation

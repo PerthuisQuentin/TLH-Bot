@@ -24,13 +24,13 @@ const tools = [
     },
 ];
 
-interface FunctionCallContext {
+type FunctionCallContext = {
     guildId: string;
     userId: string | null;
     channelId: string | null;
 }
 
-interface FunctionResult {
+type FunctionResult = {
     name: string;
     response: string;
 }
@@ -73,7 +73,7 @@ async function processFunctionCall(
     return { name, response: `Fonction inconnue: ${name}` };
 }
 
-interface ChatWithGeminiParams {
+type ChatWithGeminiParams = {
     guildId: string;
     userId?: string | null;
     channelId?: string | null;
@@ -137,7 +137,7 @@ async function chatWithGemini({
     return { response: botResponse, memory: botMemory };
 }
 
-interface AskParams {
+type AskParams = {
     guildId: string;
     userId: string;
     channelId: string;
@@ -162,7 +162,7 @@ export async function ask(
     return chatWithGemini({ guildId, userId, channelId, userPrompt, saveMemory: true });
 }
 
-interface GenerateRolePromotionParams {
+type GenerateRolePromotionParams = {
     guildId: string;
     channelName: string;
     conversationContext: string;
