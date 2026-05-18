@@ -17,11 +17,7 @@ export async function getAllGuildIdsWithReminders(): Promise<string[]> {
 export async function getExpiredReminders(
     guildId: string,
 ): Promise<ReminderObject[]> {
-    const reminders = await readJsonFile<ReminderObject[]>(
-        guildId,
-        AllowedFiles.REMINDER,
-        [],
-    );
+    const reminders = await readJsonFile(guildId, AllowedFiles.REMINDER);
     const now = new Date();
     return reminders.filter((r) => new Date(r.date) <= now);
 }
@@ -52,11 +48,7 @@ export async function addReminder(
         throw new Error('Invalid date format. Expected ISO string or Date object');
     }
 
-    const reminders = await readJsonFile<ReminderObject[]>(
-        guildId,
-        AllowedFiles.REMINDER,
-        [],
-    );
+    const reminders = await readJsonFile(guildId, AllowedFiles.REMINDER);
 
     const userReminders = reminders.filter((r) => r.userId === userId);
     if (userReminders.length >= 100) {
@@ -88,11 +80,7 @@ export async function deleteReminder(
         throw new Error('reminderId is required');
     }
 
-    const reminders = await readJsonFile<ReminderObject[]>(
-        guildId,
-        AllowedFiles.REMINDER,
-        [],
-    );
+    const reminders = await readJsonFile(guildId, AllowedFiles.REMINDER);
     const reminderIndex = reminders.findIndex((r) => r.id === reminderId);
 
     if (reminderIndex === -1) {

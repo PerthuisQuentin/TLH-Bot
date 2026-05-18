@@ -1,4 +1,4 @@
-import { getFilePath, readFileContent, AllowedFiles } from './files.js';
+import { getFilePath, readTextFile, AllowedFiles } from './files.js';
 
 export async function createSystemPrompt(guildId: string): Promise<string> {
     const now = new Date();
@@ -28,7 +28,7 @@ export async function createSystemPrompt(guildId: string): Promise<string> {
 
     let systemContent = '';
     try {
-        systemContent = await readFileContent(guildId, AllowedFiles.SYSTEM);
+        systemContent = await readTextFile(guildId, AllowedFiles.SYSTEM);
     } catch (error) {
         console.error(
             `Error reading system file (${getFilePath(guildId, AllowedFiles.SYSTEM)}):`,
@@ -57,7 +57,7 @@ export async function createUserPrompt(
 ): Promise<string> {
     let memory = '';
     try {
-        memory = await readFileContent(guildId, AllowedFiles.MEMORY);
+        memory = await readTextFile(guildId, AllowedFiles.MEMORY);
     } catch (error) {
         console.error(
             `Error reading memory file (${getFilePath(guildId, AllowedFiles.MEMORY)}):`,

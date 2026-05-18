@@ -25,11 +25,7 @@ async function handleAskCommand(req: Request, res: Response): Promise<void> {
     const guildId = body.guild_id ?? 'dm';
     const channelId = body.channel_id!;
 
-    const config = await readJsonFile<{ noAskChannels?: string[] }>(
-        guildId,
-        AllowedFiles.CONFIG,
-        {},
-    );
+    const config = await readJsonFile(guildId, AllowedFiles.CONFIG);
     const noAskChannels = config.noAskChannels ?? [];
     if (noAskChannels.includes(channelId)) {
         res.send({

@@ -1,8 +1,5 @@
-export type ShellsUser = {
-    userId: string;
-    shells: number;
-    maxShells?: number;
-}
+import type { ShellsUser } from '../commons/types.js';
+export type { ShellsUser };
 
 export type RoleChanges = {
     added: string | null;

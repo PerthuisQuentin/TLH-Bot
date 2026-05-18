@@ -3,8 +3,9 @@ import type { Request, Response } from 'express';
 import {
     AllowedFiles,
     getFilesDirectory,
-    readFileContent,
-    writeFileContent,
+    isTextFile,
+    readTextFile,
+    writeTextFile,
 } from '../commons/files.js';
 
 export async function listFiles(_req: Request, res: Response): Promise<void> {
@@ -43,8 +44,17 @@ export async function getFile(req: Request, res: Response): Promise<void> {
         return;
     }
 
+    const resolvedType = fileType as (typeof AllowedFiles)[keyof typeof AllowedFiles];
+    if (!isTextFile(resolvedType)) {
+        res
+            .status(400)
+            .set('Content-Type', 'text/plain')
+            .send('Only plain-text file types can be read via this endpoint');
+        return;
+    }
+
     try {
-        const content = await readFileContent(guildId, fileType as (typeof AllowedFiles)[keyof typeof AllowedFiles]);
+        const content = await readTextFile(guildId, resolvedType);
         res.set('Content-Type', 'text/plain; charset=utf-8');
         res.send(content);
     } catch (error) {
@@ -75,6 +85,15 @@ export async function writeFile(req: Request, res: Response): Promise<void> {
         return;
     }
 
+    const resolvedType = fileType as (typeof AllowedFiles)[keyof typeof AllowedFiles];
+    if (!isTextFile(resolvedType)) {
+        res
+            .status(400)
+            .set('Content-Type', 'text/plain')
+            .send('Only plain-text file types can be written via this endpoint');
+        return;
+    }
+
     const content = req.body as unknown;
     if (typeof content !== 'string') {
         res.status(400).set('Content-Type', 'text/plain').send('Content must be plain text');
@@ -82,7 +101,7 @@ export async function writeFile(req: Request, res: Response): Promise<void> {
     }
 
     try {
-        await writeFileContent(guildId, fileType as (typeof AllowedFiles)[keyof typeof AllowedFiles], content);
+        await writeTextFile(guildId, resolvedType, content);
         res.set('Content-Type', 'text/plain; charset=utf-8');
         res.send(`${fileType} file updated successfully`);
     } catch (error) {
