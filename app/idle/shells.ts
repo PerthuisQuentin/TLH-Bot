@@ -4,6 +4,7 @@ import {
     getUserLeaderboardEntry,
     getUserShells,
     getPaginatedShellsLeaderboard,
+    getShellsPerMessage,
 } from './shells-storage.js';
 import { updateMemberShellsRoles } from './shells-roles.js';
 import { readJsonFile, AllowedFiles } from '../commons/files.js';
@@ -25,21 +26,21 @@ export {
 export async function addShells(
     userId: string,
     guildId: string,
-    shellsAmount: number | null = null,
     member: GuildMember | null = null,
 ): Promise<{ newShells: number; maxShells: number; roleChanges: RoleChanges }> {
     try {
-        const finalShellsAmount =
-            shellsAmount ?? Math.floor(Math.random() * 10) + 1;
+        const base = getShellsPerMessage(guildId, userId);
+        const variance = Math.round(base * 0.1);
+        const amount = base - variance + Math.floor(Math.random() * (2 * variance + 1));
 
         const { newShells, maxShells } = addUserShells(
             guildId,
             userId,
-            finalShellsAmount,
+            amount,
         );
 
         console.log(
-            `[Shells] Added | userId=${userId} | guildId=${guildId} | amount=${finalShellsAmount} | total=${newShells} | maxShells=${maxShells}`,
+            `[Shells] Added | userId=${userId} | guildId=${guildId} | amount=${amount} | total=${newShells} | maxShells=${maxShells}`,
         );
 
         let roleChanges: RoleChanges = { added: null, addedRoleName: null, removed: [] };
@@ -80,7 +81,6 @@ export async function handleMessageShells(message: Message): Promise<void> {
     const { roleChanges } = await addShells(
         message.author.id,
         message.guildId!,
-        null,
         message.member,
     );
 

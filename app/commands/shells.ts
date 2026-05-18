@@ -7,6 +7,7 @@ import {
     InteractionContextType,
 } from 'discord-api-types/v10';
 import { getUserLeaderboardEntry } from '../idle/shells.js';
+import { getShellsPerMessage } from '../idle/shells-storage.js';
 import { getRoleForShells, getShellsRolesConfig } from '../idle/shells-roles.js';
 import type { Command } from './types.js';
 
@@ -15,7 +16,7 @@ function getNextRole(guildId: string, maxShells: number) {
     return roles.find((role) => role.threshold > maxShells) ?? null;
 }
 
-async function handleRankCommand(req: Request, res: Response): Promise<void> {
+async function handleShellsCommand(req: Request, res: Response): Promise<void> {
     try {
         const body = req.body as {
             guild_id?: string;
@@ -50,6 +51,7 @@ async function handleRankCommand(req: Request, res: Response): Promise<void> {
         const currentShells = entry?.shells ?? 0;
         const maxShells = entry?.maxShells ?? 0;
         const rankText = entry ? `#${entry.rank}` : 'Non classé';
+        const shellsPerMessage = getShellsPerMessage(guild_id, targetId);
 
         const currentRole = getRoleForShells(guild_id, maxShells);
         const nextRole = getNextRole(guild_id, maxShells);
@@ -62,6 +64,7 @@ async function handleRankCommand(req: Request, res: Response): Promise<void> {
         const fields = [
             { name: 'Rang', value: rankText, inline: true },
             { name: 'Coquillages', value: `${currentShells} 🐚`, inline: true },
+            { name: 'Gain par message', value: `${shellsPerMessage} 🐚 (±10%)`, inline: true },
             { name: 'Rôle actuel', value: currentRoleText, inline: true },
             { name: 'Prochain rôle', value: nextRoleText, inline: false },
         ];
@@ -95,9 +98,9 @@ async function handleRankCommand(req: Request, res: Response): Promise<void> {
     }
 }
 
-export const rankCommand: Command = {
+export const shellsCommand: Command = {
     definition: {
-        name: 'rank',
+        name: 'shells',
         description: "Affiche le profil Coquillages d'un utilisateur",
         type: ApplicationCommandType.ChatInput,
         integration_types: [ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall],
@@ -111,5 +114,5 @@ export const rankCommand: Command = {
             },
         ],
     },
-    handler: handleRankCommand,
+    handler: handleShellsCommand,
 };
