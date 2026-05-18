@@ -66,21 +66,33 @@ Persistent AI memory. Automatically updated when the AI decides to retain inform
 
 ### `{guildId}-shells.json`
 
-Gameification data. Contains the total shells and the all-time maximum for each user.
+Gamification data. Contains the shells balance and earn rate for each user.
 
 ```json
-{
-  "userId-1": { "shells": 42, "maxShells": 87 },
-  "userId-2": { "shells": 15, "maxShells": 15 }
-}
+[
+  {
+    "userId": "user-id-1",
+    "shells": 42,
+    "maxShells": 87,
+    "shellsPerMessage": 10
+  },
+  {
+    "userId": "user-id-2",
+    "shells": 15,
+    "maxShells": 15,
+    "shellsPerMessage": 12
+  }
+]
 ```
 
-| Field       | Description                                 |
-| ----------- | ------------------------------------------- |
-| `shells`    | User's current shell count                  |
-| `maxShells` | All-time maximum (used for role thresholds) |
+| Field              | Description                                       |
+| ------------------ | ------------------------------------------------- |
+| `userId`           | Discord user ID                                   |
+| `shells`           | User's current shell count                        |
+| `maxShells`        | All-time maximum (used for role threshold checks) |
+| `shellsPerMessage` | Base shells earned per message (default: `10`)    |
 
-**Feeding**: On each message from a user in a non-excluded channel, 1–10 shells are added randomly, subject to a 10-second cooldown per user.
+**Earning**: On each message in a non-excluded channel, the user earns `shellsPerMessage ± 10%` shells (random variance), subject to a 10-second cooldown per user. Role promotions are evaluated against `maxShells`, not the current balance.
 
 ---
 
@@ -91,20 +103,24 @@ List of pending reminders for this server.
 ```json
 [
   {
+    "id": "unique-reminder-id",
     "userId": "user-discord-id",
     "channelId": "channel-discord-id",
     "date": "2024-06-15T10:00:00.000Z",
-    "content": "Reminder: team meeting"
+    "question": "Remind me about the team meeting",
+    "createdAt": "2024-06-14T08:00:00.000Z"
   }
 ]
 ```
 
-| Field       | Description                     |
-| ----------- | ------------------------------- |
-| `userId`    | Discord user ID                 |
-| `channelId` | Channel to post the reminder in |
-| `date`      | Send date and time (ISO 8601)   |
-| `content`   | Reminder content                |
+| Field       | Description                         |
+| ----------- | ----------------------------------- |
+| `id`        | Unique reminder identifier          |
+| `userId`    | Discord user ID                     |
+| `channelId` | Channel to post the reminder in     |
+| `date`      | Send date and time (ISO 8601)       |
+| `question`  | Original reminder request from user |
+| `createdAt` | Creation date and time (ISO 8601)   |
 
 **Processing**: The scheduled job (`app/jobs/reminder-job.ts`) checks every 60 seconds for reminders whose date has passed, generates a message via Gemini, posts it to the channel, then deletes the reminder from this file.
 

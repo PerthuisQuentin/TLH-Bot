@@ -4,8 +4,12 @@ import {
     AllowedFiles,
     getFilesDirectory,
     isTextFile,
+    readJsonFile,
     readTextFile,
+    validateJsonFile,
+    writeJsonFile,
     writeTextFile,
+    type JsonFile,
 } from '../commons/files.js';
 
 export async function listFiles(_req: Request, res: Response): Promise<void> {
@@ -45,18 +49,17 @@ export async function getFile(req: Request, res: Response): Promise<void> {
     }
 
     const resolvedType = fileType as (typeof AllowedFiles)[keyof typeof AllowedFiles];
-    if (!isTextFile(resolvedType)) {
-        res
-            .status(400)
-            .set('Content-Type', 'text/plain')
-            .send('Only plain-text file types can be read via this endpoint');
-        return;
-    }
 
     try {
-        const content = await readTextFile(guildId, resolvedType);
-        res.set('Content-Type', 'text/plain; charset=utf-8');
-        res.send(content);
+        if (isTextFile(resolvedType)) {
+            const content = await readTextFile(guildId, resolvedType);
+            res.set('Content-Type', 'text/plain; charset=utf-8');
+            res.send(content);
+        } else {
+            const content = await readJsonFile(guildId, resolvedType as JsonFile);
+            res.set('Content-Type', 'application/json; charset=utf-8');
+            res.send(JSON.stringify(content, null, 2));
+        }
     } catch (error) {
         console.error(`Error reading ${fileType} file:`, error);
         res
@@ -86,22 +89,28 @@ export async function writeFile(req: Request, res: Response): Promise<void> {
     }
 
     const resolvedType = fileType as (typeof AllowedFiles)[keyof typeof AllowedFiles];
-    if (!isTextFile(resolvedType)) {
-        res
-            .status(400)
-            .set('Content-Type', 'text/plain')
-            .send('Only plain-text file types can be written via this endpoint');
-        return;
-    }
-
     const content = req.body as unknown;
-    if (typeof content !== 'string') {
-        res.status(400).set('Content-Type', 'text/plain').send('Content must be plain text');
-        return;
-    }
 
     try {
-        await writeTextFile(guildId, resolvedType, content);
+        if (isTextFile(resolvedType)) {
+            if (typeof content !== 'string') {
+                res.status(400).set('Content-Type', 'text/plain').send('Content must be plain text');
+                return;
+            }
+            await writeTextFile(guildId, resolvedType, content);
+        } else {
+            if (content === null || typeof content !== 'object') {
+                res.status(400).set('Content-Type', 'text/plain').send('Content must be valid JSON');
+                return;
+            }
+            const jsonFileType = resolvedType as JsonFile;
+            const validationError = validateJsonFile(jsonFileType, content);
+            if (validationError) {
+                res.status(400).set('Content-Type', 'text/plain').send(`Invalid JSON content: ${validationError}`);
+                return;
+            }
+            await writeJsonFile(guildId, jsonFileType, content as never);
+        }
         res.set('Content-Type', 'text/plain; charset=utf-8');
         res.send(`${fileType} file updated successfully`);
     } catch (error) {

@@ -2,7 +2,9 @@ import { readFile, writeFile } from 'fs/promises';
 import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import { z } from 'zod';
 import type { GuildConfig, ReminderObject, ShellsUser } from './types.js';
+import { GuildConfigSchema, ReminderObjectSchema, ShellsUserSchema } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -141,5 +143,26 @@ export function writeJsonFileSync<K extends JsonFile>(
 ): void {
     const absolutePath = getFilePath(guildId, fileType);
     writeFileSync(absolutePath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+// ─── JSON validation ──────────────────────────────────────────────────────────
+
+const JSON_SCHEMAS = {
+    [AllowedFiles.REMINDER]: z.array(ReminderObjectSchema),
+    [AllowedFiles.SHELLS]: z.array(ShellsUserSchema),
+    [AllowedFiles.CONFIG]: GuildConfigSchema,
+} satisfies Record<JsonFile, z.ZodTypeAny>;
+
+/**
+ * Returns a human-readable error string if validation fails, null otherwise.
+ */
+export function validateJsonFile(fileType: JsonFile, data: unknown): string | null {
+    const result = JSON_SCHEMAS[fileType].safeParse(data);
+    if (!result.success) {
+        return result.error.issues
+            .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+            .join(', ');
+    }
+    return null;
 }
 

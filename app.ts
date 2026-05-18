@@ -37,7 +37,7 @@ app.post(
 );
 
 // File routes
-apiRouter.use('/files', express.text({ type: 'text/plain' }));
+apiRouter.use('/files', express.text({ type: 'text/plain' }), express.json({ type: 'application/json' }));
 apiRouter.get('/files', listFiles);
 apiRouter.get('/files/:guildId/:fileType', getFile);
 apiRouter.post('/files/:guildId/:fileType', writeFile);
