@@ -10,7 +10,8 @@ export type ReminderObject = {
 export type ShellsUser = {
     userId: string;
     shells: number;
-    maxShells?: number;
+    maxShells: number;
+    shellsPerMessage: number;
 }
 
 export type ShellsRoleConfig = {

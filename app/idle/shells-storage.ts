@@ -5,12 +5,19 @@ import {
 } from '../commons/files.js';
 import type { ShellsUser, LeaderboardEntry, PaginatedLeaderboard } from './types.js';
 
+const DEFAULT_SHELLS_PER_MESSAGE = 10;
+
 export function readShellsData(guildId: string): ShellsUser[] {
     return readJsonFileSync(guildId, AllowedFiles.SHELLS);
 }
 
 export function writeShellsData(guildId: string, data: ShellsUser[]): void {
     writeJsonFileSync(guildId, AllowedFiles.SHELLS, data);
+}
+
+export function getShellsPerMessage(guildId: string, userId: string): number {
+    const user = readShellsData(guildId).find((u) => u.userId === userId);
+    return user?.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE;
 }
 
 export function getUserShellsData(
@@ -35,12 +42,11 @@ export function addUserShells(
     if (userIndex === -1) {
         newShells = shellsToAdd;
         maxShells = shellsToAdd;
-        users.push({ userId, shells: newShells, maxShells });
+        users.push({ userId, shells: newShells, maxShells, shellsPerMessage: DEFAULT_SHELLS_PER_MESSAGE });
     } else {
         users[userIndex].shells += shellsToAdd;
         newShells = users[userIndex].shells;
-        const currentMaxShells = users[userIndex].maxShells ?? users[userIndex].shells;
-        maxShells = Math.max(currentMaxShells, newShells);
+        maxShells = Math.max(users[userIndex].maxShells, newShells);
         users[userIndex].maxShells = maxShells;
     }
 
