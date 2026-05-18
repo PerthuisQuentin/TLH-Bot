@@ -5,7 +5,7 @@ import {
     createQuestionInstruction,
     createRolePromotionInstruction,
 } from '../commons/prompts.js';
-import { writeFileContent, AllowedFiles } from '../commons/files.js';
+import { writeTextFile, AllowedFiles } from '../commons/files.js';
 import { parseResponse } from '../commons/response.js';
 import {
     getWeather,
@@ -127,7 +127,7 @@ async function chatWithGemini({
 
     if (saveMemory && botMemory) {
         try {
-            await writeFileContent(guildId, AllowedFiles.MEMORY, botMemory);
+            await writeTextFile(guildId, AllowedFiles.MEMORY, botMemory);
             console.log(`[Memory] Updated | guildId=${guildId}`);
         } catch (error) {
             console.error(`[Memory] Error writing | guildId=${guildId}`, error);

@@ -6,3 +6,20 @@ export type ReminderObject = {
     question: string;
     createdAt: string;
 }
+
+export type ShellsUser = {
+    userId: string;
+    shells: number;
+    maxShells?: number;
+}
+
+export type ShellsRoleConfig = {
+    roleId: string;
+    threshold: number;
+}
+
+export type GuildConfig = {
+    noAskChannels?: string[];
+    noShellChannels?: string[];
+    shellsRoles?: ShellsRoleConfig[];
+}

@@ -66,11 +66,7 @@ export async function addShells(
 }
 
 export async function handleMessageShells(message: Message): Promise<void> {
-    const config = await readJsonFile<{ noShellChannels?: string[] }>(
-        message.guildId!,
-        AllowedFiles.CONFIG,
-        {},
-    );
+    const config = await readJsonFile(message.guildId!, AllowedFiles.CONFIG);
     const noShellChannels = config.noShellChannels ?? [];
     if (noShellChannels.includes(message.channelId)) {
         return;

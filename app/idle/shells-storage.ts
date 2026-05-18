@@ -6,7 +6,7 @@ import {
 import type { ShellsUser, LeaderboardEntry, PaginatedLeaderboard } from './types.js';
 
 export function readShellsData(guildId: string): ShellsUser[] {
-    return readJsonFileSync<ShellsUser[]>(guildId, AllowedFiles.SHELLS, []);
+    return readJsonFileSync(guildId, AllowedFiles.SHELLS);
 }
 
 export function writeShellsData(guildId: string, data: ShellsUser[]): void {

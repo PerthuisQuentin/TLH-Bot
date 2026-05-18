@@ -1,16 +1,8 @@
 import { readJsonFileSync, AllowedFiles } from '../commons/files.js';
 import { memoryCache } from '../commons/memory.js';
+import type { ShellsRoleConfig } from '../commons/types.js';
 import type { GuildMember } from 'discord.js';
 import type { RoleChanges } from './types.js';
-
-type ShellsRoleConfig = {
-    roleId: string;
-    threshold: number;
-}
-
-type GuildConfig = {
-    shellsRoles?: ShellsRoleConfig[];
-}
 
 const CONFIG_CACHE_TTL = 60;
 
@@ -22,7 +14,7 @@ export function getShellsRolesConfig(guildId: string): ShellsRoleConfig[] {
         return cached;
     }
 
-    const config = readJsonFileSync<GuildConfig>(guildId, AllowedFiles.CONFIG, {});
+    const config = readJsonFileSync(guildId, AllowedFiles.CONFIG);
     const shellsRoles = config.shellsRoles ?? [];
     const sortedRoles = [...shellsRoles].sort((a, b) => a.threshold - b.threshold);
 

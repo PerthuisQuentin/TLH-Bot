@@ -1,6 +1,6 @@
 import { ollama, DEFAULT_MODEL } from './ollama.js';
 import { createSystemPrompt, createUserPrompt, createQuestionInstruction } from '../commons/prompts.js';
-import { writeFileContent, AllowedFiles } from '../commons/files.js';
+import { writeTextFile, AllowedFiles } from '../commons/files.js';
 import { parseResponse } from '../commons/response.js';
 import {
     weatherToolOllama,
@@ -101,7 +101,7 @@ export async function ask(
 
     if (botMemory) {
         try {
-            await writeFileContent(guildId, AllowedFiles.MEMORY, botMemory);
+            await writeTextFile(guildId, AllowedFiles.MEMORY, botMemory);
             console.log(`[Memory] Updated | guildId=${guildId}`);
         } catch (error) {
             console.error(`[Memory] Error writing | guildId=${guildId}`, error);
