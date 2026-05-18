@@ -114,7 +114,7 @@ The `{guildId}-memory.txt` file is managed automatically by the AI. After each r
 
 ## REST API
 
-The bot exposes a REST API on the configured port. Routes are protected by the `API_KEY` variable (`Authorization` header).
+The bot exposes a REST API on the configured port. Routes are protected by the `API_KEY` variable (header: `x-api-key`).
 
 | Method     | Route                                 | Description                             |
 | ---------- | ------------------------------------- | --------------------------------------- |

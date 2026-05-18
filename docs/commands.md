@@ -74,6 +74,35 @@ Commands are Discord slash commands (prefix `/`). They are registered with the D
 
 ---
 
+## `/shells`
+
+**Description**: Displays a user's shells (🐚) profile: current count, rank, earn rate, current role, and next role to unlock.
+
+**Parameters**:
+
+| Parameter     | Type | Required | Description                                               |
+| ------------- | ---- | -------- | --------------------------------------------------------- |
+| `utilisateur` | User | No       | User whose profile to display (defaults to the requester) |
+
+**Behavior**:
+
+1. Resolves the target user (the `utilisateur` parameter if provided, otherwise the requester).
+2. Loads the server's `shells.json` leaderboard and determines the user's rank.
+3. Reads `shellsRoles` from the server config to determine the current and next role.
+4. Builds an embed with the following fields:
+   - **Rang**: rank on the server leaderboard, or "Non classé".
+   - **Coquillages**: current shell count.
+   - **Gain par message**: shells earned per message (±10% random variance).
+   - **Rôle actuel**: Discord role currently held based on `maxShells`, or "Aucun" if none configured.
+   - **Prochain rôle**: next role to unlock and how many shells are still needed, or "✨ Rang maximum atteint".
+5. If the historical maximum (`maxShells`) differs from the current count, it is shown in the embed footer.
+
+**Response format**: Discord embed (color `#FFD700`)
+
+**Available in**: servers only
+
+---
+
 ## Registering commands
 
 Commands are registered with Discord using:
