@@ -47,6 +47,13 @@ export function getUpgradeGain(upgrade: UpgradeDefinition, level: number): numbe
     return fullTiersGain + remainderGain;
 }
 
+export function formatUpgradeGain(upgrade: UpgradeDefinition, level: number): string {
+    const gain = getUpgradeGain(upgrade, level);
+    return upgrade.kind === UpgradeKind.MULTIPLICATIVE
+        ? `×${gain.toFixed(2)}`
+        : `+${gain} 🐚/msg`;
+}
+
 /**
  * Total cost of buying `count` consecutive levels starting from `fromLevel`.
  * Uses the geometric series closed form.
