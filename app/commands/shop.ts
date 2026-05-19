@@ -109,7 +109,7 @@ function handleListing(res: Response, guildId: string, userId: string): void {
             embeds: [
                 {
                     title: '🏪 Boutique',
-                    description: `Vous avez **${shells} 🐚**\n*Pour acheter, utilisez \`/shop upgrade:… quantite:…\`*`,
+                    description: `Vous avez **${Math.floor(shells)} 🐚**\n*Pour acheter, utilisez \`/shop upgrade:… quantite:…\`*`,
                     color: 0x4fc3f7,
                     fields,
                 },
@@ -148,7 +148,7 @@ async function handlePurchase(
         res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: `Fonds insuffisants. Il vous faut **${Math.ceil(getUpgradeCost(upgrade, currentLevel))} 🐚** pour le prochain niveau (vous avez **${shells} 🐚**).`,
+                content: `Fonds insuffisants. Il vous faut **${Math.ceil(getUpgradeCost(upgrade, currentLevel))} 🐚** pour le prochain niveau (vous avez **${Math.floor(shells)} 🐚**).`,
                 flags: EPHEMERAL_FLAG,
             },
         });
@@ -159,7 +159,7 @@ async function handlePurchase(
         res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: `Vous ne pouvez acheter que **${maxBuyable}** niveau(x) avec vos **${shells} 🐚**.`,
+                content: `Vous ne pouvez acheter que **${maxBuyable}** niveau(x) avec vos **${Math.floor(shells)} 🐚**.`,
                 flags: EPHEMERAL_FLAG,
             },
         });
@@ -198,7 +198,7 @@ async function handlePurchase(
                             value: `${formatGain(upgrade, currentLevel)} → **${formatGain(upgrade, newLevel)}**`,
                             inline: true,
                         },
-                        { name: 'Solde restant', value: `${spent.newShells} 🐚`, inline: true },
+                        { name: 'Solde restant', value: `${Math.floor(spent.newShells)} 🐚`, inline: true },
                     ],
                 },
             ],
