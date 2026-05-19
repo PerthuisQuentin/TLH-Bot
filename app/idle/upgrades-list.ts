@@ -1,4 +1,4 @@
-import type { AdditiveUpgradeDefinition, MultiplicativeUpgradeDefinition } from './types.js';
+import type { AdditiveUpgradeDefinition, MultiplicativeUpgradeDefinition, UpgradeDefinition } from './types.js';
 import { UpgradeKind } from './types.js';
 
 export const DIVING_OTTERS_UPGRADE: AdditiveUpgradeDefinition = {
@@ -23,3 +23,5 @@ export const HYDRODYNAMIC_FLIPPERS_UPGRADE: MultiplicativeUpgradeDefinition = {
     costMultiplier: 1.25,
     baseGain: 1.15,
 };
+
+export const ALL_UPGRADES: UpgradeDefinition[] = [DIVING_OTTERS_UPGRADE, HYDRODYNAMIC_FLIPPERS_UPGRADE];

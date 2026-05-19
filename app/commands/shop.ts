@@ -8,13 +8,11 @@ import {
 } from 'discord-api-types/v10';
 import { getUserShellsData, spendUserShells, updateUserShellsPerMessage, DEFAULT_SHELLS_PER_MESSAGE } from '../idle/shells-storage.js';
 import { getUserUpgrades, incrementUserUpgrade } from '../idle/upgrades-storage.js';
-import { DIVING_OTTERS_UPGRADE, HYDRODYNAMIC_FLIPPERS_UPGRADE } from '../idle/upgrades-list.js';
-import { getUpgradeCost, getUpgradeGain, getUpgradeTotalCost, getMaxBuyable } from '../idle/upgrades.js';
+import { ALL_UPGRADES } from '../idle/upgrades-list.js';
+import { getUpgradeCost, getUpgradeGain, getUpgradeTotalCost, getMaxBuyable, formatUpgradeGain } from '../idle/upgrades.js';
 import type { UserUpgrades, UpgradeDefinition } from '../idle/types.js';
 import { UpgradeKind } from '../idle/types.js';
 import type { Command } from './types.js';
-
-const ALL_UPGRADES: UpgradeDefinition[] = [DIVING_OTTERS_UPGRADE, HYDRODYNAMIC_FLIPPERS_UPGRADE];
 
 const EPHEMERAL_FLAG = 1 << 6;
 
@@ -35,10 +33,7 @@ function upgradeLevel(upgrades: UserUpgrades, upgrade: UpgradeDefinition): numbe
 }
 
 function formatGain(upgrade: UpgradeDefinition, level: number): string {
-    const gain = getUpgradeGain(upgrade, level);
-    return upgrade.kind === UpgradeKind.MULTIPLICATIVE
-        ? `×${gain.toFixed(2)}`
-        : `+${gain} 🐚/msg`;
+    return formatUpgradeGain(upgrade, level);
 }
 
 function buildUpgradeField(upgrade: UpgradeDefinition, level: number, shells: number) {

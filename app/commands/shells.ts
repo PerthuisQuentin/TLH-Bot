@@ -9,6 +9,10 @@ import {
 import { getUserLeaderboardEntry } from '../idle/shells.js';
 import { getShellsPerMessage } from '../idle/shells-storage.js';
 import { getRoleForShells, getShellsRolesConfig } from '../idle/shells-roles.js';
+import { getUserUpgrades } from '../idle/upgrades-storage.js';
+import { ALL_UPGRADES } from '../idle/upgrades-list.js';
+import { formatUpgradeGain } from '../idle/upgrades.js';
+import type { UserUpgrades } from '../idle/types.js';
 import type { Command } from './types.js';
 
 const EPHEMERAL_FLAG = 1 << 6;
@@ -54,6 +58,12 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         const maxShells = entry?.maxShells ?? 0;
         const rankText = entry ? `#${entry.rank}` : 'Non classé';
         const shellsPerMessage = getShellsPerMessage(guild_id, targetId);
+        const userUpgrades = getUserUpgrades(guild_id, targetId);
+
+        const upgradeLines = ALL_UPGRADES.map((u) => {
+            const level = (userUpgrades[u.id as keyof UserUpgrades] as number | undefined) ?? 0;
+            return `${u.emoji} **${u.name}** — Niv. ${level} · ${formatUpgradeGain(u, level)}`;
+        });
 
         const currentRole = getRoleForShells(guild_id, maxShells);
         const nextRole = getNextRole(guild_id, maxShells);
@@ -69,6 +79,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             { name: 'Gain par message', value: `${+shellsPerMessage.toFixed(2)} 🐚 (±10%)`, inline: true },
             { name: 'Rôle actuel', value: currentRoleText, inline: true },
             { name: 'Prochain rôle', value: nextRoleText, inline: false },
+            { name: 'Upgrades', value: upgradeLines.join('\n'), inline: false },
         ];
 
         res.send({
