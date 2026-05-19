@@ -3,8 +3,8 @@ import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { z } from 'zod';
-import type { GuildConfig, ReminderObject, ShellsUser } from './types.js';
-import { GuildConfigSchema, ReminderObjectSchema, ShellsUserSchema } from './types.js';
+import type { GuildConfig, ReminderObject, ShellsUser, UserUpgrades } from './types.js';
+import { GuildConfigSchema, ReminderObjectSchema, ShellsUserSchema, UserUpgradesSchema } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,6 +20,7 @@ export const AllowedFiles = {
     MEMORY: 'memory',
     REMINDER: 'reminder',
     SHELLS: 'shells',
+    UPGRADES: 'upgrades',
     CONFIG: 'config',
 } as const;
 
@@ -35,6 +36,7 @@ export type TextFile =
 type JsonFileTypeMap = {
     [AllowedFiles.REMINDER]: ReminderObject[];
     [AllowedFiles.SHELLS]: ShellsUser[];
+    [AllowedFiles.UPGRADES]: UserUpgrades[];
     [AllowedFiles.CONFIG]: GuildConfig;
 };
 
@@ -51,6 +53,7 @@ const TEXT_FILES = new Set<AllowedFile>([
 const JSON_DEFAULTS: JsonFileTypeMap = {
     [AllowedFiles.REMINDER]: [],
     [AllowedFiles.SHELLS]: [],
+    [AllowedFiles.UPGRADES]: [],
     [AllowedFiles.CONFIG]: {},
 };
 
@@ -150,6 +153,7 @@ export function writeJsonFileSync<K extends JsonFile>(
 const JSON_SCHEMAS = {
     [AllowedFiles.REMINDER]: z.array(ReminderObjectSchema),
     [AllowedFiles.SHELLS]: z.array(ShellsUserSchema),
+    [AllowedFiles.UPGRADES]: z.array(UserUpgradesSchema),
     [AllowedFiles.CONFIG]: GuildConfigSchema,
 } satisfies Record<JsonFile, z.ZodTypeAny>;
 

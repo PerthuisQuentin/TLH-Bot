@@ -11,6 +11,7 @@ import {
     getUserLeaderboardEntry,
     getUserShells,
 } from '../idle/shells.js';
+import { DEFAULT_SHELLS_PER_MESSAGE } from '../idle/shells-storage.js';
 import type { ShellsUser, LeaderboardEntry } from '../idle/types.js';
 import type { Command } from './types.js';
 
@@ -34,7 +35,8 @@ function formatLeaderboardDescription({
     const leaderboardText = pageUsers
         .map((user, index) => {
             const rank = startIndex + index + 1;
-            const line = `#${rank} <@${user.userId}> - ${user.shells} 🐚`;
+            const spm = +(user.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE).toFixed(2);
+            const line = `#${rank} <@${user.userId}> - ${user.shells} 🐚 *(+${spm}/msg)*`;
             if (requesterId && user.userId === requesterId) {
                 return `**${line}**`;
             }

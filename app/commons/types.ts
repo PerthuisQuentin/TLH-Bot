@@ -27,6 +27,12 @@ export type GuildConfig = {
     shellsRoles?: ShellsRoleConfig[];
 }
 
+export type UserUpgrades = {
+    userId: string;
+    divingOtters: number;
+    hydrodynamicFlippers: number;
+}
+
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
 
 export const ReminderObjectSchema = z.object({
@@ -54,4 +60,10 @@ export const GuildConfigSchema = z.object({
     noAskChannels: z.array(z.string()).optional(),
     noShellChannels: z.array(z.string()).optional(),
     shellsRoles: z.array(ShellsRoleConfigSchema).optional(),
+});
+
+export const UserUpgradesSchema = z.object({
+    userId: z.string(),
+    divingOtters: z.number(),
+    hydrodynamicFlippers: z.number(),
 });
