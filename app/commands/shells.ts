@@ -60,12 +60,12 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
 
         const currentRoleText = currentRole ? `<@&${currentRole.roleId}>` : 'Aucun';
         const nextRoleText = nextRole
-            ? `<@&${nextRole.roleId}> — encore **${nextRole.threshold - maxShells} 🐚**`
+            ? `<@&${nextRole.roleId}> — encore **${Math.ceil(nextRole.threshold - maxShells)} 🐚**`
             : '✨ Rang maximum atteint';
 
         const fields = [
             { name: 'Rang', value: rankText, inline: true },
-            { name: 'Coquillages', value: `${currentShells} 🐚`, inline: true },
+            { name: 'Coquillages', value: `${Math.floor(currentShells)} 🐚`, inline: true },
             { name: 'Gain par message', value: `${+shellsPerMessage.toFixed(2)} 🐚 (±10%)`, inline: true },
             { name: 'Rôle actuel', value: currentRoleText, inline: true },
             { name: 'Prochain rôle', value: nextRoleText, inline: false },
@@ -83,7 +83,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
                         fields,
                         timestamp: new Date().toISOString(),
                         ...(maxShells !== currentShells && {
-                            footer: { text: `Max historique : ${maxShells} 🐚` },
+                            footer: { text: `Max historique : ${Math.floor(maxShells)} 🐚` },
                         }),
                     },
                 ],

@@ -57,7 +57,7 @@ export function addUserShells(
 
 export function getShellsLeaderboard(guildId: string): ShellsUser[] {
     const users = readShellsData(guildId);
-    return [...users].sort((a, b) => b.shells - a.shells);
+    return [...users].sort((a, b) => (b.maxShells ?? b.shells) - (a.maxShells ?? a.shells));
 }
 
 export function getUserLeaderboardEntry(
@@ -75,6 +75,7 @@ export function getUserLeaderboardEntry(
         rank: userIndex + 1,
         shells: leaderboard[userIndex].shells,
         maxShells: leaderboard[userIndex].maxShells ?? leaderboard[userIndex].shells,
+        shellsPerMessage: leaderboard[userIndex].shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE,
         userId,
     };
 }

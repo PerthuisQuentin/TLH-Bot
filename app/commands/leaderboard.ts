@@ -36,7 +36,7 @@ function formatLeaderboardDescription({
         .map((user, index) => {
             const rank = startIndex + index + 1;
             const spm = +(user.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE).toFixed(2);
-            const line = `#${rank} <@${user.userId}> - ${user.shells} 🐚 *(+${spm}/msg)*`;
+            const line = `#${rank} <@${user.userId}> - ${Math.floor(user.maxShells ?? user.shells)} 🐚 *(+${spm}/msg)*`;
             if (requesterId && user.userId === requesterId) {
                 return `**${line}**`;
             }
@@ -54,10 +54,10 @@ function formatLeaderboardDescription({
     if (requesterIsOnPage) return leaderboardText;
 
     if (requesterEntry) {
-        return `${leaderboardText}\n—\n**#${requesterEntry.rank} <@${requesterId}> - ${requesterEntry.shells} 🐚**`;
+        return `${leaderboardText}\n—\n**#${requesterEntry.rank} <@${requesterId}> - ${Math.floor(requesterEntry.maxShells)} 🐚 *(+${+(requesterEntry.shellsPerMessage).toFixed(2)}/msg)***`;
     }
 
-    return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}> - ${requesterShells} 🐚**`;
+    return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}> - ${Math.floor(requesterShells)} 🐚**`;
 }
 
 async function handleLeaderboardCommand(

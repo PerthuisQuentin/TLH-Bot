@@ -37,6 +37,7 @@ export type LeaderboardEntry = {
     rank: number;
     shells: number;
     maxShells: number;
+    shellsPerMessage: number;
     userId: string;
 }
 
