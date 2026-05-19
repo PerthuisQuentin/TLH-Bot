@@ -5,7 +5,7 @@ import {
 } from '../commons/files.js';
 import type { ShellsUser, LeaderboardEntry, PaginatedLeaderboard } from './types.js';
 
-const DEFAULT_SHELLS_PER_MESSAGE = 10;
+export const DEFAULT_SHELLS_PER_MESSAGE = 10;
 
 export function readShellsData(guildId: string): ShellsUser[] {
     return readJsonFileSync(guildId, AllowedFiles.SHELLS);
@@ -82,6 +82,31 @@ export function getUserLeaderboardEntry(
 export function getUserShells(guildId: string, userId: string): number {
     const user = getUserShellsData(guildId, userId);
     return user ? user.shells : 0;
+}
+
+export function spendUserShells(
+    guildId: string,
+    userId: string,
+    amount: number,
+): { newShells: number } | null {
+    const users = readShellsData(guildId);
+    const index = users.findIndex((u) => u.userId === userId);
+    if (index === -1 || users[index].shells < amount) return null;
+    users[index].shells -= amount;
+    writeShellsData(guildId, users);
+    return { newShells: users[index].shells };
+}
+
+export function updateUserShellsPerMessage(
+    guildId: string,
+    userId: string,
+    shellsPerMessage: number,
+): void {
+    const users = readShellsData(guildId);
+    const index = users.findIndex((u) => u.userId === userId);
+    if (index === -1) return;
+    users[index].shellsPerMessage = shellsPerMessage;
+    writeShellsData(guildId, users);
 }
 
 export function getPaginatedShellsLeaderboard(

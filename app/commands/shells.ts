@@ -11,6 +11,8 @@ import { getShellsPerMessage } from '../idle/shells-storage.js';
 import { getRoleForShells, getShellsRolesConfig } from '../idle/shells-roles.js';
 import type { Command } from './types.js';
 
+const EPHEMERAL_FLAG = 1 << 6;
+
 function getNextRole(guildId: string, maxShells: number) {
     const roles = getShellsRolesConfig(guildId);
     return roles.find((role) => role.threshold > maxShells) ?? null;
@@ -30,7 +32,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         if (!guild_id) {
             res.send({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: 'Cette commande ne fonctionne que sur un serveur.' },
+                data: { content: 'Cette commande ne fonctionne que sur un serveur.', flags: EPHEMERAL_FLAG },
             });
             return;
         }
@@ -42,7 +44,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         if (!targetId) {
             res.send({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: "Impossible de déterminer l'utilisateur cible." },
+                data: { content: "Impossible de déterminer l'utilisateur cible.", flags: EPHEMERAL_FLAG },
             });
             return;
         }
@@ -64,7 +66,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         const fields = [
             { name: 'Rang', value: rankText, inline: true },
             { name: 'Coquillages', value: `${currentShells} 🐚`, inline: true },
-            { name: 'Gain par message', value: `${shellsPerMessage} 🐚 (±10%)`, inline: true },
+            { name: 'Gain par message', value: `${+shellsPerMessage.toFixed(2)} 🐚 (±10%)`, inline: true },
             { name: 'Rôle actuel', value: currentRoleText, inline: true },
             { name: 'Prochain rôle', value: nextRoleText, inline: false },
         ];
@@ -72,6 +74,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
+                flags: EPHEMERAL_FLAG,
                 embeds: [
                     {
                         title: '🐚 Profil Coquillages',
@@ -93,6 +96,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
                 content: 'Une erreur est survenue en récupérant le profil.',
+                flags: EPHEMERAL_FLAG,
             },
         });
     }
