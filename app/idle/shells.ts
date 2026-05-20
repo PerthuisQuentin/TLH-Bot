@@ -9,6 +9,7 @@ import {
 import { updateMemberShellsRoles } from './shells-roles.js';
 import { readJsonFile, AllowedFiles } from '../commons/files.js';
 import { memoryCache } from '../commons/memory.js';
+import { updateChannelHeat } from './channel-activity.js';
 import { generateRolePromotionMessage } from '../gemini/ask-gemini.js';
 import { formatDiscordJsMessage } from '../commons/messages.js';
 import type { Message, GuildMember, TextChannel } from 'discord.js';
@@ -27,11 +28,13 @@ export async function addShells(
     userId: string,
     guildId: string,
     member: GuildMember | null = null,
+    multiplier = 1.0,
 ): Promise<{ newShells: number; maxShells: number; roleChanges: RoleChanges }> {
     try {
         const base = getShellsPerMessage(guildId, userId);
         const variance = Math.round(base * 0.1);
-        const amount = base - variance + Math.floor(Math.random() * (2 * variance + 1));
+        const rolled = base - variance + Math.floor(Math.random() * (2 * variance + 1));
+        const amount = Math.round(rolled * multiplier);
 
         const { newShells, maxShells } = addUserShells(
             guildId,
@@ -40,7 +43,7 @@ export async function addShells(
         );
 
         console.log(
-            `[Shells] Added | userId=${userId} | guildId=${guildId} | amount=${amount} | total=${newShells} | maxShells=${maxShells}`,
+            `[Shells] Added | userId=${userId} | guildId=${guildId} | amount=${amount} | multiplier=${multiplier.toFixed(2)} | total=${newShells} | maxShells=${maxShells}`,
         );
 
         let roleChanges: RoleChanges = { added: null, addedRoleName: null, removed: [] };
@@ -73,6 +76,10 @@ export async function handleMessageShells(message: Message): Promise<void> {
         return;
     }
 
+    // Update heat before the cooldown check so every message counts toward activity,
+    // even when the user is on cooldown and won't earn shells this time.
+    const multiplier = updateChannelHeat(message.channelId, message.author.id);
+
     const cacheKey = `shells:${message.guildId}:${message.author.id}`;
     if (memoryCache.has(cacheKey)) {
         return;
@@ -82,6 +89,7 @@ export async function handleMessageShells(message: Message): Promise<void> {
         message.author.id,
         message.guildId!,
         message.member,
+        multiplier,
     );
 
     if (roleChanges.added && roleChanges.addedRoleName) {
