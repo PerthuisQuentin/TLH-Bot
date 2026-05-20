@@ -5,47 +5,11 @@
  * Tweak the parameters below to explore different behaviours.
  */
 
+import { DECAY_LAMBDA, MIN_CONTRIBUTION, HeatState, createHeatState, heatToMultiplier, recordMessage, advanceDecay } from '../app/idle/heat-config.js';
+
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-const DECAY_LAMBDA = 0.008; // per second — controls cooling speed
-const MIN_CONTRIBUTION = 0.01;
-
-function heatToMultiplier(heat: number): number {
-    if (heat < 1.5) return 1.0;
-    if (heat < 2) return 1.2;
-    if (heat < 3) return 1.4;
-    if (heat < 4) return 1.6;
-    if (heat < 7) return 1.8;
-    return 2.0;
-}
-
 const BASE_SHELLS = 10; // shellsPerMessage baseline for display
-
-// ── Heat engine (same logic as channel-activity.ts, time-injectable for sim) ──
-
-type SimState = { contributions: Map<string, number>; lastDecayAt: number };
-
-function createState(nowMs: number): SimState {
-    return { contributions: new Map(), lastDecayAt: nowMs };
-}
-
-function postMessage(state: SimState, userId: string, nowMs: number): number {
-    const deltaSeconds = (nowMs - state.lastDecayAt) / 1000;
-    const decayFactor = Math.exp(-DECAY_LAMBDA * deltaSeconds);
-
-    for (const [uid, c] of state.contributions) {
-        const decayed = c * decayFactor;
-        if (decayed < MIN_CONTRIBUTION) state.contributions.delete(uid);
-        else state.contributions.set(uid, decayed);
-    }
-
-    state.lastDecayAt = nowMs;
-    state.contributions.set(userId, 1.0);
-
-    let heat = 0;
-    for (const c of state.contributions.values()) heat += c;
-    return heat;
-}
 
 // ── Display helpers ───────────────────────────────────────────────────────────
 
@@ -65,8 +29,8 @@ function multiplierColor(m: number): string {
     return GREEN;
 }
 
-function heatBar(heat: number, maxHeat = 6, width = 15): string {
-    const filled = Math.round((heat / maxHeat) * width);
+function heatBar(heat: number, maxHeat = 20, width = 15): string {
+    const filled = Math.min(width, Math.round((heat / maxHeat) * width));
     return '█'.repeat(filled) + '░'.repeat(width - filled);
 }
 
@@ -93,23 +57,9 @@ function printRow(t: number, event: string, heat: number, dim = false): void {
     );
 }
 
-function printSilence(state: SimState, fromMs: number, toMs: number, stepS = 30): void {
+function printSilence(state: HeatState, fromMs: number, toMs: number, stepS = 30): void {
     for (let t = fromMs / 1000 + stepS; t <= toMs / 1000; t += stepS) {
-        const nowMs = t * 1000;
-        const deltaSeconds = (nowMs - state.lastDecayAt) / 1000;
-        const decayFactor = Math.exp(-DECAY_LAMBDA * deltaSeconds);
-
-        let heat = 0;
-        for (const c of state.contributions.values()) heat += c * decayFactor;
-
-        // Advance state lazily (no message, just peek)
-        state.lastDecayAt = nowMs;
-        for (const [uid, c] of state.contributions) {
-            const d = c * decayFactor;
-            if (d < MIN_CONTRIBUTION) state.contributions.delete(uid);
-            else state.contributions.set(uid, d);
-        }
-
+        const heat = advanceDecay(state, t * 1000);
         printRow(t, '(silence)', heat, true);
     }
 }
@@ -119,35 +69,35 @@ function printSilence(state: SimState, fromMs: number, toMs: number, stepS = 30)
 // 1. Solo user — no bonus expected
 {
     printHeader('Scenario 1 — Solo user');
-    const s = createState(0);
-    for (let i = 0; i < 5; i++) {
-        const t = i * 30;
-        const heat = postMessage(s, 'user1', t * 1000);
+    const s = createHeatState(0);
+    for (let i = 0; i < 20; i++) {
+        const t = i * 10;
+        const heat = recordMessage(s, 'user1', t * 1000);
         printRow(t, 'user1 posts', heat);
     }
 }
 
 // 2. Two users alternating every 20 s
 {
-    printHeader('Scenario 2 — 2 users alternating (20 s)');
-    const s = createState(0);
+    printHeader('Scenario 2 — 2 users alternating (5 s)');
+    const s = createHeatState(0);
     const users = ['Noug', 'Wino'];
-    for (let i = 0; i < 8; i++) {
-        const t = i * 20;
-        const heat = postMessage(s, users[i % 2], t * 1000);
+    for (let i = 0; i < 30; i++) {
+        const t = i * 5;
+        const heat = recordMessage(s, users[i % 2], t * 1000);
         printRow(t, `${users[i % 2]} posts`, heat);
     }
 }
 
 // 3. 4 users in an active conversation (one message every 10–15 s, rotating)
 {
-    printHeader('Scenario 3 — 4 users active conv (10–15 s)');
-    const s = createState(0);
+    printHeader('Scenario 3 — 4 users active conv (5–10 s)');
+    const s = createHeatState(0);
     const users = ['Liline', 'Wino', 'La Noug', 'Cindoush'];
-    const intervals = [10, 12, 15, 10, 13, 11, 14, 10, 12, 15];
+    const intervals = [5, 7, 6, 8, 5, 9, 6, 7, 5, 8, 6, 5, 7, 9, 6, 8, 5, 7, 6, 8];
     let t = 0;
     for (let i = 0; i < intervals.length; i++) {
-        const heat = postMessage(s, users[i % 4], t * 1000);
+        const heat = recordMessage(s, users[i % 4], t * 1000);
         printRow(t, `${users[i % 4]} posts`, heat);
         t += intervals[i];
     }
@@ -158,36 +108,49 @@ function printSilence(state: SimState, fromMs: number, toMs: number, stepS = 30)
 // 4. 8 users: progressive ramp-up, sustained peak, then cool-down
 {
     printHeader('Scenario 4 — 8 users, progressive then silence');
-    const s = createState(0);
+    const s = createHeatState(0);
 
     // Users join one by one, realistic gaps
     const events: [number, string][] = [
         // Progressive arrivals
         [0, 'Liline'],
-        [22, 'Wino'],
-        [38, 'La Noug'],
-        [55, 'Cindoush'],
-        [75, 'Tintin'],
-        [90, 'Floflo'],
-        [110, 'Roro'],
-        [128, 'Beber'],
+        [8, 'Wino'],
+        [14, 'La Noug'],
+        [20, 'Cindoush'],
+        [28, 'Tintin'],
+        [35, 'Floflo'],
+        [41, 'Roro'],
+        [48, 'Beber'],
         // Conversation at full speed
-        [145, 'Liline'],
-        [157, 'Wino'],
-        [172, 'Tintin'],
-        [184, 'La Noug'],
-        [197, 'Cindoush'],
-        [210, 'Roro'],
-        [222, 'Beber'],
-        [235, 'Floflo'],
+        [55, 'Liline'],
+        [62, 'Wino'],
+        [68, 'Tintin'],
+        [75, 'La Noug'],
+        [81, 'Cindoush'],
+        [87, 'Roro'],
+        [93, 'Beber'],
+        [99, 'Floflo'],
+        [106, 'Liline'],
+        [112, 'Wino'],
+        [118, 'Tintin'],
+        [125, 'La Noug'],
+        [131, 'Cindoush'],
+        [137, 'Roro'],
+        [143, 'Beber'],
+        [149, 'Floflo'],
+        [156, 'Liline'],
+        [162, 'Wino'],
+        [169, 'Tintin'],
+        [175, 'La Noug'],
         // Conversation starts to slow down
-        [275, 'Liline'],
-        [320, 'Wino'],
-        [390, 'La Noug'],
+        [200, 'Cindoush'],
+        [230, 'Liline'],
+        [270, 'Wino'],
+        [330, 'La Noug'],
     ];
 
     for (const [t, user] of events) {
-        const heat = postMessage(s, user, t * 1000);
+        const heat = recordMessage(s, user, t * 1000);
         printRow(t, `${user} posts`, heat);
     }
 
@@ -198,10 +161,10 @@ function printSilence(state: SimState, fromMs: number, toMs: number, stepS = 30)
 // 5. One user floods (cooldown would prevent this in prod, shown for reference)
 {
     printHeader('Scenario 5 — Flood by single user (×1.0 stays flat)');
-    const s = createState(0);
-    for (let i = 0; i < 6; i++) {
+    const s = createHeatState(0);
+    for (let i = 0; i < 12; i++) {
         const t = i * 5;
-        const heat = postMessage(s, 'spammer', t * 1000);
+        const heat = recordMessage(s, 'spammer', t * 1000);
         printRow(t, 'spammer posts', heat);
     }
 }
