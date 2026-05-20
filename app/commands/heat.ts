@@ -13,25 +13,44 @@ function heatBar(heat: number, maxHeat = 7, length = 12): string {
     return '█'.repeat(filled) + '░'.repeat(length - filled);
 }
 
-function formatHeatMessage(channelId: string): string {
+type HeatEmbed = {
+    title: string;
+    description: string;
+    color: number;
+    fields?: Array<{ name: string; value: string; inline?: boolean }>;
+};
+
+function formatHeatEmbed(channelId: string): HeatEmbed {
     const { heat, multiplier, contributors } = getChannelHeatSnapshot(channelId);
 
     const bar = heatBar(heat);
-    const heatLine = `🔥 **Chaleur du canal :** \`${bar}\` **${heat.toFixed(2)}** → ×${multiplier.toFixed(1)}`;
+    const description =
+        contributors.length === 0
+            ? '*Aucune activité récente.*'
+            : `\`${bar}\` **${heat.toFixed(2)}** → ×${multiplier.toFixed(1)}`;
 
-    if (contributors.length === 0) {
-        return `${heatLine}\n*Aucune activité récente.*`;
+    const embed: HeatEmbed = {
+        title: '🔥 Chaleur du canal',
+        description,
+        color: multiplier >= 2.0 ? 0xe74c3c : multiplier >= 1.6 ? 0xe67e22 : multiplier >= 1.2 ? 0xf1c40f : 0x2ecc71,
+    };
+
+    if (contributors.length > 0) {
+        const total = contributors.reduce((sum, c) => sum + c.contribution, 0);
+        embed.fields = [
+            {
+                name: 'Participants actifs',
+                value: contributors
+                    .map((c) => {
+                        const pct = Math.round((c.contribution / total) * 100);
+                        return `• <@${c.userId}> — ${pct}%`;
+                    })
+                    .join('\n'),
+            },
+        ];
     }
 
-    const total = contributors.reduce((sum, c) => sum + c.contribution, 0);
-    const participantLines = contributors
-        .map((c) => {
-            const pct = Math.round((c.contribution / total) * 100);
-            return `• <@${c.userId}> — ${pct}%`;
-        })
-        .join('\n');
-
-    return `${heatLine}\n\n**Participants actifs :**\n${participantLines}`;
+    return embed;
 }
 
 async function handleHeatCommand(req: Request, res: Response): Promise<void> {
@@ -48,7 +67,7 @@ async function handleHeatCommand(req: Request, res: Response): Promise<void> {
 
     res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: { content: formatHeatMessage(channelId) },
+        data: { embeds: [formatHeatEmbed(channelId)] },
     });
 }
 
