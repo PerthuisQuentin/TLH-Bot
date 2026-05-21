@@ -11,14 +11,14 @@ export type ReminderObject = {
 
 export type ShellsUser = {
     userId: string;
-    shells: number;
-    maxShells: number;
-    shellsPerMessage: number;
+    shells: string;
+    maxShells: string;
+    shellsPerMessage: string;
 }
 
 export type ShellsRoleConfig = {
     roleId: string;
-    threshold: number;
+    threshold: string;
 }
 
 export type GuildConfig = {
@@ -46,14 +46,14 @@ export const ReminderObjectSchema = z.object({
 
 export const ShellsUserSchema = z.object({
     userId: z.string(),
-    shells: z.number(),
-    maxShells: z.number(),
-    shellsPerMessage: z.number(),
+    shells: z.string(),
+    maxShells: z.string(),
+    shellsPerMessage: z.string(),
 });
 
 export const ShellsRoleConfigSchema = z.object({
     roleId: z.string(),
-    threshold: z.number(),
+    threshold: z.string(),
 });
 
 export const GuildConfigSchema = z.object({

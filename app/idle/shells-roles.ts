@@ -1,5 +1,6 @@
 import { readJsonFileSync, AllowedFiles } from '../commons/files.js';
 import { memoryCache } from '../commons/memory.js';
+import { bnFromJSON, bnGte, bnGt, bnLt, type BigNum } from '../commons/big-number.js';
 import type { ShellsRoleConfig } from '../commons/types.js';
 import type { GuildMember } from 'discord.js';
 import type { RoleChanges } from './types.js';
@@ -16,7 +17,11 @@ export function getShellsRolesConfig(guildId: string): ShellsRoleConfig[] {
 
     const config = readJsonFileSync(guildId, AllowedFiles.CONFIG);
     const shellsRoles = config.shellsRoles ?? [];
-    const sortedRoles = [...shellsRoles].sort((a, b) => a.threshold - b.threshold);
+    const sortedRoles = [...shellsRoles].sort((a, b) => {
+        const at = bnFromJSON(a.threshold);
+        const bt = bnFromJSON(b.threshold);
+        return bnLt(at, bt) ? -1 : bnGt(at, bt) ? 1 : 0;
+    });
 
     memoryCache.set(cacheKey, sortedRoles, CONFIG_CACHE_TTL);
 
@@ -25,14 +30,14 @@ export function getShellsRolesConfig(guildId: string): ShellsRoleConfig[] {
 
 export function getRoleForShells(
     guildId: string,
-    shells: number,
+    shells: BigNum,
 ): ShellsRoleConfig | null {
     const shellsRoles = getShellsRolesConfig(guildId);
     if (shellsRoles.length === 0) return null;
 
     let qualifiedRole: ShellsRoleConfig | null = null;
     for (const role of shellsRoles) {
-        if (shells >= role.threshold) {
+        if (bnGte(shells, bnFromJSON(role.threshold))) {
             qualifiedRole = role;
         } else {
             break;
@@ -43,7 +48,7 @@ export function getRoleForShells(
 
 export async function updateMemberShellsRoles(
     member: GuildMember,
-    maxShells: number,
+    maxShells: BigNum,
 ): Promise<RoleChanges> {
     const guildId = member.guild.id;
     const shellsRoles = getShellsRolesConfig(guildId);

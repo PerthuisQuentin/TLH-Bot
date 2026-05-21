@@ -12,14 +12,15 @@ import { getRoleForShells, getShellsRolesConfig } from '../idle/shells-roles.js'
 import { getUserUpgrades } from '../idle/upgrades-storage.js';
 import { ALL_UPGRADES } from '../idle/upgrades-list.js';
 import { formatUpgradeGain } from '../idle/upgrades.js';
+import { bn, bnSub, bnFromJSON, bnGt, formatBigNum, type BigNum } from '../commons/big-number.js';
 import type { UserUpgrades } from '../idle/types.js';
 import type { Command } from './types.js';
 
 const EPHEMERAL_FLAG = 1 << 6;
 
-function getNextRole(guildId: string, maxShells: number) {
+function getNextRole(guildId: string, maxShells: BigNum) {
     const roles = getShellsRolesConfig(guildId);
-    return roles.find((role) => role.threshold > maxShells) ?? null;
+    return roles.find((role) => bnGt(bnFromJSON(role.threshold), maxShells)) ?? null;
 }
 
 async function handleShellsCommand(req: Request, res: Response): Promise<void> {
@@ -42,7 +43,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         }
 
         const targetId =
-            (data?.options?.find((opt) => opt.name === 'utilisateur')?.value as string | undefined) ??
+            (data?.options?.find((opt) => opt.name === 'user')?.value as string | undefined) ??
             requesterId;
 
         if (!targetId) {
@@ -54,8 +55,8 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         }
 
         const entry = getUserLeaderboardEntry(guild_id, targetId);
-        const currentShells = entry?.shells ?? 0;
-        const maxShells = entry?.maxShells ?? 0;
+        const currentShells = entry?.shells ?? bn(0);
+        const maxShells = entry?.maxShells ?? bn(0);
         const rankText = entry ? `#${entry.rank}` : 'Non classé';
         const shellsPerMessage = getShellsPerMessage(guild_id, targetId);
         const userUpgrades = getUserUpgrades(guild_id, targetId);
@@ -70,13 +71,13 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
 
         const currentRoleText = currentRole ? `<@&${currentRole.roleId}>` : 'Aucun';
         const nextRoleText = nextRole
-            ? `<@&${nextRole.roleId}> — encore **${Math.ceil(nextRole.threshold - maxShells)} 🐚**`
+            ? `<@&${nextRole.roleId}> — encore **${formatBigNum(bnSub(bnFromJSON(nextRole.threshold), maxShells))} 🐚**`
             : '✨ Rang maximum atteint';
 
         const fields = [
             { name: 'Rang', value: rankText, inline: true },
-            { name: 'Coquillages', value: `${Math.floor(currentShells)} 🐚`, inline: true },
-            { name: 'Gain par message', value: `${+shellsPerMessage.toFixed(2)} 🐚 (±10%)`, inline: true },
+            { name: 'Coquillages', value: `${formatBigNum(currentShells)} 🐚`, inline: true },
+            { name: 'Gain par message', value: `${formatBigNum(shellsPerMessage)} 🐚 (±10%)`, inline: true },
             { name: 'Rôle actuel', value: currentRoleText, inline: true },
             { name: 'Prochain rôle', value: nextRoleText, inline: false },
             { name: 'Upgrades', value: upgradeLines.join('\n'), inline: false },
@@ -93,8 +94,8 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
                         color: 0xffd700,
                         fields,
                         timestamp: new Date().toISOString(),
-                        ...(maxShells !== currentShells && {
-                            footer: { text: `Max historique : ${Math.floor(maxShells)} 🐚` },
+                        ...(!maxShells.eq(currentShells) && {
+                            footer: { text: `Max historique : ${formatBigNum(maxShells)} 🐚` },
                         }),
                     },
                 ],
@@ -123,7 +124,7 @@ export const shellsCommand: Command = {
         options: [
             {
                 type: ApplicationCommandOptionType.User,
-                name: 'utilisateur',
+                name: 'user',
                 description: 'Utilisateur dont afficher le profil (vous par défaut)',
                 required: false,
             },

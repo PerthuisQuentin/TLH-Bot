@@ -12,6 +12,7 @@ import {
     getUserShells,
 } from '../idle/shells.js';
 import { DEFAULT_SHELLS_PER_MESSAGE } from '../idle/shells-storage.js';
+import { bn, bnFromJSON, formatBigNum, type BigNum } from '../commons/big-number.js';
 import type { ShellsUser, LeaderboardEntry } from '../idle/types.js';
 import type { Command } from './types.js';
 
@@ -21,7 +22,7 @@ type FormatLeaderboardParams = {
     pageSize: number;
     requesterId: string | undefined;
     requesterEntry: LeaderboardEntry | null;
-    requesterShells: number;
+    requesterShells: BigNum;
 }
 
 function formatLeaderboardDescription({
@@ -35,8 +36,8 @@ function formatLeaderboardDescription({
     const leaderboardText = pageUsers
         .map((user, index) => {
             const rank = startIndex + index + 1;
-            const spm = +(user.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE).toFixed(2);
-            const line = `#${rank} <@${user.userId}> - ${Math.floor(user.maxShells ?? user.shells)} 🐚 *(+${spm}/msg)*`;
+            const spm = formatBigNum(bnFromJSON(user.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE));
+            const line = `#${rank} <@${user.userId}> - ${formatBigNum(bnFromJSON(user.maxShells ?? user.shells))} 🐚 *(+${spm}/msg)*`;
             if (requesterId && user.userId === requesterId) {
                 return `**${line}**`;
             }
@@ -54,10 +55,10 @@ function formatLeaderboardDescription({
     if (requesterIsOnPage) return leaderboardText;
 
     if (requesterEntry) {
-        return `${leaderboardText}\n—\n**#${requesterEntry.rank} <@${requesterId}> - ${Math.floor(requesterEntry.maxShells)} 🐚 *(+${+(requesterEntry.shellsPerMessage).toFixed(2)}/msg)***`;
+        return `${leaderboardText}\n—\n**#${requesterEntry.rank} <@${requesterId}> - ${formatBigNum(requesterEntry.maxShells)} 🐚 *(+${formatBigNum(requesterEntry.shellsPerMessage)}/msg)***`;
     }
 
-    return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}> - ${Math.floor(requesterShells)} 🐚**`;
+    return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}> - ${formatBigNum(requesterShells)} 🐚**`;
 }
 
 async function handleLeaderboardCommand(
@@ -107,7 +108,7 @@ async function handleLeaderboardCommand(
         const requesterEntry = requesterId
             ? getUserLeaderboardEntry(guild_id, requesterId)
             : null;
-        const requesterShells = requesterId ? getUserShells(guild_id, requesterId) : 0;
+        const requesterShells = requesterId ? getUserShells(guild_id, requesterId) : bn(0);
 
         const description = formatLeaderboardDescription({
             pageUsers,

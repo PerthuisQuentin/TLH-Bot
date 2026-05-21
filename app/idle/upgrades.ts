@@ -1,5 +1,6 @@
 import { UpgradeKind } from './types.js';
 import type { UpgradeDefinition } from './types.js';
+import { bn, bnAdd, bnSub, bnMul, bnDiv, bnFloor, bnPow, bnLn, bnLte, bnGt, formatBigNum, type BigNum } from '../commons/big-number.js';
 
 // ─── Calculation helpers ──────────────────────────────────────────────────────
 
@@ -8,8 +9,8 @@ import type { UpgradeDefinition } from './types.js';
  * Follows a geometric series: initialCost * costMultiplier^level.
  * Level is 0-indexed (level 0 → 1 costs initialCost).
  */
-export function getUpgradeCost(upgrade: UpgradeDefinition, level: number): number {
-    return upgrade.initialCost * Math.pow(upgrade.costMultiplier, level);
+export function getUpgradeCost(upgrade: UpgradeDefinition, level: number): BigNum {
+    return bnMul(upgrade.initialCost, bnPow(upgrade.costMultiplier, level));
 }
 
 /**
@@ -22,36 +23,34 @@ export function getUpgradeCost(upgrade: UpgradeDefinition, level: number): numbe
  *   levels  1–10 each contribute +1  → total at level 10 is 10
  *   levels 11–20 each contribute +2  → total at level 11 is 12
  */
-export function getUpgradeGain(upgrade: UpgradeDefinition, level: number): number {
+export function getUpgradeGain(upgrade: UpgradeDefinition, level: number): BigNum {
     if (upgrade.kind === UpgradeKind.MULTIPLICATIVE) {
-        return Math.pow(upgrade.baseGain, level); // level 0 → 1 (identity, no effect)
+        return bnPow(upgrade.baseGain, level);
     }
 
-    if (level <= 0) return 0;
+    if (level <= 0) return bn(0);
 
-    // Additive with doubling every gainDoublingInterval levels
     const { baseGain, gainDoublingInterval } = upgrade;
     const completeTiers = Math.floor(level / gainDoublingInterval);
     const remainder = level % gainDoublingInterval;
 
-    // Sum of all complete tiers: each tier t contributes gainDoublingInterval * baseGain * 2^t
-    // Sum over t=0..completeTiers-1 = gainDoublingInterval * baseGain * (2^completeTiers - 1)
     const fullTiersGain =
         completeTiers > 0
-            ? gainDoublingInterval * baseGain * (Math.pow(2, completeTiers) - 1)
-            : 0;
+            ? bnMul(gainDoublingInterval * baseGain, bnSub(bnPow(2, completeTiers), 1))
+            : bn(0);
 
-    // Remaining levels in the current (incomplete) tier
-    const remainderGain = remainder * baseGain * Math.pow(2, completeTiers);
+    const remainderGain = bnMul(remainder * baseGain, bnPow(2, completeTiers));
 
-    return fullTiersGain + remainderGain;
+    return bnAdd(fullTiersGain, remainderGain);
 }
 
 export function formatUpgradeGain(upgrade: UpgradeDefinition, level: number): string {
     const gain = getUpgradeGain(upgrade, level);
-    return upgrade.kind === UpgradeKind.MULTIPLICATIVE
-        ? `×${gain.toFixed(2)}`
-        : `+${gain} 🐚/msg`;
+    if (upgrade.kind === UpgradeKind.MULTIPLICATIVE) {
+        // Pour les petits multiplicateurs, afficher 2 décimales ; pour les grands, utiliser formatBigNum
+        return gain.gte(1000) ? `×${formatBigNum(gain)}` : `×${gain.toFixed(2)}`;
+    }
+    return `+${formatBigNum(gain)} 🐚/msg`;
 }
 
 /**
@@ -62,12 +61,12 @@ export function getUpgradeTotalCost(
     upgrade: UpgradeDefinition,
     fromLevel: number,
     count: number,
-): number {
-    if (count <= 0) return 0;
+): BigNum {
+    if (count <= 0) return bn(0);
     const { initialCost, costMultiplier } = upgrade;
     const ratio = costMultiplier - 1;
-    const base = initialCost * Math.pow(costMultiplier, fromLevel);
-    return base * (Math.pow(costMultiplier, count) - 1) / ratio;
+    const base = bnMul(initialCost, bnPow(costMultiplier, fromLevel));
+    return bnDiv(bnMul(base, bnSub(bnPow(costMultiplier, count), 1)), ratio);
 }
 
 /**
@@ -79,25 +78,25 @@ export function getUpgradeTotalCost(
 export function getMaxBuyable(
     upgrade: UpgradeDefinition,
     currentLevel: number,
-    shells: number,
+    shells: BigNum,
 ): number {
-    if (shells <= 0) return 0;
+    if (bnLte(shells, 0)) return 0;
 
     const { initialCost, costMultiplier } = upgrade;
-
-    // Total cost of buying N levels from currentLevel (geometric series):
-    //   initialCost * costMultiplier^currentLevel * (costMultiplier^N - 1) / (costMultiplier - 1)
-    // Solving for N gives the formula below.
     const ratio = costMultiplier - 1;
-    const base = initialCost * Math.pow(costMultiplier, currentLevel);
+    const base = bnMul(initialCost, bnPow(costMultiplier, currentLevel));
+
+    // Solving for N: base * (costMultiplier^N - 1) / ratio <= shells
+    // N <= ln(1 + shells * ratio / base) / ln(costMultiplier)
+    const inner = bnAdd(1, bnDiv(bnMul(shells, ratio), base));
 
     const estimate = Math.max(
         0,
-        Math.floor(Math.log(1 + (shells * ratio) / base) / Math.log(costMultiplier)),
+        bnFloor(bnDiv(bnLn(inner), bnLn(costMultiplier))).toNumber(),
     );
 
     // Correct for floating-point drift (at most ±1 off)
-    if (getUpgradeTotalCost(upgrade, currentLevel, estimate + 1) <= shells) return estimate + 1;
-    if (estimate > 0 && getUpgradeTotalCost(upgrade, currentLevel, estimate) > shells) return estimate - 1;
+    if (bnLte(getUpgradeTotalCost(upgrade, currentLevel, estimate + 1), shells)) return estimate + 1;
+    if (estimate > 0 && bnGt(getUpgradeTotalCost(upgrade, currentLevel, estimate), shells)) return estimate - 1;
     return estimate;
 }
