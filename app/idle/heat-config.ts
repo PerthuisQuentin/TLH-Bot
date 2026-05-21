@@ -1,5 +1,5 @@
-// Decay constant (per second). With λ = 0.01, a contribution halves in ~69 s.
-export const DECAY_LAMBDA = 0.01;
+// Decay constant (per second). With λ = 0.006, a contribution halves in ~116 s.
+export const DECAY_LAMBDA = 0.006;
 
 // Entries below this threshold are pruned to avoid memory leaks in silent channels.
 export const MIN_CONTRIBUTION = 0.01;

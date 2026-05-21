@@ -42,6 +42,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             return;
         }
 
+        const isPublic = data?.options?.find((opt) => opt.name === 'public')?.value === true;
         const targetId =
             (data?.options?.find((opt) => opt.name === 'user')?.value as string | undefined) ??
             requesterId;
@@ -86,7 +87,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                flags: EPHEMERAL_FLAG,
+                ...(isPublic ? {} : { flags: EPHEMERAL_FLAG }),
                 embeds: [
                     {
                         title: '🐚 Profil Coquillages',
@@ -126,6 +127,12 @@ export const shellsCommand: Command = {
                 type: ApplicationCommandOptionType.User,
                 name: 'user',
                 description: 'Utilisateur dont afficher le profil (vous par défaut)',
+                required: false,
+            },
+            {
+                type: ApplicationCommandOptionType.Boolean,
+                name: 'public',
+                description: 'Rendre la réponse visible par tous (par défaut : privée)',
                 required: false,
             },
         ],
