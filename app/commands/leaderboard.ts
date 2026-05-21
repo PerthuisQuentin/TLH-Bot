@@ -16,6 +16,8 @@ import { bn, bnFromJSON, formatBigNum, type BigNum } from '../commons/big-number
 import type { ShellsUser, LeaderboardEntry } from '../idle/types.js';
 import type { Command } from './types.js';
 
+const EPHEMERAL_FLAG = 1 << 6;
+
 type FormatLeaderboardParams = {
     pageUsers: ShellsUser[];
     startIndex: number;
@@ -84,6 +86,7 @@ async function handleLeaderboardCommand(
         }
 
         const pageOption = data?.options?.find((opt) => opt.name === 'page')?.value;
+        const isPublic = data?.options?.find((opt) => opt.name === 'public')?.value === true;
         const requestedPage =
             Number.isInteger(pageOption) && (pageOption as number) > 0
                 ? (pageOption as number)
@@ -96,6 +99,7 @@ async function handleLeaderboardCommand(
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
                     content: 'Aucun utilisateur avec des coquillages pour le moment.',
+                    ...(isPublic ? {} : { flags: EPHEMERAL_FLAG }),
                 },
             });
             return;
@@ -122,6 +126,7 @@ async function handleLeaderboardCommand(
         res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
+                ...(isPublic ? {} : { flags: EPHEMERAL_FLAG }),
                 embeds: [
                     {
                         title: '🐚 Classement Coquillages',
@@ -161,6 +166,12 @@ export const leaderboardCommand: Command = {
                 description: 'Numéro de page (10 utilisateurs par page)',
                 required: false,
                 min_value: 1,
+            },
+            {
+                type: ApplicationCommandOptionType.Boolean,
+                name: 'public',
+                description: 'Rendre la réponse visible par tous (par défaut : privée)',
+                required: false,
             },
         ],
     },
