@@ -3,6 +3,7 @@ import {
     writeJsonFileSync,
     AllowedFiles,
 } from '../commons/files.js';
+import { bn, bnAdd, bnSub, bnMax, bnFromJSON, bnToJSON, bnLt, bnCompare, type BigNum } from '../commons/big-number.js';
 import type { ShellsUser, LeaderboardEntry, PaginatedLeaderboard } from './types.js';
 
 export const DEFAULT_SHELLS_PER_MESSAGE = 10;
@@ -15,9 +16,9 @@ export function writeShellsData(guildId: string, data: ShellsUser[]): void {
     writeJsonFileSync(guildId, AllowedFiles.SHELLS, data);
 }
 
-export function getShellsPerMessage(guildId: string, userId: string): number {
+export function getShellsPerMessage(guildId: string, userId: string): BigNum {
     const user = readShellsData(guildId).find((u) => u.userId === userId);
-    return user?.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE;
+    return bnFromJSON(user?.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE);
 }
 
 export function getUserShellsData(
@@ -31,23 +32,28 @@ export function getUserShellsData(
 export function addUserShells(
     guildId: string,
     userId: string,
-    shellsToAdd: number,
-): { newShells: number; maxShells: number } {
+    shellsToAdd: BigNum,
+): { newShells: BigNum; maxShells: BigNum } {
     const users = readShellsData(guildId);
     const userIndex = users.findIndex((u) => u.userId === userId);
 
-    let newShells: number;
-    let maxShells: number;
+    let newShells: BigNum;
+    let maxShells: BigNum;
 
     if (userIndex === -1) {
         newShells = shellsToAdd;
         maxShells = shellsToAdd;
-        users.push({ userId, shells: newShells, maxShells, shellsPerMessage: DEFAULT_SHELLS_PER_MESSAGE });
+        users.push({
+            userId,
+            shells: bnToJSON(newShells),
+            maxShells: bnToJSON(maxShells),
+            shellsPerMessage: String(DEFAULT_SHELLS_PER_MESSAGE),
+        });
     } else {
-        users[userIndex].shells += shellsToAdd;
-        newShells = users[userIndex].shells;
-        maxShells = Math.max(users[userIndex].maxShells, newShells);
-        users[userIndex].maxShells = maxShells;
+        newShells = bnAdd(bnFromJSON(users[userIndex]!.shells), shellsToAdd);
+        maxShells = bnMax(bnFromJSON(users[userIndex]!.maxShells), newShells);
+        users[userIndex]!.shells = bnToJSON(newShells);
+        users[userIndex]!.maxShells = bnToJSON(maxShells);
     }
 
     writeShellsData(guildId, users);
@@ -57,7 +63,11 @@ export function addUserShells(
 
 export function getShellsLeaderboard(guildId: string): ShellsUser[] {
     const users = readShellsData(guildId);
-    return [...users].sort((a, b) => (b.maxShells ?? b.shells) - (a.maxShells ?? a.shells));
+    return [...users].sort((a, b) => {
+        const aMax = bnFromJSON(a.maxShells ?? a.shells);
+        const bMax = bnFromJSON(b.maxShells ?? b.shells);
+        return bnCompare(bMax, aMax); // décroissant : b avant a
+    });
 }
 
 export function getUserLeaderboardEntry(
@@ -73,40 +83,41 @@ export function getUserLeaderboardEntry(
 
     return {
         rank: userIndex + 1,
-        shells: leaderboard[userIndex].shells,
-        maxShells: leaderboard[userIndex].maxShells ?? leaderboard[userIndex].shells,
-        shellsPerMessage: leaderboard[userIndex].shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE,
+        shells: bnFromJSON(leaderboard[userIndex]!.shells),
+        maxShells: bnFromJSON(leaderboard[userIndex]!.maxShells ?? leaderboard[userIndex]!.shells),
+        shellsPerMessage: bnFromJSON(leaderboard[userIndex]!.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE),
         userId,
     };
 }
 
-export function getUserShells(guildId: string, userId: string): number {
+export function getUserShells(guildId: string, userId: string): BigNum {
     const user = getUserShellsData(guildId, userId);
-    return user ? user.shells : 0;
+    return user ? bnFromJSON(user.shells) : bn(0);
 }
 
 export function spendUserShells(
     guildId: string,
     userId: string,
-    amount: number,
-): { newShells: number } | null {
+    amount: BigNum,
+): { newShells: BigNum } | null {
     const users = readShellsData(guildId);
     const index = users.findIndex((u) => u.userId === userId);
-    if (index === -1 || users[index].shells < amount) return null;
-    users[index].shells -= amount;
+    if (index === -1 || bnLt(bnFromJSON(users[index]!.shells), amount)) return null;
+    const newShells = bnSub(bnFromJSON(users[index]!.shells), amount);
+    users[index]!.shells = bnToJSON(newShells);
     writeShellsData(guildId, users);
-    return { newShells: users[index].shells };
+    return { newShells };
 }
 
 export function updateUserShellsPerMessage(
     guildId: string,
     userId: string,
-    shellsPerMessage: number,
+    shellsPerMessage: BigNum,
 ): void {
     const users = readShellsData(guildId);
     const index = users.findIndex((u) => u.userId === userId);
     if (index === -1) return;
-    users[index].shellsPerMessage = shellsPerMessage;
+    users[index]!.shellsPerMessage = bnToJSON(shellsPerMessage);
     writeShellsData(guildId, users);
 }
 

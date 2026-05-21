@@ -12,10 +12,11 @@ import { memoryCache } from '../commons/memory.js';
 import { updateChannelHeat } from './channel-activity.js';
 import { generateRolePromotionMessage } from '../gemini/ask-gemini.js';
 import { formatDiscordJsMessage } from '../commons/messages.js';
+import { bn, bnAdd, bnSub, bnMul, bnFloor, type BigNum } from '../commons/big-number.js';
 import type { Message, GuildMember, TextChannel } from 'discord.js';
 import type { RoleChanges } from './types.js';
 
-const SHELLS_COOLDOWN = 10;
+const SHELLS_COOLDOWN = 5;
 
 export {
     getShellsLeaderboard,
@@ -29,12 +30,14 @@ export async function addShells(
     guildId: string,
     member: GuildMember | null = null,
     multiplier = 1.0,
-): Promise<{ newShells: number; maxShells: number; roleChanges: RoleChanges }> {
+): Promise<{ newShells: BigNum; maxShells: BigNum; roleChanges: RoleChanges }> {
     try {
         const base = getShellsPerMessage(guildId, userId);
-        const variance = Math.round(base * 0.1);
-        const rolled = base - variance + Math.floor(Math.random() * (2 * variance + 1));
-        const amount = Math.round(rolled * multiplier);
+        const variance = bnFloor(bnMul(base, 0.1));
+        const rangeSize = bnAdd(bnMul(variance, 2), 1);
+        const offset = bnFloor(bnMul(rangeSize, Math.random()));
+        const rolled = bnAdd(bnSub(base, variance), offset);
+        const amount = bnFloor(bnMul(rolled, multiplier));
 
         const { newShells, maxShells } = addUserShells(
             guildId,
@@ -62,8 +65,8 @@ export async function addShells(
             error,
         );
         return {
-            newShells: 0,
-            maxShells: 0,
+            newShells: bn(0),
+            maxShells: bn(0),
             roleChanges: { added: null, addedRoleName: null, removed: [] },
         };
     }

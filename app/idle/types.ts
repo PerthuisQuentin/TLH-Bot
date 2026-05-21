@@ -1,4 +1,5 @@
 import type { ShellsUser, UserUpgrades } from '../commons/types.js';
+import type { BigNum } from '../commons/big-number.js';
 export type { ShellsUser, UserUpgrades };
 
 export enum UpgradeKind {
@@ -35,9 +36,9 @@ export type RoleChanges = {
 
 export type LeaderboardEntry = {
     rank: number;
-    shells: number;
-    maxShells: number;
-    shellsPerMessage: number;
+    shells: BigNum;
+    maxShells: BigNum;
+    shellsPerMessage: BigNum;
     userId: string;
 }
 
