@@ -5,7 +5,7 @@ import { handleInteraction } from './app/routes/interactions.js';
 import { getFile, listFiles, writeFile } from './app/routes/files.js';
 import { deleteMessage } from './app/routes/messages.js';
 import { listRoles } from './app/routes/guilds.js';
-import { startBot } from './bot.js';
+import { startBot, client } from './bot.js';
 import { startReminderJob } from './app/jobs/reminder-job.js';
 
 const app = express();
@@ -63,6 +63,8 @@ startReminderJob();
 
 function shutdown(signal: string): void {
     console.log(`Received ${signal}, shutting down gracefully...`);
+    client.destroy();
+    server.closeAllConnections();
     server.close(() => {
         console.log('HTTP server closed. Exiting.');
         process.exit(0);
