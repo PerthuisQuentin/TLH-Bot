@@ -103,6 +103,57 @@ Commands are Discord slash commands (prefix `/`). They are registered with the D
 
 ---
 
+## `/shop`
+
+**Description**: Displays the upgrade shop or purchases upgrade levels using shells (🐚).
+
+**Parameters**:
+
+| Parameter  | Type        | Required | Description                               |
+| ---------- | ----------- | -------- | ----------------------------------------- |
+| `upgrade`  | Choice      | No       | Upgrade to purchase (omit to just browse) |
+| `quantite` | Integer ≥ 1 | No       | Number of levels to buy (default: 1)      |
+
+**Behavior**:
+
+- **Without `upgrade`** (listing mode):
+  1. Loads the user's current shells and upgrade levels.
+  2. Displays each upgrade with its current level, current gain, next-level cost, and how many levels the user can afford.
+  3. Response is ephemeral (only visible to the requesting user).
+
+- **With `upgrade`** (purchase mode):
+  1. Validates the requested quantity against the user's shell balance.
+  2. Deducts the total cost (geometric series) from the user's shells.
+  3. Increments the upgrade level(s) and recomputes `shellsPerMessage`.
+  4. Returns a confirmation embed showing old → new level, cost, and new gain.
+  5. Responds with an error if the user cannot afford even one level.
+
+**Response format**: Ephemeral Discord embed (listing: color `#4FC3F7`, purchase: color `#66BB6A`)
+
+**Available in**: servers only
+
+---
+
+## `/heat`
+
+**Description**: Displays the current conversation heat of the channel and its active contributors.
+
+**Parameters**: none
+
+**Behavior**:
+
+1. Reads the in-memory heat state for the current channel.
+2. Renders a 12-block progress bar representing the heat level.
+3. Shows the heat value and the resulting shells multiplier (×1.0 to ×2.0).
+4. Lists active contributors with their relative share of channel activity (%).
+5. The embed color scales with the multiplier: green (×1.0–1.0) → yellow → orange → red (×2.0).
+
+**Response format**: Discord embed (color varies with heat level)
+
+**Available in**: servers only
+
+---
+
 ## Registering commands
 
 Commands are registered with Discord using:
