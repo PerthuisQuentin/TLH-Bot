@@ -5,7 +5,7 @@
  * Tweak the parameters below to explore different behaviours.
  */
 
-import { DECAY_LAMBDA, MIN_CONTRIBUTION, HeatState, createHeatState, heatToMultiplier, recordMessage, advanceDecay } from '../app/idle/heat-config.js';
+import { DECAY_LAMBDA, MIN_CONTRIBUTION, HeatState, createHeatState, heatToMultiplier, recordActivity, advanceDecay } from '../app/idle/heat-config.js';
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ function printSilence(state: HeatState, fromMs: number, toMs: number, stepS = 30
     const s = createHeatState(0);
     for (let i = 0; i < 20; i++) {
         const t = i * 10;
-        const heat = recordMessage(s, 'user1', t * 1000);
+        const heat = recordActivity(s, 'user1', t * 1000);
         printRow(t, 'user1 posts', heat);
     }
 }
@@ -84,7 +84,7 @@ function printSilence(state: HeatState, fromMs: number, toMs: number, stepS = 30
     const users = ['Noug', 'Wino'];
     for (let i = 0; i < 30; i++) {
         const t = i * 5;
-        const heat = recordMessage(s, users[i % 2], t * 1000);
+        const heat = recordActivity(s, users[i % 2], t * 1000);
         printRow(t, `${users[i % 2]} posts`, heat);
     }
 }
@@ -97,7 +97,7 @@ function printSilence(state: HeatState, fromMs: number, toMs: number, stepS = 30
     const intervals = [5, 7, 6, 8, 5, 9, 6, 7, 5, 8, 6, 5, 7, 9, 6, 8, 5, 7, 6, 8];
     let t = 0;
     for (let i = 0; i < intervals.length; i++) {
-        const heat = recordMessage(s, users[i % 4], t * 1000);
+        const heat = recordActivity(s, users[i % 4], t * 1000);
         printRow(t, `${users[i % 4]} posts`, heat);
         t += intervals[i];
     }
@@ -150,7 +150,7 @@ function printSilence(state: HeatState, fromMs: number, toMs: number, stepS = 30
     ];
 
     for (const [t, user] of events) {
-        const heat = recordMessage(s, user, t * 1000);
+        const heat = recordActivity(s, user, t * 1000);
         printRow(t, `${user} posts`, heat);
     }
 
@@ -164,7 +164,7 @@ function printSilence(state: HeatState, fromMs: number, toMs: number, stepS = 30
     const s = createHeatState(0);
     for (let i = 0; i < 12; i++) {
         const t = i * 5;
-        const heat = recordMessage(s, 'spammer', t * 1000);
+        const heat = recordActivity(s, 'spammer', t * 1000);
         printRow(t, 'spammer posts', heat);
     }
 }

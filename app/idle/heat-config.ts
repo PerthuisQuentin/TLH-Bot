@@ -8,6 +8,9 @@ export const MIN_CONTRIBUTION = 0.01;
 // A user needs ~7 messages in quick succession to reach full contribution.
 export const MSG_INCREMENT = 0.5;
 
+// How much a single reaction adds to a user's contribution.
+export const REACTION_INCREMENT = 0.1;
+
 // Maximum contribution a single user can accumulate.
 export const MAX_CONTRIBUTION = 5.0;
 
@@ -33,7 +36,7 @@ export function heatToMultiplier(heat: number): number {
  * Applies exponential decay to `state`, records a new message from `userId`,
  * and returns the total raw heat.
  */
-export function recordMessage(state: HeatState, userId: string, nowMs: number): number {
+export function recordActivity(state: HeatState, userId: string, nowMs: number, increment = MSG_INCREMENT): number {
     const deltaSeconds = (nowMs - state.lastDecayAt) / 1000;
     const decayFactor = Math.exp(-DECAY_LAMBDA * deltaSeconds);
 
@@ -45,7 +48,7 @@ export function recordMessage(state: HeatState, userId: string, nowMs: number): 
 
     state.lastDecayAt = nowMs;
     const current = state.contributions.get(userId) ?? 0;
-    state.contributions.set(userId, Math.min(MAX_CONTRIBUTION, current + MSG_INCREMENT));
+    state.contributions.set(userId, Math.min(MAX_CONTRIBUTION, current + increment));
 
     let sum = 0, sumSq = 0;
     for (const c of state.contributions.values()) { sum += c; sumSq += c * c; }

@@ -46,7 +46,7 @@ function formatHeatEmbed(channelId: string): HeatEmbed {
                 value: contributors
                     .map((c) => {
                         const pct = Math.round((c.contribution / total) * 100);
-                        return `• <@${c.userId}> — ${pct}%`;
+                        return `• <@${c.userId}> — \`${c.contribution.toFixed(2)}\` — ${pct}%`;
                     })
                     .join('\n'),
             },

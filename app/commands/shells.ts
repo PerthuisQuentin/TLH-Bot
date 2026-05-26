@@ -12,7 +12,7 @@ import { getRoleForShells, getShellsRolesConfig } from '../idle/shells-roles.js'
 import { getUserUpgrades } from '../idle/upgrades-storage.js';
 import { ALL_UPGRADES } from '../idle/upgrades-list.js';
 import { formatUpgradeGain } from '../idle/upgrades.js';
-import { bn, bnSub, bnFromJSON, bnGt, formatBigNum, type BigNum } from '../commons/big-number.js';
+import { bn, bnSub, bnFromJSON, bnGt, bnMul, formatBigNum, type BigNum } from '../commons/big-number.js';
 import type { UserUpgrades } from '../idle/types.js';
 import type { Command } from './types.js';
 
@@ -76,11 +76,16 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             : '✨ Rang maximum atteint';
 
         const fields = [
-            { name: 'Rang', value: rankText, inline: true },
-            { name: 'Coquillages', value: `${formatBigNum(currentShells)} 🐚`, inline: true },
-            { name: 'Gain par message', value: `${formatBigNum(shellsPerMessage)} 🐚 (±10%)`, inline: true },
-            { name: 'Rôle actuel', value: currentRoleText, inline: true },
-            { name: 'Prochain rôle', value: nextRoleText, inline: false },
+            {
+                name: 'Rôles',
+                value: `Rang : ${rankText}\nActuel : ${currentRoleText}\nProchain : ${nextRoleText}`,
+                inline: false,
+            },
+            {
+                name: 'Coquillages',
+                value: `${formatBigNum(currentShells)} 🐚\nPar message : ${formatBigNum(shellsPerMessage)} 🐚 (±10%)\nPar réaction : ${formatBigNum(bnMul(shellsPerMessage, 0.1))} 🐚`,
+                inline: false,
+            },
             { name: 'Upgrades', value: upgradeLines.join('\n'), inline: false },
         ];
 
