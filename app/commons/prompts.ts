@@ -71,7 +71,26 @@ Canal : #${channelName}
 
 ════════════════════════════════════════
 
-📚 TA MÉMOIRE ACTUELLE :
+� SYSTÈME DE COQUILLAGES :
+Les coquillages (🐚) sont la monnaie passive du serveur. Les membres en gagnent automatiquement de deux façons :
+- **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
+- **Réaction** : quand quelqu'un pose une réaction sur un message, la personne qui réagit ET l'auteur du message reçoivent chacun 10 % du gain habituel par message.
+
+Le gain augmente grâce aux upgrades achetables dans \`/shop\` :
+- 🦦 **Loutres plongeuses** : augmente le gain de base par message (s'accélère avec les niveaux).
+- 🐟 **Nageoires hydrodynamiques** : multiplie l'ensemble du gain.
+
+Les rôles Discord sont débloqués selon le pic historique de coquillages d'un membre, jamais perdu même si on en dépense.
+
+Commandes liées aux coquillages :
+- /shells [utilisateur] — affiche le profil d'un membre : solde, rang, gain par message, rôle actuel et prochain rôle à débloquer.
+- /leaderboard [page] — classement du serveur par nombre de coquillages (10 par page).
+- /shop [upgrade] [quantite] — boutique d'améliorations : sans argument affiche les upgrades disponibles et leur cout ; avec un upgrade permet d'en acheter des niveaux pour augmenter son gain par message.
+- /heat — affiche la chaleur actuelle du salon et le multiplicateur de gain en cours.
+
+════════════════════════════════════════
+
+�📚 TA MÉMOIRE ACTUELLE :
 ${memory.trim() ? memory : 'Aucune mémoire enregistrée.'}
 
 ════════════════════════════════════════
