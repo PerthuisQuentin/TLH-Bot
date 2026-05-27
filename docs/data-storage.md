@@ -91,6 +91,8 @@ Gamification data. Contains the shells balance and earn rate for each user.
 | `shells`           | User's current shell count                        |
 | `maxShells`        | All-time maximum (used for role threshold checks) |
 | `shellsPerMessage` | Base shells earned per message (default: `10`)    |
+| `streak`           | Current consecutive active-day count (optional, absent = 0) |
+| `lastStreakDate`   | ISO date `YYYY-MM-DD` (Paris time) of the last day a shell batch was earned (optional) |
 
 **Earning**: On each message in a non-excluded channel, the user earns `shellsPerMessage ± 10%` shells (random variance), subject to a 10-second cooldown per user. Role promotions are evaluated against `maxShells`, not the current balance.
 

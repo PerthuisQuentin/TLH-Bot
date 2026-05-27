@@ -73,8 +73,10 @@ Canal : #${channelName}
 
 � SYSTÈME DE COQUILLAGES :
 Les coquillages (🐚) sont la monnaie passive du serveur. Les membres en gagnent automatiquement de deux façons :
-- **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
+- **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente) et le streak journalier (×1.0 à ×2.0 selon les jours consécutifs actifs). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
 - **Réaction** : quand quelqu'un pose une réaction sur un message, la personne qui réagit ET l'auteur du message reçoivent chacun 10 % du gain habituel par message.
+
+Le **streak journalier** augmente chaque jour où le membre envoie au moins un message. Il donne un bonus progressif de ×1.0 (1er jour) jusqu'à ×2.0 (7 jours consécutifs ou plus). Un jour sans message remet le streak à zéro. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 heat × ×2 streak).
 
 Le gain augmente grâce aux upgrades achetables dans \`/shop\` :
 - 🦦 **Loutres plongeuses** : augmente le gain de base par message (s'accélère avec les niveaux).
