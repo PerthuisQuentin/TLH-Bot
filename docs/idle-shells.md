@@ -86,6 +86,43 @@ This naturally rewards diverse multi-user activity over a single spammy user.
 
 ---
 
+## Daily streak
+
+Each calendar day (Europe/Paris timezone) where a user earns at least one shell batch increments their **streak**. Missing a day resets it to 1.
+
+### Streak → multiplier table
+
+| Streak (days) | Multiplier |
+| ------------- | ---------- |
+| 1             | ×1.00      |
+| 2             | ×1.17      |
+| 3             | ×1.33      |
+| 4             | ×1.50      |
+| 5             | ×1.67      |
+| 6             | ×1.83      |
+| **7+**        | **×2.00**  |
+
+Formula: `1 + min(streak − 1, 6) / 6`
+
+The streak multiplier is **combined multiplicatively** with the heat multiplier:
+
+```
+finalMultiplier = heatMultiplier × streakMultiplier
+```
+
+The theoretical maximum is ×4.0 (heat ×2.0 × streak ×2.0).
+
+### Persistence
+
+Streak state is stored in `{guildId}-shells.json` alongside the shell balance. Two fields are added per user:
+
+- `streak` — current consecutive-day count (absent means 0).
+- `lastStreakDate` — ISO date `YYYY-MM-DD` (Paris time) of the last qualifying day.
+
+The update is idempotent: calling it multiple times on the same day leaves the streak unchanged. Existing users without these fields are treated as streak 0 (multiplier ×1.0 until their first earn), with no migration required.
+
+---
+
 ## Upgrades
 
 Upgrades increase the base `shellsPerMessage` permanently. They are purchased via `/shop` and persisted per-user per-server in `upgrades.json`.
@@ -172,3 +209,11 @@ The `shellsRoles` array in the server config maps thresholds to role IDs:
 | `{guildId}-upgrades.json` | Array of `UserUpgrades` (`userId`, `divingOtters`, `hydrodynamicFlippers`)  |
 
 See `docs/data-storage.md` for the full file format reference.
+
+---
+
+## Keeping the bot's explanations up to date
+
+The function `createUserPrompt` in `app/commons/prompts.ts` contains a hardcoded **SYSTÈME DE COQUILLAGES** block that the bot uses to answer questions about the idle game rules (multipliers, mechanics, commands, etc.).
+
+**Whenever a rule or mechanic changes** (new multiplier, new upgrade, rebalanced formula…), that block must be updated to match the new behaviour. If it falls out of sync, the bot will give incorrect answers to users asking how the system works.

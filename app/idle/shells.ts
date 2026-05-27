@@ -5,7 +5,9 @@ import {
     getUserShells,
     getPaginatedShellsLeaderboard,
     getShellsPerMessage,
+    updateUserStreak,
 } from './shells-storage.js';
+import { getStreakMultiplier } from './streak.js';
 import { updateMemberShellsRoles } from './shells-roles.js';
 import { readJsonFile, AllowedFiles } from '../commons/files.js';
 import { memoryCache } from '../commons/memory.js';
@@ -100,9 +102,12 @@ async function awardShells(ctx: ShellsAwardContext): Promise<void> {
 
     // Update heat before the cooldown check so every event counts toward activity,
     // even when the user is on cooldown and won't earn shells this time.
-    const multiplier = updateChannelHeat(ctx.channelId, ctx.userId, ctx.activityType);
+    const heatMultiplier = updateChannelHeat(ctx.channelId, ctx.userId, ctx.activityType);
 
     if (memoryCache.has(ctx.cacheKey)) return;
+
+    const streak = updateUserStreak(ctx.guildId, ctx.userId);
+    const multiplier = heatMultiplier * getStreakMultiplier(streak);
 
     const { roleChanges } = await addShells(
         ctx.userId,

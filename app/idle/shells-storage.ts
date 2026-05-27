@@ -4,6 +4,7 @@ import {
     AllowedFiles,
 } from '../commons/files.js';
 import { bn, bnAdd, bnSub, bnMax, bnFromJSON, bnToJSON, bnLt, bnCompare, type BigNum } from '../commons/big-number.js';
+import { computeNewStreak, getTodayString } from './streak.js';
 import type { ShellsUser, LeaderboardEntry, PaginatedLeaderboard } from './types.js';
 
 export const DEFAULT_SHELLS_PER_MESSAGE = 10;
@@ -59,6 +60,37 @@ export function addUserShells(
     writeShellsData(guildId, users);
 
     return { newShells, maxShells };
+}
+
+/**
+ * Updates the daily streak for a user and persists it to shells.json.
+ * Safe to call multiple times per day — idempotent when already counted today.
+ * Returns the current (possibly updated) streak count.
+ */
+export function updateUserStreak(guildId: string, userId: string): number {
+    const users = readShellsData(guildId);
+    const userIndex = users.findIndex((u) => u.userId === userId);
+
+    if (userIndex === -1) {
+        // User doesn't exist yet; addUserShells will create the record, nothing to do.
+        return 1;
+    }
+
+    const user = users[userIndex]!;
+    const today = getTodayString();
+    const { streak, lastStreakDate } = computeNewStreak(
+        user.streak ?? 0,
+        user.lastStreakDate,
+        today,
+    );
+
+    if (streak !== user.streak || lastStreakDate !== user.lastStreakDate) {
+        user.streak = streak;
+        user.lastStreakDate = lastStreakDate;
+        writeShellsData(guildId, users);
+    }
+
+    return streak;
 }
 
 export function getShellsLeaderboard(guildId: string): ShellsUser[] {

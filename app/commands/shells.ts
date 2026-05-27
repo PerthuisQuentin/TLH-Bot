@@ -7,7 +7,8 @@ import {
     InteractionContextType,
 } from 'discord-api-types/v10';
 import { getUserLeaderboardEntry } from '../idle/shells.js';
-import { getShellsPerMessage } from '../idle/shells-storage.js';
+import { getShellsPerMessage, getUserShellsData } from '../idle/shells-storage.js';
+import { getStreakMultiplier } from '../idle/streak.js';
 import { getRoleForShells, getShellsRolesConfig } from '../idle/shells-roles.js';
 import { getUserUpgrades } from '../idle/upgrades-storage.js';
 import { ALL_UPGRADES } from '../idle/upgrades-list.js';
@@ -62,6 +63,10 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         const shellsPerMessage = getShellsPerMessage(guild_id, targetId);
         const userUpgrades = getUserUpgrades(guild_id, targetId);
 
+        const userData = getUserShellsData(guild_id, targetId);
+        const streak = userData?.streak ?? 0;
+        const streakMultiplier = getStreakMultiplier(Math.max(streak, 1));
+
         const upgradeLines = ALL_UPGRADES.map((u) => {
             const level = (userUpgrades[u.id as keyof UserUpgrades] as number | undefined) ?? 0;
             return `${u.emoji} **${u.name}** — Niv. ${level} · ${formatUpgradeGain(u, level)}`;
@@ -75,6 +80,10 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             ? `<@&${nextRole.roleId}> — encore **${formatBigNum(bnSub(bnFromJSON(nextRole.threshold), maxShells))} 🐚**`
             : '✨ Rang maximum atteint';
 
+        const streakText = streak === 0
+            ? 'Streak : aucun 🔥'
+            : `Streak : ${streak} jour${streak > 1 ? 's' : ''} 🔥 — ×${streakMultiplier.toFixed(2)}`;
+
         const fields = [
             {
                 name: 'Rôles',
@@ -83,7 +92,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             },
             {
                 name: 'Coquillages',
-                value: `${formatBigNum(currentShells)} 🐚\nPar message : ${formatBigNum(shellsPerMessage)} 🐚 (±10%)\nPar réaction : ${formatBigNum(bnMul(shellsPerMessage, 0.1))} 🐚`,
+                value: `${formatBigNum(currentShells)} 🐚\nPar message : ${formatBigNum(shellsPerMessage)} 🐚 (±10%)\nPar réaction : ${formatBigNum(bnMul(shellsPerMessage, 0.1))} 🐚\n${streakText}`,
                 inline: false,
             },
             { name: 'Upgrades', value: upgradeLines.join('\n'), inline: false },
