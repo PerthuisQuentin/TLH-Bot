@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { z } from 'zod';
+import NodeCache from 'node-cache';
 import type { GuildConfig, ReminderObject, ShellsUser, UserUpgrades } from './types.js';
 import { GuildConfigSchema, ReminderObjectSchema, ShellsUserSchema, UserUpgradesSchema } from './types.js';
 
@@ -57,6 +58,13 @@ const JSON_DEFAULTS: JsonFileTypeMap = {
     [AllowedFiles.CONFIG]: {},
 };
 
+// Cache for async JSON reads. TTL is a safety fallback; writes invalidate eagerly.
+const jsonReadCache = new NodeCache({ stdTTL: 60, useClones: false });
+
+function jsonCacheKey(guildId: string, fileType: JsonFile): string {
+    return `${guildId}:${fileType}`;
+}
+
 export function isTextFile(fileType: AllowedFile): fileType is TextFile {
     return TEXT_FILES.has(fileType);
 }
@@ -98,10 +106,16 @@ export async function readJsonFile<K extends JsonFile>(
     guildId: string,
     fileType: K,
 ): Promise<JsonFileTypeMap[K]> {
+    const key = jsonCacheKey(guildId, fileType);
+    const cached = jsonReadCache.get<JsonFileTypeMap[K]>(key);
+    if (cached !== undefined) return cached;
+
     const absolutePath = getFilePath(guildId, fileType);
     try {
         const content = await readFile(absolutePath, 'utf-8');
-        return JSON.parse(content) as JsonFileTypeMap[K];
+        const parsed = JSON.parse(content) as JsonFileTypeMap[K];
+        jsonReadCache.set(key, parsed);
+        return parsed;
     } catch (err) {
         const error = err as NodeJS.ErrnoException;
         if (error.code === 'ENOENT') {
@@ -118,6 +132,7 @@ export async function writeJsonFile<K extends JsonFile>(
 ): Promise<void> {
     const absolutePath = getFilePath(guildId, fileType);
     await writeFile(absolutePath, JSON.stringify(data, null, 2), 'utf-8');
+    jsonReadCache.del(jsonCacheKey(guildId, fileType));
 }
 
 // ─── JSON file operations (sync) ─────────────────────────────────────────────
@@ -146,6 +161,7 @@ export function writeJsonFileSync<K extends JsonFile>(
 ): void {
     const absolutePath = getFilePath(guildId, fileType);
     writeFileSync(absolutePath, JSON.stringify(data, null, 2), 'utf-8');
+    jsonReadCache.del(jsonCacheKey(guildId, fileType));
 }
 
 // ─── JSON validation ──────────────────────────────────────────────────────────

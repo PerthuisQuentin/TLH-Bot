@@ -1,5 +1,5 @@
-import { Client, GatewayIntentBits } from 'discord.js';
-import { handleMessageShells } from './app/idle/shells.js';
+import { Client, GatewayIntentBits, Partials } from 'discord.js';
+import { handleMessageShells, handleReactionShells } from './app/idle/shells.js';
 
 const client = new Client({
     intents: [
@@ -8,6 +8,12 @@ const client = new Client({
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.DirectMessages,
         GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMessageReactions,
+    ],
+    partials: [
+        Partials.Message,
+        Partials.Channel,
+        Partials.Reaction,
     ],
 });
 
@@ -19,6 +25,10 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (!message.guild) return;
     await handleMessageShells(message);
+});
+
+client.on('messageReactionAdd', async (reaction, user) => {
+    await handleReactionShells(reaction, user);
 });
 
 client.on('error', (error) => {

@@ -1,14 +1,24 @@
-import { HeatState, createHeatState, heatToMultiplier, recordMessage, advanceDecay } from './heat-config.js';
+import { HeatState, createHeatState, heatToMultiplier, recordActivity, advanceDecay, MSG_INCREMENT, REACTION_INCREMENT } from './heat-config.js';
+
+export enum ChannelActivityType {
+    Message = 'message',
+    Reaction = 'reaction',
+}
+
+const ACTIVITY_INCREMENTS: Record<ChannelActivityType, number> = {
+    [ChannelActivityType.Message]: MSG_INCREMENT,
+    [ChannelActivityType.Reaction]: REACTION_INCREMENT,
+};
 
 const channelStates = new Map<string, HeatState>();
 
 /**
- * Records a message from `userId` in `channelId`, applies the exponential decay
+ * Records an activity from `userId` in `channelId`, applies the exponential decay
  * to all existing contributions, then returns the current activity multiplier.
  *
- * Designed to be called lazily on every message — no background loop needed.
+ * Designed to be called lazily on every event — no background loop needed.
  */
-export function updateChannelHeat(channelId: string, userId: string): number {
+export function updateChannelHeat(channelId: string, userId: string, activityType: ChannelActivityType = ChannelActivityType.Message): number {
     const now = Date.now();
 
     if (!channelStates.has(channelId)) {
@@ -16,7 +26,7 @@ export function updateChannelHeat(channelId: string, userId: string): number {
     }
 
     const state = channelStates.get(channelId)!;
-    return heatToMultiplier(recordMessage(state, userId, now));
+    return heatToMultiplier(recordActivity(state, userId, now, ACTIVITY_INCREMENTS[activityType]));
 }
 
 export type HeatSnapshot = {
