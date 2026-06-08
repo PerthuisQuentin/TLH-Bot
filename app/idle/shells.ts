@@ -7,6 +7,7 @@ import {
     getShellsPerMessage,
     updateUserStreak,
 } from './shells-storage.js';
+import { applyPassiveIncome } from './passive-income.js';
 import { getStreakMultiplier } from './streak.js';
 import { updateMemberShellsRoles } from './shells-roles.js';
 import { readJsonFile, AllowedFiles } from '../commons/files.js';
@@ -14,7 +15,7 @@ import { memoryCache } from '../commons/memory.js';
 import { updateChannelHeat, ChannelActivityType } from './channel-activity.js';
 import { generateRolePromotionMessage } from '../gemini/ask-gemini.js';
 import { formatDiscordJsMessage } from '../commons/messages.js';
-import { bn, bnAdd, bnSub, bnMul, bnFloor, type BigNum } from '../commons/big-number.js';
+import { bn, bnAdd, bnSub, bnMul, bnFloor, bnGt, type BigNum } from '../commons/big-number.js';
 import type { Message, GuildMember, TextChannel, MessageReaction, PartialMessageReaction, User, PartialUser } from 'discord.js';
 import type { RoleChanges } from './types.js';
 
@@ -105,6 +106,13 @@ async function awardShells(ctx: ShellsAwardContext): Promise<void> {
     const heatMultiplier = updateChannelHeat(ctx.channelId, ctx.userId, ctx.activityType);
 
     if (memoryCache.has(ctx.cacheKey)) return;
+
+    const passiveAmount = applyPassiveIncome(ctx.guildId, ctx.userId);
+    if (bnGt(passiveAmount, bn(0))) {
+        console.log(
+            `[Shells] Passive | userId=${ctx.userId} | guildId=${ctx.guildId} | amount=${passiveAmount}`,
+        );
+    }
 
     const streak = updateUserStreak(ctx.guildId, ctx.userId);
     const multiplier = heatMultiplier * getStreakMultiplier(streak);
