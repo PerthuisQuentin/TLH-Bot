@@ -16,8 +16,11 @@ noShellChannels? ──yes──► skip
 updateChannelHeat  ──────────────────────────► heat multiplier (×1.0–×2.0)
      │
      ▼
-10 s cooldown? ──yes──► skip (heat already updated)
+5 s cooldown? ──yes──► skip (heat already updated)
      │ no
+     ▼
+applyPassiveIncome(userId, guildId)   ◄─── passive shells since lastActiveAt
+     │
      ▼
 addShells(userId, guildId, multiplier)
   │
@@ -44,7 +47,32 @@ Each qualifying message earns a random amount in the range `[base − variance, 
 
 ### Cooldown
 
-A user can earn shells at most once every **10 seconds** per server. Messages sent during the cooldown still count toward channel heat.
+A user can earn shells at most once every **5 seconds** per server. Messages sent during the cooldown still count toward channel heat.
+
+### Passive income
+
+Each time a user earns shells from a message (i.e. not on cooldown), the bot first credits passive shells accumulated since the last earning event. The amount is based on elapsed time and the user's current `shellsPerMessage`:
+
+$$\text{passive}(H) = \text{shellsPerMessage} \times \begin{cases} H & H \leq 24 \\ 24 + 24 \times \arctan\!\left(\dfrac{H - 24}{24}\right) & H > 24 \end{cases}$$
+
+where $H$ = hours elapsed since the last shell-earning event.
+
+The **hourly rate** is:
+
+- **Full rate** (1 msg-equivalent / h) for the first 24 h
+- **Halved** at 48 h — decays as $1 / (1 + ((H-24)/24)^2)$
+- ~2.7 % of full rate after 1 week; approaches 0 but never reaches it
+
+| Absence | Hourly rate | Cumulative (base 10) |
+| ------- | ----------- | -------------------- |
+| 12 h    | 100 %       | ~120 shells          |
+| 24 h    | 100 %       | ~240 shells          |
+| 48 h    | 50 %        | ~428 shells          |
+| 72 h    | 20 %        | ~504 shells          |
+| 1 week  | 2.7 %       | ~577 shells          |
+| ∞       | →0          | ~617 shells (cap)    |
+
+Passive income ignores heat and streak multipliers — it uses the base `shellsPerMessage` only (which includes upgrade bonuses). The timestamp of the last earning event is stored as `lastActiveAt` in `shells.json`.
 
 ### Excluded channels
 

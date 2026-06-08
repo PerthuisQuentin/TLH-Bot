@@ -49,6 +49,7 @@ export function addUserShells(
             shells: bnToJSON(newShells),
             maxShells: bnToJSON(maxShells),
             shellsPerMessage: String(DEFAULT_SHELLS_PER_MESSAGE),
+            lastActiveAt: new Date().toISOString(),
         });
     } else {
         newShells = bnAdd(bnFromJSON(users[userIndex]!.shells), shellsToAdd);
@@ -150,6 +151,14 @@ export function updateUserShellsPerMessage(
     const index = users.findIndex((u) => u.userId === userId);
     if (index === -1) return;
     users[index]!.shellsPerMessage = bnToJSON(shellsPerMessage);
+    writeShellsData(guildId, users);
+}
+
+export function setLastActiveAt(guildId: string, userId: string, timestamp: string): void {
+    const users = readShellsData(guildId);
+    const index = users.findIndex((u) => u.userId === userId);
+    if (index === -1) return;
+    users[index]!.lastActiveAt = timestamp;
     writeShellsData(guildId, users);
 }
 

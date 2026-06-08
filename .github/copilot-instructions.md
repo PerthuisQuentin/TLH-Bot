@@ -32,6 +32,8 @@ The `docs/` folder contains the authoritative reference for understanding the pr
 
 **When to update the docs**: if a code change alters a public behavior, data format, config option, command parameter, or architectural pattern, update the corresponding doc file to reflect it. Keep descriptions functional — explain _what_ and _why_, not _how_ the code works line by line.
 
+**`app/commons/prompts.ts`** contains the user-facing description of the shells economy injected into every AI prompt. Update it whenever shells mechanics change (earn rates, multipliers, passive income rules, commands, etc.).
+
 ## Separation of concerns
 
 Business logic must stay independent from external integrations (Discord, Gemini, Ollama). The goal is that a feature's core behavior can be understood, tested, and modified without touching any Discord or AI-specific code.

@@ -16,6 +16,7 @@ export type ShellsUser = {
     shellsPerMessage: string;
     streak?: number;
     lastStreakDate?: string;
+    lastActiveAt?: string;
 }
 
 export type ShellsRoleConfig = {
@@ -53,6 +54,7 @@ export const ShellsUserSchema = z.object({
     shellsPerMessage: z.string(),
     streak: z.number().optional(),
     lastStreakDate: z.string().optional(),
+    lastActiveAt: z.string().optional(),
 });
 
 export const ShellsRoleConfigSchema = z.object({
