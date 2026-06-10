@@ -1,4 +1,3 @@
-import { InteractionResponseType } from 'discord-interactions';
 import type { Request, Response } from 'express';
 import {
     ApplicationCommandType,
@@ -14,10 +13,12 @@ import { getUserUpgrades } from '../idle/upgrades-storage.js';
 import { ALL_UPGRADES } from '../idle/upgrades-list.js';
 import { formatUpgradeGain } from '../idle/upgrades.js';
 import { bn, bnSub, bnFromJSON, bnGt, bnMul, formatBigNum, type BigNum } from '../commons/big-number.js';
+import { replyText, replyEmbed, getOption, isPublicOption, requireGuild } from '../commons/utils.js';
 import type { UserUpgrades } from '../idle/types.js';
 import type { Command } from './types.js';
 
-const EPHEMERAL_FLAG = 1 << 6;
+const PARAM_USER = 'utilisateur';
+const PARAM_PUBLIC = 'public';
 
 function getNextRole(guildId: string, maxShells: BigNum) {
     const roles = getShellsRolesConfig(guildId);
@@ -35,24 +36,13 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
         const { guild_id, data } = body;
         const requesterId = body.member?.user?.id ?? body.user?.id;
 
-        if (!guild_id) {
-            res.send({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: 'Cette commande ne fonctionne que sur un serveur.', flags: EPHEMERAL_FLAG },
-            });
-            return;
-        }
+        if (!requireGuild(res, guild_id)) return;
 
-        const isPublic = data?.options?.find((opt) => opt.name === 'public')?.value === true;
-        const targetId =
-            (data?.options?.find((opt) => opt.name === 'user')?.value as string | undefined) ??
-            requesterId;
+        const isPublic = isPublicOption(data?.options);
+        const targetId = getOption<string>(data?.options, PARAM_USER) ?? requesterId;
 
         if (!targetId) {
-            res.send({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: "Impossible de déterminer l'utilisateur cible.", flags: EPHEMERAL_FLAG },
-            });
+            replyText(res, "Impossible de déterminer l'utilisateur cible.", { ephemeral: true });
             return;
         }
 
@@ -98,34 +88,19 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             { name: 'Upgrades', value: upgradeLines.join('\n'), inline: false },
         ];
 
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                ...(isPublic ? {} : { flags: EPHEMERAL_FLAG }),
-                embeds: [
-                    {
-                        title: '🐚 Profil Coquillages',
-                        description: `<@${targetId}>`,
-                        color: 0xffd700,
-                        fields,
-                        timestamp: new Date().toISOString(),
-                        ...(!maxShells.eq(currentShells) && {
-                            footer: { text: `Max historique : ${formatBigNum(maxShells)} 🐚` },
-                        }),
-                    },
-                ],
-                allowed_mentions: { parse: [] },
-            },
-        });
+        replyEmbed(res, {
+            title: '🐚 Profil Coquillages',
+            description: `<@${targetId}>`,
+            color: 0xffd700,
+            fields,
+            timestamp: new Date().toISOString(),
+            ...(!maxShells.eq(currentShells) && {
+                footer: { text: `Max historique : ${formatBigNum(maxShells)} 🐚` },
+            }),
+        }, { ephemeral: !isPublic, suppressMentions: true });
     } catch (error) {
         console.error('Error handling rank command:', error);
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: 'Une erreur est survenue en récupérant le profil.',
-                flags: EPHEMERAL_FLAG,
-            },
-        });
+        replyText(res, 'Une erreur est survenue en récupérant le profil.', { ephemeral: true });
     }
 }
 
@@ -139,13 +114,13 @@ export const shellsCommand: Command = {
         options: [
             {
                 type: ApplicationCommandOptionType.User,
-                name: 'user',
+                name: PARAM_USER,
                 description: 'Utilisateur dont afficher le profil (vous par défaut)',
                 required: false,
             },
             {
                 type: ApplicationCommandOptionType.Boolean,
-                name: 'public',
+                name: PARAM_PUBLIC,
                 description: 'Rendre la réponse visible par tous (par défaut : privée)',
                 required: false,
             },

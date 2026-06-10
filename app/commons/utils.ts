@@ -1,7 +1,9 @@
 import {
+    InteractionResponseType,
     InteractionResponseFlags,
     MessageComponentTypes,
 } from 'discord-interactions';
+import type { Response as ExpressResponse } from 'express';
 import 'dotenv/config';
 
 type DiscordRequestOptions = {
@@ -69,4 +71,68 @@ export function createMessageBody(content: string): object {
             },
         ],
     };
+}
+
+// ─── Interaction response helpers ────────────────────────────────────────────
+
+const EPHEMERAL_FLAG = 1 << 6;
+
+export function replyText(
+    res: ExpressResponse,
+    content: string,
+    options: { ephemeral?: boolean } = {},
+): void {
+    res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+            content,
+            ...(options.ephemeral ? { flags: EPHEMERAL_FLAG } : {}),
+        },
+    });
+}
+
+export function replyEmbed(
+    res: ExpressResponse,
+    embed: object,
+    options: { ephemeral?: boolean; suppressMentions?: boolean } = {},
+): void {
+    res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+            embeds: [embed],
+            ...(options.ephemeral ? { flags: EPHEMERAL_FLAG } : {}),
+            ...(options.suppressMentions ? { allowed_mentions: { parse: [] } } : {}),
+        },
+    });
+}
+
+export function replyDeferred(res: ExpressResponse): void {
+    res.send({
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+    });
+}
+
+// ─── Interaction option helpers ───────────────────────────────────────────────
+
+export type DiscordOption = {
+    name: string;
+    value?: unknown;
+};
+
+export function getOption<T = string>(options: ReadonlyArray<DiscordOption> | undefined, name: string): T | undefined {
+    return options?.find((o) => o.name === name)?.value as T | undefined;
+}
+
+export function isPublicOption(options: ReadonlyArray<DiscordOption> | undefined): boolean {
+    return getOption<boolean>(options, 'public') === true;
+}
+
+/**
+ * Sends an ephemeral "guild-only" error and returns false if guild_id is absent.
+ * Use as an early-return guard: `if (!requireGuild(res, guild_id)) return;`
+ */
+export function requireGuild(res: ExpressResponse, guildId: string | undefined): guildId is string {
+    if (guildId) return true;
+    replyText(res, 'Cette commande ne fonctionne que sur un serveur.', { ephemeral: true });
+    return false;
 }

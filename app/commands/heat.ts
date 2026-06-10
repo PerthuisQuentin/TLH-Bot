@@ -1,4 +1,3 @@
-import { InteractionResponseType } from 'discord-interactions';
 import type { Request, Response } from 'express';
 import {
     ApplicationCommandOptionType,
@@ -6,10 +5,11 @@ import {
     ApplicationIntegrationType,
     InteractionContextType,
 } from 'discord-api-types/v10';
-
-const EPHEMERAL_FLAG = 1 << 6;
 import { getChannelHeatSnapshot } from '../idle/channel-activity.js';
+import { replyText, replyEmbed, isPublicOption } from '../commons/utils.js';
 import type { Command } from './types.js';
+
+const PARAM_PUBLIC = 'public';
 
 function heatBar(heat: number, maxHeat = 7, length = 12): string {
     const filled = Math.min(length, Math.round((heat / maxHeat) * length));
@@ -62,23 +62,14 @@ async function handleHeatCommand(req: Request, res: Response): Promise<void> {
         data?: { options?: Array<{ name: string; value: unknown }> };
     };
     const channelId = body.channel_id;
-    const isPublic = body.data?.options?.find((opt) => opt.name === 'public')?.value === true;
+    const isPublic = isPublicOption(body.data?.options);
 
     if (!channelId) {
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content: 'Impossible de déterminer le canal.', flags: EPHEMERAL_FLAG },
-        });
+        replyText(res, 'Impossible de déterminer le canal.', { ephemeral: true });
         return;
     }
 
-    res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-            embeds: [formatHeatEmbed(channelId)],
-            ...(isPublic ? {} : { flags: EPHEMERAL_FLAG }),
-        },
-    });
+    replyEmbed(res, formatHeatEmbed(channelId), { ephemeral: !isPublic });
 }
 
 export const heatCommand: Command = {
@@ -90,7 +81,7 @@ export const heatCommand: Command = {
         contexts: [InteractionContextType.Guild],
         options: [
             {
-                name: 'public',
+                name: PARAM_PUBLIC,
                 description: 'Rendre la réponse visible par tous (par défaut : privée)',
                 type: ApplicationCommandOptionType.Boolean,
                 required: false,
