@@ -18,7 +18,7 @@ import type { Command } from './types.js';
 
 const PARAM_PAGE = 'page';
 const PARAM_PUBLIC = 'public';
-const PARAM_SORT = 'tri';
+const PARAM_SORT = 'sort';
 
 type FormatLeaderboardParams = {
     pageUsers: ShellsUser[];
