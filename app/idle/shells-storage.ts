@@ -94,22 +94,39 @@ export function updateUserStreak(guildId: string, userId: string): number {
     return streak;
 }
 
-export function getShellsLeaderboard(guildId: string): ShellsUser[] {
+export enum LeaderboardSort {
+    MAX = 'max',
+    CURRENT = 'current',
+    INCOME = 'income',
+}
+
+export function getShellsLeaderboard(guildId: string, sort: LeaderboardSort = LeaderboardSort.MAX): ShellsUser[] {
     const users = readShellsData(guildId);
     return [...users].sort((a, b) => {
-        const aMax = bnFromJSON(a.maxShells ?? a.shells);
-        const bMax = bnFromJSON(b.maxShells ?? b.shells);
-        return bnCompare(bMax, aMax); // décroissant : b avant a
+        let aVal: BigNum;
+        let bVal: BigNum;
+        if (sort === LeaderboardSort.CURRENT) {
+            aVal = bnFromJSON(a.shells);
+            bVal = bnFromJSON(b.shells);
+        } else if (sort === LeaderboardSort.INCOME) {
+            aVal = bnFromJSON(a.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE);
+            bVal = bnFromJSON(b.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE);
+        } else {
+            aVal = bnFromJSON(a.maxShells ?? a.shells);
+            bVal = bnFromJSON(b.maxShells ?? b.shells);
+        }
+        return bnCompare(bVal, aVal); // décroissant : b avant a
     });
 }
 
 export function getUserLeaderboardEntry(
     guildId: string,
     userId: string,
+    sort: LeaderboardSort = LeaderboardSort.MAX,
 ): LeaderboardEntry | null {
     if (!userId) return null;
 
-    const leaderboard = getShellsLeaderboard(guildId);
+    const leaderboard = getShellsLeaderboard(guildId, sort);
     const userIndex = leaderboard.findIndex((user) => user.userId === userId);
 
     if (userIndex === -1) return null;
@@ -166,8 +183,9 @@ export function getPaginatedShellsLeaderboard(
     guildId: string,
     requestedPage = 1,
     pageSize = 10,
+    sort: LeaderboardSort = LeaderboardSort.MAX,
 ): PaginatedLeaderboard {
-    const leaderboard = getShellsLeaderboard(guildId);
+    const leaderboard = getShellsLeaderboard(guildId, sort);
 
     if (leaderboard.length === 0) {
         return { users: [], totalUsers: 0, totalPages: 0, currentPage: 1, startIndex: 0, pageSize };

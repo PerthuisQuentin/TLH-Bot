@@ -1,4 +1,3 @@
-import { InteractionResponseType } from 'discord-interactions';
 import type { Request, Response } from 'express';
 import {
     ApplicationCommandType,
@@ -11,12 +10,15 @@ import {
     getUserLeaderboardEntry,
     getUserShells,
 } from '../idle/shells.js';
-import { DEFAULT_SHELLS_PER_MESSAGE } from '../idle/shells-storage.js';
+import { DEFAULT_SHELLS_PER_MESSAGE, LeaderboardSort } from '../idle/shells-storage.js';
 import { bn, bnFromJSON, formatBigNum, type BigNum } from '../commons/big-number.js';
+import { replyText, replyEmbed, getOption, isPublicOption, requireGuild } from '../commons/utils.js';
 import type { ShellsUser, LeaderboardEntry } from '../idle/types.js';
 import type { Command } from './types.js';
 
-const EPHEMERAL_FLAG = 1 << 6;
+const PARAM_PAGE = 'page';
+const PARAM_PUBLIC = 'public';
+const PARAM_SORT = 'tri';
 
 type FormatLeaderboardParams = {
     pageUsers: ShellsUser[];
@@ -25,6 +27,10 @@ type FormatLeaderboardParams = {
     requesterId: string | undefined;
     requesterEntry: LeaderboardEntry | null;
     requesterShells: BigNum;
+}
+
+function formatUserLine(entry: LeaderboardEntry): string {
+    return `#${entry.rank} <@${entry.userId}> — ${formatBigNum(entry.maxShells)} 🐚 *(${formatBigNum(entry.shells)} · +${formatBigNum(entry.shellsPerMessage)}/msg)*`;
 }
 
 function formatLeaderboardDescription({
@@ -38,12 +44,15 @@ function formatLeaderboardDescription({
     const leaderboardText = pageUsers
         .map((user, index) => {
             const rank = startIndex + index + 1;
-            const spm = formatBigNum(bnFromJSON(user.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE));
-            const line = `#${rank} <@${user.userId}> - ${formatBigNum(bnFromJSON(user.maxShells ?? user.shells))} 🐚 *(+${spm}/msg)*`;
-            if (requesterId && user.userId === requesterId) {
-                return `**${line}**`;
-            }
-            return line;
+            const entry: LeaderboardEntry = {
+                rank,
+                userId: user.userId,
+                maxShells: bnFromJSON(user.maxShells ?? user.shells),
+                shells: bnFromJSON(user.shells),
+                shellsPerMessage: bnFromJSON(user.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE),
+            };
+            const line = formatUserLine(entry);
+            return requesterId && user.userId === requesterId ? `**${line}**` : line;
         })
         .join('\n');
 
@@ -57,7 +66,7 @@ function formatLeaderboardDescription({
     if (requesterIsOnPage) return leaderboardText;
 
     if (requesterEntry) {
-        return `${leaderboardText}\n—\n**#${requesterEntry.rank} <@${requesterId}> - ${formatBigNum(requesterEntry.maxShells)} 🐚 *(+${formatBigNum(requesterEntry.shellsPerMessage)}/msg)***`;
+        return `${leaderboardText}\n—\n**${formatUserLine({ ...requesterEntry, userId: requesterId })}**`;
     }
 
     return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}> - ${formatBigNum(requesterShells)} 🐚**`;
@@ -77,31 +86,23 @@ async function handleLeaderboardCommand(
         const { guild_id, data } = body;
         const requesterId = body.member?.user?.id ?? body.user?.id;
 
-        if (!guild_id) {
-            res.send({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: 'Cette commande ne fonctionne que sur un serveur.' },
-            });
-            return;
-        }
+        if (!requireGuild(res, guild_id)) return;
 
-        const pageOption = data?.options?.find((opt) => opt.name === 'page')?.value;
-        const isPublic = data?.options?.find((opt) => opt.name === 'public')?.value === true;
+        const isPublic = isPublicOption(data?.options);
+        const pageOption = getOption<number>(data?.options, PARAM_PAGE);
+        const sortOption = getOption<string>(data?.options, PARAM_SORT);
+        const sort = (Object.values(LeaderboardSort) as string[]).includes(sortOption ?? '')
+            ? (sortOption as LeaderboardSort)
+            : LeaderboardSort.MAX;
         const requestedPage =
             Number.isInteger(pageOption) && (pageOption as number) > 0
                 ? (pageOption as number)
                 : 1;
 
-        const paginated = getPaginatedShellsLeaderboard(guild_id, requestedPage, 10);
+        const paginated = getPaginatedShellsLeaderboard(guild_id, requestedPage, 10, sort);
 
         if (paginated.totalUsers === 0) {
-            res.send({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                    content: 'Aucun utilisateur avec des coquillages pour le moment.',
-                    ...(isPublic ? {} : { flags: EPHEMERAL_FLAG }),
-                },
-            });
+            replyText(res, 'Aucun utilisateur avec des coquillages pour le moment.', { ephemeral: !isPublic });
             return;
         }
 
@@ -110,7 +111,7 @@ async function handleLeaderboardCommand(
         const currentPage = paginated.currentPage;
         const totalPages = paginated.totalPages;
         const requesterEntry = requesterId
-            ? getUserLeaderboardEntry(guild_id, requesterId)
+            ? getUserLeaderboardEntry(guild_id, requesterId, sort)
             : null;
         const requesterShells = requesterId ? getUserShells(guild_id, requesterId) : bn(0);
 
@@ -123,32 +124,18 @@ async function handleLeaderboardCommand(
             requesterShells,
         });
 
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                ...(isPublic ? {} : { flags: EPHEMERAL_FLAG }),
-                embeds: [
-                    {
-                        title: '🐚 Classement Coquillages',
-                        description,
-                        color: 0xffd700,
-                        timestamp: new Date().toISOString(),
-                        footer: {
-                            text: `Page ${currentPage}/${totalPages} • ${paginated.totalUsers} utilisateurs`,
-                        },
-                    },
-                ],
-                allowed_mentions: { parse: [] },
+        replyEmbed(res, {
+            title: '🐚 Classement Coquillages',
+            description,
+            color: 0xffd700,
+            timestamp: new Date().toISOString(),
+            footer: {
+                text: `Page ${currentPage}/${totalPages} • ${paginated.totalUsers} utilisateurs • tri : ${sort}`,
             },
-        });
+        }, { ephemeral: !isPublic, suppressMentions: true });
     } catch (error) {
         console.error('Error handling leaderboard command:', error);
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: 'Une erreur est survenue en récupérant le classement.',
-            },
-        });
+        replyText(res, 'Une erreur est survenue en récupérant le classement.');
     }
 }
 
@@ -162,14 +149,25 @@ export const leaderboardCommand: Command = {
         options: [
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: 'page',
+                name: PARAM_PAGE,
                 description: 'Numéro de page (10 utilisateurs par page)',
                 required: false,
                 min_value: 1,
             },
             {
+                type: ApplicationCommandOptionType.String,
+                name: PARAM_SORT,
+                description: 'Critère de tri (par défaut : record historique)',
+                required: false,
+                choices: [
+                    { name: 'Record historique', value: LeaderboardSort.MAX },
+                    { name: 'Solde actuel', value: LeaderboardSort.CURRENT },
+                    { name: 'Revenu par message', value: LeaderboardSort.INCOME },
+                ],
+            },
+            {
                 type: ApplicationCommandOptionType.Boolean,
-                name: 'public',
+                name: PARAM_PUBLIC,
                 description: 'Rendre la réponse visible par tous (par défaut : privée)',
                 required: false,
             },

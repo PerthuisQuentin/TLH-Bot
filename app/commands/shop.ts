@@ -1,4 +1,3 @@
-import { InteractionResponseType } from 'discord-interactions';
 import type { Request, Response } from 'express';
 import {
     ApplicationCommandType,
@@ -11,11 +10,13 @@ import { getUserUpgrades, incrementUserUpgrade } from '../idle/upgrades-storage.
 import { ALL_UPGRADES } from '../idle/upgrades-list.js';
 import { getUpgradeCost, getUpgradeGain, getUpgradeTotalCost, getMaxBuyable, formatUpgradeGain } from '../idle/upgrades.js';
 import { bn, bnAdd, bnMul, bnCeil, bnFromJSON, bnGte, formatBigNum, type BigNum } from '../commons/big-number.js';
+import { replyText, replyEmbed, getOption, requireGuild } from '../commons/utils.js';
 import type { UserUpgrades, UpgradeDefinition } from '../idle/types.js';
 import { UpgradeKind } from '../idle/types.js';
 import type { Command } from './types.js';
 
-const EPHEMERAL_FLAG = 1 << 6;
+const PARAM_UPGRADE = 'amelioration';
+const PARAM_QUANTITY = 'quantite';
 
 function computeShellsPerMessage(userUpgrades: UserUpgrades): BigNum {
     const additive = ALL_UPGRADES
@@ -67,19 +68,14 @@ async function handleShopCommand(req: Request, res: Response): Promise<void> {
     const { guild_id } = body;
     const userId = body.member?.user?.id ?? body.user?.id;
 
-    if (!guild_id || !userId) {
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: 'Cette commande ne fonctionne que sur un serveur.',
-                flags: EPHEMERAL_FLAG,
-            },
-        });
+    if (!requireGuild(res, guild_id)) return;
+    if (!userId) {
+        replyText(res, 'Impossible de déterminer l\u2019utilisateur.', { ephemeral: true });
         return;
     }
 
     const options = body.data?.options ?? [];
-    const upgradeId = options.find((o) => o.name === 'upgrade')?.value as string | undefined;
+    const upgradeId = getOption<string>(options, PARAM_UPGRADE);
 
     if (upgradeId) {
         await handlePurchase(res, guild_id, userId, upgradeId, options);
@@ -98,20 +94,12 @@ function handleListing(res: Response, guildId: string, userId: string): void {
         return buildUpgradeField(upgrade, level, shells);
     });
 
-    res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-            flags: EPHEMERAL_FLAG,
-            embeds: [
-                {
-                    title: '🏪 Boutique',
-                    description: `Vous avez **${formatBigNum(shells)} 🐚**\n*Pour acheter, utilisez \`/shop upgrade:… quantite:…\`*`,
-                    color: 0x4fc3f7,
-                    fields,
-                },
-            ],
-        },
-    });
+    replyEmbed(res, {
+        title: '🏪 Boutique',
+        description: `Vous avez **${formatBigNum(shells)} 🐚**\n*Pour acheter, utilisez \`/shop ${PARAM_UPGRADE}:… ${PARAM_QUANTITY}:…\`*`,
+        color: 0x4fc3f7,
+        fields,
+    }, { ephemeral: true });
 }
 
 async function handlePurchase(
@@ -123,10 +111,7 @@ async function handlePurchase(
 ): Promise<void> {
     const upgrade = ALL_UPGRADES.find((u) => u.id === upgradeId);
     if (!upgrade) {
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content: 'Upgrade introuvable.', flags: EPHEMERAL_FLAG },
-        });
+        replyText(res, 'Amélioration introuvable.', { ephemeral: true });
         return;
     }
 
@@ -135,30 +120,18 @@ async function handlePurchase(
     const userUpgrades = getUserUpgrades(guildId, userId);
     const currentLevel = upgradeLevel(userUpgrades, upgrade);
 
-    const rawQuantite = options.find((o) => o.name === 'quantity')?.value;
+    const rawQuantite = getOption<number>(options, PARAM_QUANTITY);
     const quantite = typeof rawQuantite === 'number' ? Math.floor(rawQuantite) : 1;
 
     const maxBuyable = getMaxBuyable(upgrade, currentLevel, shells);
 
     if (maxBuyable === 0) {
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: `Fonds insuffisants. Il vous faut **${formatBigNum(bnCeil(getUpgradeCost(upgrade, currentLevel)))} 🐚** pour le prochain niveau (vous avez **${formatBigNum(shells)} 🐚**).`,
-                flags: EPHEMERAL_FLAG,
-            },
-        });
+        replyText(res, `Fonds insuffisants. Il vous faut **${formatBigNum(bnCeil(getUpgradeCost(upgrade, currentLevel)))} 🐚** pour le prochain niveau (vous avez **${formatBigNum(shells)} 🐚**).`, { ephemeral: true });
         return;
     }
 
     if (quantite > maxBuyable) {
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: `Vous ne pouvez acheter que **${maxBuyable}** niveau(x) avec vos **${formatBigNum(shells)} 🐚**.`,
-                flags: EPHEMERAL_FLAG,
-            },
-        });
+        replyText(res, `Vous ne pouvez acheter que **${maxBuyable}** niveau(x) avec vos **${formatBigNum(shells)} 🐚**.`, { ephemeral: true });
         return;
     }
 
@@ -166,10 +139,7 @@ async function handlePurchase(
     const spent = spendUserShells(guildId, userId, totalCost);
 
     if (!spent) {
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content: 'Fonds insuffisants.', flags: EPHEMERAL_FLAG },
-        });
+        replyText(res, 'Fonds insuffisants.', { ephemeral: true });
         return;
     }
 
@@ -177,48 +147,40 @@ async function handlePurchase(
     const updatedUpgrades = incrementUserUpgrade(guildId, userId, upgrade.id as keyof Omit<UserUpgrades, 'userId'>, quantite);
     updateUserShellsPerMessage(guildId, userId, computeShellsPerMessage(updatedUpgrades));
 
-    res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-            flags: EPHEMERAL_FLAG,
-            embeds: [
-                {
-                    title: '✅ Achat effectué',
-                    color: 0x66bb6a,
-                    fields: [
-                        { name: 'Upgrade', value: upgrade.name, inline: true },
-                        { name: 'Niveau', value: `${currentLevel} → **${newLevel}**`, inline: true },
-                        { name: 'Coût total', value: `${formatBigNum(totalCost)} 🐚`, inline: true },
-                        {
-                            name: 'Gain',
-                            value: `${formatGain(upgrade, currentLevel)} → **${formatGain(upgrade, newLevel)}**`,
-                            inline: true,
-                        },
-                        { name: 'Solde restant', value: `${formatBigNum(spent.newShells)} 🐚`, inline: true },
-                    ],
-                },
-            ],
-        },
-    });
+    replyEmbed(res, {
+        title: '✅ Achat effectué',
+        color: 0x66bb6a,
+        fields: [
+            { name: 'Amélioration', value: upgrade.name, inline: true },
+            { name: 'Niveau', value: `${currentLevel} → **${newLevel}**`, inline: true },
+            { name: 'Coût total', value: `${formatBigNum(totalCost)} 🐚`, inline: true },
+            {
+                name: 'Gain',
+                value: `${formatGain(upgrade, currentLevel)} → **${formatGain(upgrade, newLevel)}**`,
+                inline: true,
+            },
+            { name: 'Solde restant', value: `${formatBigNum(spent.newShells)} 🐚`, inline: true },
+        ],
+    }, { ephemeral: true });
 }
 
 export const shopCommand: Command = {
     definition: {
         name: 'shop',
-        description: 'Affiche la boutique ou achète un upgrade.',
+        description: "Affiche la boutique d'améliorations.",
         type: ApplicationCommandType.ChatInput,
         integration_types: [ApplicationIntegrationType.GuildInstall],
         contexts: [InteractionContextType.Guild],
         options: [
             {
-                name: 'upgrade',
-                description: 'L\'upgrade à acheter',
+                name: PARAM_UPGRADE,
+                description: "L'amélioration à acheter",
                 type: ApplicationCommandOptionType.String,
                 required: false,
                 choices: ALL_UPGRADES.map((u) => ({ name: u.name, value: u.id })),
             },
             {
-                name: 'quantity',
+                name: PARAM_QUANTITY,
                 description: 'Nombre de niveaux à acheter (défaut : 1)',
                 type: ApplicationCommandOptionType.Integer,
                 required: false,

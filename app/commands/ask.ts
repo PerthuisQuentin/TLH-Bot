@@ -1,9 +1,11 @@
-import { InteractionResponseType } from 'discord-interactions';
 import type { Request, Response } from 'express';
 import {
     createMessageBody,
     updateInteractionResponse,
     DiscordRequest,
+    replyText,
+    replyDeferred,
+    getOption,
 } from '../commons/utils.js';
 import { CONTEXT_MESSAGES_LIMIT } from '../commons/prompts.js';
 import { formatMessagesContext } from '../commons/messages.js';
@@ -15,9 +17,10 @@ import {
     ApplicationCommandOptionType,
     ApplicationIntegrationType,
     InteractionContextType,
-    MessageFlags,
 } from 'discord-api-types/v10';
 import { Command } from './types.js';
+
+const PARAM_QUESTION = 'question';
 
 async function handleAskCommand(req: Request, res: Response): Promise<void> {
     const body = req.body as APIChatInputApplicationCommandInteraction;
@@ -28,23 +31,13 @@ async function handleAskCommand(req: Request, res: Response): Promise<void> {
     const config = await readJsonFile(guildId, AllowedFiles.CONFIG);
     const noAskChannels = config.noAskChannels ?? [];
     if (noAskChannels.includes(channelId)) {
-        res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: "Je ne suis pas autorisé à répondre dans ce canal.",
-                flags: MessageFlags.Ephemeral,
-            },
-        });
+        replyText(res, "Je ne suis pas autorisé à répondre dans ce canal.", { ephemeral: true });
         return;
     }
 
-    const userQuestion = (data?.options?.find(
-        (opt) => opt.name === 'question',
-    ) as { value?: string } | undefined)?.value;
+    const userQuestion = getOption<string>(data?.options, PARAM_QUESTION);
 
-    res.send({
-        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-    });
+    replyDeferred(res);
 
     try {
         const userId =
@@ -133,7 +126,7 @@ export const askCommand: Command = {
         options: [
             {
                 type: ApplicationCommandOptionType.String,
-                name: 'question',
+                name: PARAM_QUESTION,
                 description: 'La question à poser',
                 required: true,
             },
