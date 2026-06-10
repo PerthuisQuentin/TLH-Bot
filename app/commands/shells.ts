@@ -17,7 +17,7 @@ import { replyText, replyEmbed, getOption, isPublicOption, requireGuild } from '
 import type { UserUpgrades } from '../idle/types.js';
 import type { Command } from './types.js';
 
-const PARAM_USER = 'utilisateur';
+const PARAM_USER = 'user';
 const PARAM_PUBLIC = 'public';
 
 function getNextRole(guildId: string, maxShells: BigNum) {

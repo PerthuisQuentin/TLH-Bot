@@ -15,8 +15,8 @@ import type { UserUpgrades, UpgradeDefinition } from '../idle/types.js';
 import { UpgradeKind } from '../idle/types.js';
 import type { Command } from './types.js';
 
-const PARAM_UPGRADE = 'amelioration';
-const PARAM_QUANTITY = 'quantite';
+const PARAM_UPGRADE = 'upgrade';
+const PARAM_QUANTITY = 'quantity';
 
 function computeShellsPerMessage(userUpgrades: UserUpgrades): BigNum {
     const additive = ALL_UPGRADES
