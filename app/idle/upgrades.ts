@@ -1,6 +1,5 @@
-import { UpgradeKind } from './types.js';
 import type { UpgradeDefinition } from './types.js';
-import { bn, bnAdd, bnSub, bnMul, bnDiv, bnFloor, bnPow, bnLn, bnLte, bnGt, formatBigNum, type BigNum } from '../commons/big-number.js';
+import { bn, bnAdd, bnLte, formatBigNum, type BigNum } from '../commons/big-number.js';
 
 // ─── Calculation helpers ──────────────────────────────────────────────────────
 
@@ -10,7 +9,7 @@ import { bn, bnAdd, bnSub, bnMul, bnDiv, bnFloor, bnPow, bnLn, bnLte, bnGt, form
  * Level is 0-indexed (level 0 → 1 costs initialCost).
  */
 export function getUpgradeCost(upgrade: UpgradeDefinition, level: number): BigNum {
-    return bnMul(upgrade.initialCost, bnPow(upgrade.costMultiplier, level));
+    return upgrade.getCost(level);
 }
 
 /**
@@ -24,32 +23,13 @@ export function getUpgradeCost(upgrade: UpgradeDefinition, level: number): BigNu
  *   levels 11–20 each contribute +2  → total at level 11 is 12
  */
 export function getUpgradeGain(upgrade: UpgradeDefinition, level: number): BigNum {
-    if (upgrade.kind === UpgradeKind.MULTIPLICATIVE) {
-        return bnPow(upgrade.baseGain, level);
-    }
-
-    if (level <= 0) return bn(0);
-
-    const { baseGain, gainDoublingInterval } = upgrade;
-    const completeTiers = Math.floor(level / gainDoublingInterval);
-    const remainder = level % gainDoublingInterval;
-
-    const fullTiersGain =
-        completeTiers > 0
-            ? bnMul(gainDoublingInterval * baseGain, bnSub(bnPow(2, completeTiers), 1))
-            : bn(0);
-
-    const remainderGain = bnMul(remainder * baseGain, bnPow(2, completeTiers));
-
-    return bnAdd(fullTiersGain, remainderGain);
+    return upgrade.getGain(level);
 }
 
 export function formatUpgradeGain(upgrade: UpgradeDefinition, level: number): string {
+    if (upgrade.formatGain) return upgrade.formatGain(level);
+
     const gain = getUpgradeGain(upgrade, level);
-    if (upgrade.kind === UpgradeKind.MULTIPLICATIVE) {
-        // Pour les petits multiplicateurs, afficher 2 décimales ; pour les grands, utiliser formatBigNum
-        return gain.gte(1000) ? `×${formatBigNum(gain)}` : `×${gain.toFixed(2)}`;
-    }
     return `+${formatBigNum(gain)} 🐚/msg`;
 }
 
@@ -63,10 +43,13 @@ export function getUpgradeTotalCost(
     count: number,
 ): BigNum {
     if (count <= 0) return bn(0);
-    const { initialCost, costMultiplier } = upgrade;
-    const ratio = costMultiplier - 1;
-    const base = bnMul(initialCost, bnPow(costMultiplier, fromLevel));
-    return bnDiv(bnMul(base, bnSub(bnPow(costMultiplier, count), 1)), ratio);
+
+    let total = bn(0);
+    for (let i = 0; i < count; i += 1) {
+        total = bnAdd(total, getUpgradeCost(upgrade, fromLevel + i));
+    }
+
+    return total;
 }
 
 /**
@@ -82,21 +65,29 @@ export function getMaxBuyable(
 ): number {
     if (bnLte(shells, 0)) return 0;
 
-    const { initialCost, costMultiplier } = upgrade;
-    const ratio = costMultiplier - 1;
-    const base = bnMul(initialCost, bnPow(costMultiplier, currentLevel));
+    const canAfford = (count: number): boolean =>
+        bnLte(getUpgradeTotalCost(upgrade, currentLevel, count), shells);
 
-    // Solving for N: base * (costMultiplier^N - 1) / ratio <= shells
-    // N <= ln(1 + shells * ratio / base) / ln(costMultiplier)
-    const inner = bnAdd(1, bnDiv(bnMul(shells, ratio), base));
+    if (!canAfford(1)) return 0;
 
-    const estimate = Math.max(
-        0,
-        bnFloor(bnDiv(bnLn(inner), bnLn(costMultiplier))).toNumber(),
-    );
+    let low = 1;
+    let high = 2;
 
-    // Correct for floating-point drift (at most ±1 off)
-    if (bnLte(getUpgradeTotalCost(upgrade, currentLevel, estimate + 1), shells)) return estimate + 1;
-    if (estimate > 0 && bnGt(getUpgradeTotalCost(upgrade, currentLevel, estimate), shells)) return estimate - 1;
-    return estimate;
+    // Exponential search for an upper bound.
+    while (canAfford(high)) {
+        low = high;
+        high *= 2;
+    }
+
+    // Binary search for the maximum affordable count.
+    while (low + 1 < high) {
+        const mid = Math.floor((low + high) / 2);
+        if (canAfford(mid)) {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+
+    return low;
 }

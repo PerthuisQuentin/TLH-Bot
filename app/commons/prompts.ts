@@ -82,6 +82,7 @@ Le **streak journalier** augmente chaque jour où le membre envoie au moins un m
 Le gain augmente grâce aux upgrades achetables dans \`/shop\` :
 - 🦦 **Loutres plongeuses** : augmente le gain de base par message (s'accélère avec les niveaux).
 - 🐟 **Nageoires hydrodynamiques** : multiplie l'ensemble du gain.
+- 🎒 **Sacs de récolte XXL** : multiplie également l'ensemble du gain (bonus plus élevé par niveau, mais coût bien plus important).
 
 Les rôles Discord sont débloqués selon le pic historique de coquillages d'un membre, jamais perdu même si on en dépense.
 

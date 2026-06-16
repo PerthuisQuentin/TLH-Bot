@@ -198,13 +198,25 @@ Gain formula: the marginal gain of the k-th level doubles every 10 levels:
 
 #### 🐟 Nageoires hydrodynamiques (`hydrodynamicFlippers`) — MULTIPLICATIVE
 
-| Property         | Value     |
-| ---------------- | --------- |
-| `initialCost`    | 15 000 🐚 |
-| `costMultiplier` | 1.25      |
-| `baseGain`       | 1.15      |
+| Property            | Value              |
+| ------------------- | ------------------ |
+| `initialCost`       | 15 000 🐚          |
+| `costMultiplier`    | 1.30               |
+| `costIntervalBoost` | ×5 every 10 levels |
+| `baseGain`          | 1.15               |
 
-Gain formula: `×1.15^level` (level 0 = ×1.0, no effect).
+Gain formula: `×1.15^level` (level 0 = ×1.00, no effect).
+
+#### 🎒 Sacs de récolte XXL (`harvestBags`) — MULTIPLICATIVE
+
+| Property            | Value               |
+| ------------------- | ------------------- |
+| `initialCost`       | 100 000 🐚          |
+| `costMultiplier`    | 2.00                |
+| `costIntervalBoost` | ×10 every 10 levels |
+| `baseGain`          | 1.50                |
+
+Gain formula: `×1.5^level` (level 0 = ×1.00, no effect).
 
 ---
 
@@ -231,10 +243,10 @@ The `shellsRoles` array in the server config maps thresholds to role IDs:
 
 ## Data storage
 
-| File                      | Content                                                                     |
-| ------------------------- | --------------------------------------------------------------------------- |
-| `{guildId}-shells.json`   | Array of `ShellsUser` (`userId`, `shells`, `maxShells`, `shellsPerMessage`) |
-| `{guildId}-upgrades.json` | Array of `UserUpgrades` (`userId`, `divingOtters`, `hydrodynamicFlippers`)  |
+| File                      | Content                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| `{guildId}-shells.json`   | Array of `ShellsUser` (`userId`, `shells`, `maxShells`, `shellsPerMessage`)               |
+| `{guildId}-upgrades.json` | Array of `UserUpgrades` (`userId`, `divingOtters`, `hydrodynamicFlippers`, `harvestBags`) |
 
 See `docs/data-storage.md` for the full file format reference.
 
