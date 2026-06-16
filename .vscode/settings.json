@@ -23,6 +23,10 @@
         "/^npx tsc --noEmit 2>&1$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^npx tsc --noEmit --pretty false$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

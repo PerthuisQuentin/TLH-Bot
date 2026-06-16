@@ -128,9 +128,10 @@ export function formatBigNum(n: BigNum): string {
 
     const e = n.e; // floor(log10(|n|))
 
-    // Nombre < 1 000 : afficher en entier
+    // Nombre < 1 000 : afficher avec 2 décimales (3 chiffres significatifs)
     if (e < 3) {
-        return Decimal.floor(n).toFixed(0);
+        const decimals = Math.max(0, 2 - Math.max(0, e));
+        return n.toFixed(decimals);
     }
 
     // Tier de suffixe : tier 1 = K (e 3–5), tier 2 = M (e 6–8), etc.

@@ -34,6 +34,7 @@ export type UserUpgrades = {
     userId: string;
     divingOtters: number;
     hydrodynamicFlippers: number;
+    harvestBags: number;
 }
 
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
@@ -72,4 +73,5 @@ export const UserUpgradesSchema = z.object({
     userId: z.string(),
     divingOtters: z.number(),
     hydrodynamicFlippers: z.number(),
+    harvestBags: z.number(),
 });

@@ -16,6 +16,7 @@ export function getUserUpgrades(guildId: string, userId: string): UserUpgrades {
         userId,
         divingOtters: found?.divingOtters ?? 0,
         hydrodynamicFlippers: found?.hydrodynamicFlippers ?? 0,
+        harvestBags: found?.harvestBags ?? 0,
     };
 }
 

@@ -12,14 +12,13 @@ type UpgradeDefinitionBase = {
     name: string;
     emoji: string;
     description: string;
-    initialCost: number;
-    costMultiplier: number;
-    baseGain: number;
+    getCost: (currentLevel: number) => BigNum;
+    getGain: (currentLevel: number) => BigNum;
+    formatGain?: (currentLevel: number) => string;
 };
 
 export type AdditiveUpgradeDefinition = UpgradeDefinitionBase & {
     kind: UpgradeKind.ADDITIVE;
-    gainDoublingInterval: number;
 };
 
 export type MultiplicativeUpgradeDefinition = UpgradeDefinitionBase & {
