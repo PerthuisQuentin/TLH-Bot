@@ -4,6 +4,7 @@ import {
     createUserPrompt,
     createQuestionInstruction,
     createRolePromotionInstruction,
+    createJackpotInstruction,
 } from '../commons/prompts.js';
 import { writeTextFile, AllowedFiles } from '../commons/files.js';
 import { parseResponse } from '../commons/response.js';
@@ -192,5 +193,38 @@ export async function generateRolePromotionMessage(
             error,
         );
         return `Félicitations ${userName} ! Tu as obtenu le rôle ${roleName} !`;
+    }
+}
+
+type GenerateJackpotParams = {
+    guildId: string;
+    channelName: string;
+    conversationContext: string;
+    userName: string;
+    amount: string;
+    multiplier: number;
+}
+
+export async function generateJackpotMessage(
+    params: GenerateJackpotParams,
+): Promise<string> {
+    const { guildId, channelName, conversationContext, userName, amount, multiplier } = params;
+    const defaultMessage = `🎰 JACKPOT ! ${userName} remporte le jackpot et gagne **${amount} 🐚** (×${multiplier}) !`;
+    try {
+        const instruction = createJackpotInstruction(userName, amount, multiplier);
+        const userPrompt = await createUserPrompt(
+            channelName,
+            conversationContext,
+            instruction,
+            guildId,
+        );
+        const { response } = await chatWithGemini({ guildId, userPrompt, saveMemory: false });
+        return response || defaultMessage;
+    } catch (error) {
+        console.error(
+            `[Bot] Error generating jackpot message | guildId=${guildId}`,
+            error,
+        );
+        return defaultMessage;
     }
 }

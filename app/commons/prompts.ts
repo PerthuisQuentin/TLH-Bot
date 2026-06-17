@@ -79,6 +79,8 @@ Les coquillages (🐚) sont la monnaie passive du serveur. Les membres en gagnen
 
 Le **streak journalier** augmente chaque jour où le membre envoie au moins un message. Il donne un bonus progressif de ×1.0 (1er jour) jusqu'à ×2.0 (7 jours consécutifs ou plus). Un jour sans message remet le streak à zéro. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 heat × ×2 streak).
 
+- **Jackpot** : chaque message a 1 chance sur 1 000 de déclencher un jackpot, qui multiplie le gain du message par 1 000. Le jackpot est annoncé publiquement dans le salon.
+
 Le gain augmente grâce aux upgrades achetables dans \`/shop\` :
 - 🦦 **Loutres plongeuses** : augmente le gain de base par message (s'accélère avec les niveaux).
 - 🐟 **Nageoires hydrodynamiques** : multiplie l'ensemble du gain.
@@ -126,4 +128,15 @@ export function createRolePromotionInstruction(
 ${userName} vient d'obtenir le rôle "${roleName}" grâce à son activité sur le serveur.
 
 Génère un court message de félicitations (1-2 phrases max) pour ${userName}. Sois créatif et enthousiaste ! Ne mets pas de balises <response> ou <memory>.`;
+}
+
+export function createJackpotInstruction(
+    userName: string,
+    amount: string,
+    multiplier: number,
+): string {
+    return `🎰 JACKPOT :
+${userName} vient de déclencher le jackpot et gagne ${amount} 🐚 (×${multiplier} son income habituel) !
+
+Génère un court message d'annonce épique (1-2 phrases max) pour ${userName}. Sois dramatique et enthousiaste ! Ne mets pas de balises <response> ou <memory>.`;
 }

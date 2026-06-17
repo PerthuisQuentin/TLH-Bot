@@ -122,3 +122,33 @@ Heat is currently in-memory only and resets on restart. Since heat is an instant
 ### Global cross-server leaderboard 💡
 
 A ranking aggregating data across all servers where the bot is present. Would require lifting the current per-guild isolation — to be considered carefully.
+
+---
+
+## Quiet-user friendly mechanics
+
+The current system strongly rewards message volume. The ideas below aim to give low-activity users a meaningful path to earning shells without competing on raw post count.
+
+### Silence multiplier 💡
+
+The longer a user has been silent, the higher the multiplier on their next earn event. For example: no message in the last hour → ×1.5, 6 hours → ×2, 24 hours → ×3, capped at some maximum. The bonus resets after each earned message. Rewards those who speak rarely but meaningfully.
+
+### First-message-of-the-day bonus 💡
+
+The very first message of the calendar day (Europe/Paris timezone, consistent with the streak logic) earns a fixed shell bonus, regardless of volume. Even posting once a day is worth it. Could be displayed as a streak milestone.
+
+### Reaction income 💡
+
+When another user reacts to your message with an emoji, you earn a small amount of shells. Shifts the incentive from quantity to quality: one well-received message can outperform ten ignored ones. Should be capped per message to prevent farming.
+
+### Off-peak bonus 💡
+
+Invert the heat multiplier logic: messages sent when the channel is cold (heat < 0.5, multiplier ×1.0) earn a small bonus instead of a penalty. Rewards members who keep the conversation alive during quiet periods.
+
+### Observer dividend 💡
+
+When a channel has high heat, a fraction of the bonus shells generated is distributed to all members who have been present (sent at least one message in the last N minutes) — not just those currently active. Quiet bystanders who were part of the conversation earlier still benefit from the rush they helped ignite.
+
+### Lucky message (jackpot) ✅
+
+Every message has a small probability (e.g. 1%) of triggering a jackpot that multiplies the earn by ×5–×20. Entirely independent of message frequency, so a user who sends one message a day has the same per-message odds as a spammer. Adds a lottery layer that decouples luck from volume.
