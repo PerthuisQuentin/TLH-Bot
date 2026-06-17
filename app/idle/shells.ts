@@ -13,9 +13,9 @@ import { updateMemberShellsRoles } from './shells-roles.js';
 import { readJsonFile, AllowedFiles } from '../commons/files.js';
 import { memoryCache } from '../commons/memory.js';
 import { updateChannelHeat, ChannelActivityType } from './channel-activity.js';
-import { generateRolePromotionMessage } from '../gemini/ask-gemini.js';
+import { generateRolePromotionMessage, generateJackpotMessage } from '../gemini/ask-gemini.js';
 import { formatDiscordJsMessage } from '../commons/messages.js';
-import { bn, bnAdd, bnSub, bnMul, bnFloor, bnGt, type BigNum } from '../commons/big-number.js';
+import { bn, bnAdd, bnSub, bnMul, bnFloor, bnGt, formatBigNum, type BigNum } from '../commons/big-number.js';
 import type { Message, GuildMember, TextChannel, MessageReaction, PartialMessageReaction, User, PartialUser } from 'discord.js';
 import type { RoleChanges } from './types.js';
 
@@ -23,6 +23,9 @@ const SHELLS_COOLDOWN = 5;
 
 const MESSAGE_SHELLS_FRACTION = 1.0;
 const REACTION_SHELLS_FRACTION = 0.1;
+
+const JACKPOT_CHANCE = 1 / 1000;
+const JACKPOT_MULTIPLIER = 1000;
 
 const GAIN_FRACTIONS: Record<ChannelActivityType, number> = {
     [ChannelActivityType.Message]: MESSAGE_SHELLS_FRACTION,
@@ -42,7 +45,7 @@ export async function addShells(
     member: GuildMember | null = null,
     multiplier = 1.0,
     activityType: ChannelActivityType = ChannelActivityType.Message,
-): Promise<{ newShells: BigNum; maxShells: BigNum; roleChanges: RoleChanges }> {
+): Promise<{ amount: BigNum; newShells: BigNum; maxShells: BigNum; roleChanges: RoleChanges }> {
     try {
         const base = getShellsPerMessage(guildId, userId);
         const variance = bnFloor(bnMul(base, 0.1));
@@ -71,13 +74,14 @@ export async function addShells(
             }
         }
 
-        return { newShells, maxShells, roleChanges };
+        return { amount, newShells, maxShells, roleChanges };
     } catch (error) {
         console.error(
             `[Shells] Error adding | userId=${userId} | guildId=${guildId}`,
             error,
         );
         return {
+            amount: bn(0),
             newShells: bn(0),
             maxShells: bn(0),
             roleChanges: { added: null, addedRoleName: null, removed: [] },
@@ -117,13 +121,38 @@ async function awardShells(ctx: ShellsAwardContext): Promise<void> {
     const streak = updateUserStreak(ctx.guildId, ctx.userId);
     const multiplier = heatMultiplier * getStreakMultiplier(streak);
 
-    const { roleChanges } = await addShells(
+    const isJackpot = ctx.activityType === ChannelActivityType.Message && Math.random() < JACKPOT_CHANCE;
+    const finalMultiplier = isJackpot ? multiplier * JACKPOT_MULTIPLIER : multiplier;
+
+    if (isJackpot) {
+        console.log(`[Shells] Jackpot! | userId=${ctx.userId} | guildId=${ctx.guildId}`);
+    }
+
+    const { amount: jackpotAmount, roleChanges } = await addShells(
         ctx.userId,
         ctx.guildId,
         ctx.member,
-        multiplier,
+        finalMultiplier,
         ctx.activityType,
     );
+
+    if (isJackpot) {
+        try {
+            const channelName = ('name' in ctx.channel ? ctx.channel.name : null) ?? 'canal';
+            const formattedAmount = formatBigNum(jackpotAmount);
+            const jackpotMessage = await generateJackpotMessage({
+                guildId: ctx.guildId,
+                channelName,
+                conversationContext: ctx.conversationContext,
+                userName: ctx.displayName,
+                amount: formattedAmount,
+                multiplier: JACKPOT_MULTIPLIER,
+            });
+            await ctx.channel.send(`<@${ctx.userId}> ${jackpotMessage}`);
+        } catch (error) {
+            console.error(`[Bot] Error sending jackpot message | userId=${ctx.userId}`, error);
+        }
+    }
 
     if (roleChanges.added && roleChanges.addedRoleName) {
         try {
