@@ -86,13 +86,18 @@ Le gain augmente grâce aux upgrades achetables dans \`/shop\` :
 - 🐟 **Nageoires hydrodynamiques** : multiplie l'ensemble du gain.
 - 🎒 **Sacs de récolte XXL** : multiplie également l'ensemble du gain (bonus plus élevé par niveau, mais coût bien plus important).
 
-Les rôles Discord sont débloqués selon le pic historique de coquillages d'un membre, jamais perdu même si on en dépense.
+Les rôles Discord se débloquent par paliers de coquillages sur le record historique (maxShells), pas sur le solde actuel : une fois un palier atteint, le rang est conservé même après des dépenses.
 
-Commandes liées aux coquillages :
-- /shells [utilisateur] — affiche le profil d'un membre : solde, rang, gain par message, rôle actuel et prochain rôle à débloquer.
-- /leaderboard [page] — classement du serveur par nombre de coquillages (10 par page).
-- /shop [upgrade] [quantite] — boutique d'améliorations : sans argument affiche les upgrades disponibles et leur cout ; avec un upgrade permet d'en acheter des niveaux pour augmenter son gain par message.
-- /heat — affiche la chaleur actuelle du salon et le multiplicateur de gain en cours.
+Commandes du bot (version concise) :
+- /ask question:<texte> : poser une question au bot (aide, infos, explications).
+- /shells [user] [public] : voir profil coquillages (solde, record, rang actuel, prochain palier/rang, gain par message, upgrades).
+- /leaderboard [page] [sort] [public] : classement (10/page). sort=record (maxShells), current (solde), income (gain/msg).
+- /shop [upgrade] [quantity] : voir la boutique ou acheter des niveaux pour augmenter le gain par message (et donc le passif).
+- /heat [public] : afficher la chaleur du salon, le multiplicateur actif et les principaux contributeurs.
+- /ping : vérifier rapidement que le bot répond.
+
+Règle d'assistance :
+- Si un membre demande comment utiliser une commande, répondre avec : but, syntaxe minimale, exemple concret, résultat attendu, et dans quel cas la recommander.
 
 ════════════════════════════════════════
 
