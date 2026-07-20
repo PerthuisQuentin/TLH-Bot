@@ -1,9 +1,16 @@
-import { pingCommand } from './ping.js';
-import { askCommand } from './ask.js';
-import { leaderboardCommand } from './leaderboard.js';
-import { shellsCommand } from './shells.js';
-import { shopCommand } from './shop.js';
-import { heatCommand } from './heat.js';
-import type { Command } from './types.js';
+import { pingCommand } from './ping.ts';
+import { askCommand } from './ask.ts';
+import { leaderboardCommand } from './leaderboard.ts';
+import { shellsCommand } from './shells.ts';
+import { shopCommand } from './shop.ts';
+import { heatCommand } from './heat.ts';
+import type { Command } from './types.ts';
 
-export const commands: Command[] = [pingCommand, askCommand, leaderboardCommand, shellsCommand, shopCommand, heatCommand];
+export const commands: Command[] = [
+    pingCommand,
+    askCommand,
+    leaderboardCommand,
+    shellsCommand,
+    shopCommand,
+    heatCommand,
+];

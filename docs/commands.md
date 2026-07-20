@@ -1,165 +1,129 @@
-# Available commands
+# Commands
 
-Commands are Discord slash commands (prefix `/`). They are registered with the Discord API via `npm run register`.
+Discord slash commands. Definitions live in `app/commands/<name>.ts` and are pushed to Discord with `npm run register` — re-run it after any change to a `definition`.
+
+Every user-facing string is French. The option names below are the literal ones Discord shows.
+
+| Command        | Options                  | Scope        | Default visibility |
+| -------------- | ------------------------ | ------------ | ------------------ |
+| `/ping`        | —                        | Guilds + DMs | public             |
+| `/ask`         | `question`               | Guilds + DMs | public             |
+| `/leaderboard` | `page`, `sort`, `public` | Guilds + DMs | ephemeral          |
+| `/shells`      | `user`, `public`         | Guilds + DMs | ephemeral          |
+| `/shop`        | `upgrade`, `quantity`    | Guilds only  | always ephemeral   |
+| `/heat`        | `public`                 | Guilds only  | ephemeral          |
+
+The three shells commands that accept `public` default to an ephemeral reply, so checking your own profile doesn't spam the channel. Pass `public:true` to show it to everyone.
 
 ---
 
 ## `/ping`
 
-**Description**: Checks that the bot is running.
-
-**Parameters**: none
-
-**Response**: `Pong!`
-
-**Available in**: servers, DMs, all contexts
+Checks that the bot answers. No options. Replies `Pong !`.
 
 ---
 
 ## `/ask`
 
-**Description**: Ask the AI a question. The bot takes into account the conversation context (last 50 messages in the channel), the server memory, and the custom system prompt.
+Asks the AI a question, with the channel's recent conversation, the guild memory and the guild system prompt as context.
 
-**Parameters**:
+| Option     | Type   | Required | Description   |
+| ---------- | ------ | -------- | ------------- |
+| `question` | String | Yes      | The question. |
 
-| Parameter  | Type   | Required | Description                |
-| ---------- | ------ | -------- | -------------------------- |
-| `question` | String | Yes      | The question to ask the AI |
+1. Refuses if the channel is in `noAskChannels`, or if that config could not be read at all.
+2. Defers the reply, which buys 15 minutes. Everything after this point can only reach the user by editing that reply — see the defer boundary in [architecture.md](./architecture.md#error-handling).
+3. Fetches the channel name and its last 50 messages over REST, parsed into `ConversationMessage[]` by `app/discord/messages.ts`.
+4. Calls Gemini with the tool declarations from `app/tools/`, looping while the model returns tool calls, bounded by `MAX_TOOL_ROUNDS`. The last round declares no tool, so a model that will not converge still produces an answer rather than running until the interaction expires.
+5. Splits the response on the `### [MÉMOIRE]` marker, matched loosely (see `docs/storage.md`): the first half is posted, the second is persisted silently.
 
-**Behavior**:
+| Tool          | Triggered by       | Action                      |
+| ------------- | ------------------ | --------------------------- |
+| `get_weather` | A weather question | Calls World Weather Online. |
 
-1. Checks that the channel is not listed in `noAskChannels` in the server config.
-2. Fetches the last 50 messages from the channel to build context.
-3. Loads the server memory and system prompt.
-4. Sends a deferred response to Discord (allows up to 15 minutes to process).
-5. Calls Google Gemini with the available tools (weather, reminders).
-6. If the AI invokes a tool, executes it automatically and sends the result back to Gemini.
-7. Parses the response to extract a possible memory update (`### [MEMORY]` marker).
-8. Posts the final response to the channel with mention of the question's author.
-9. Saves memory if it was updated by the AI.
+The rendering of the conversation to text happens in `app/commons/prompts.ts`, not in the command. Members are identified by Discord ID; a globally unique handle is added only when two different IDs share a display name in the same conversation.
 
-**AI-accessible tools**:
-
-| Tool           | Trigger          | Action                               |
-| -------------- | ---------------- | ------------------------------------ |
-| `get_weather`  | Weather question | Call to World Weather Online         |
-| `set_reminder` | Reminder request | Creates a reminder persisted as JSON |
-
-**Available in**: servers, DMs, all contexts
+Names come from the gateway's member cache, so the history shows server nicknames — the same names `/shells` and the gateway announcements use. REST message payloads carry no member object, which is why the cache is consulted rather than the payload; a member the gateway never saw falls back to their global name. The question header reads the same resolver as the history, so the asker is never named two different ways in one prompt.
 
 ---
 
 ## `/leaderboard`
 
-**Description**: Displays the server's shells (🐚) ranking in descending order.
+The guild's shells ranking, 10 per page.
 
-**Parameters**:
+| Option   | Type        | Required | Description                                                                    |
+| -------- | ----------- | -------- | ------------------------------------------------------------------------------ |
+| `page`   | Integer ≥ 1 | No       | Page number. Default 1, clamped to the last page.                              |
+| `sort`   | Choice      | No       | `max` (all-time record, default), `current` (balance), `income` (per message). |
+| `public` | Boolean     | No       | Show to everyone. Default false.                                               |
 
-| Parameter | Type        | Required | Description                                   |
-| --------- | ----------- | -------- | --------------------------------------------- |
-| `page`    | Integer ≥ 1 | No       | Page number (10 entries per page, default: 1) |
+Each line shows the rank, the member, their record, and their balance and income in parentheses. The requester's own line is bold; if they are not on the displayed page, it is appended below a separator, or "Non classé" if they have never earned.
 
-**Behavior**:
-
-1. Loads the server's `shells.json` file.
-2. Sorts users by shell count in descending order.
-3. Displays 10 entries per page with their rank, Discord username, and total shells.
-4. Highlights the row of the user who requested the leaderboard.
-5. Indicates if the user is not yet ranked.
-6. Shows total participant count and pagination info.
-
-**Response format**: Discord embed (color `#FFD700`)
-
-**Available in**: servers only
+The footer carries the page, the participant count and the active sort. Mentions are suppressed, so nobody gets pinged by the ranking.
 
 ---
 
 ## `/shells`
 
-**Description**: Displays a user's shells (🐚) profile: current count, rank, earn rate, current role, and next role to unlock.
+A member's shells profile.
 
-**Parameters**:
+| Option   | Type    | Required | Description                               |
+| -------- | ------- | -------- | ----------------------------------------- |
+| `user`   | User    | No       | Whose profile. Defaults to the requester. |
+| `public` | Boolean | No       | Show to everyone. Default false.          |
 
-| Parameter     | Type | Required | Description                                               |
-| ------------- | ---- | -------- | --------------------------------------------------------- |
-| `utilisateur` | User | No       | User whose profile to display (defaults to the requester) |
+Three fields:
 
-**Behavior**:
+- **Rôles** — leaderboard rank, current role, next role and the shells still missing.
+- **Coquillages** — balance, gain per message (±10 %), gain per reaction, current streak and its multiplier.
+- **Upgrades** — one line per upgrade with its level and current effect.
 
-1. Resolves the target user (the `utilisateur` parameter if provided, otherwise the requester).
-2. Loads the server's `shells.json` leaderboard and determines the user's rank.
-3. Reads `shellsRoles` from the server config to determine the current and next role.
-4. Builds an embed with the following fields:
-   - **Rang**: rank on the server leaderboard, or "Non classé".
-   - **Coquillages**: current shell count.
-   - **Gain par message**: shells earned per message (±10% random variance).
-   - **Rôle actuel**: Discord role currently held based on `maxShells`, or "Aucun" if none configured.
-   - **Prochain rôle**: next role to unlock and how many shells are still needed, or "✨ Rang maximum atteint".
-5. If the historical maximum (`maxShells`) differs from the current count, it is shown in the embed footer.
+The all-time maximum appears in the footer only when it differs from the balance.
 
-**Response format**: Discord embed (color `#FFD700`)
-
-**Available in**: servers only
+Roles are read from `maxShells`, so the "current role" never regresses after a shop purchase.
 
 ---
 
 ## `/shop`
 
-**Description**: Displays the upgrade shop or purchases upgrade levels using shells (🐚).
+Browses the upgrade shop, or buys levels. Always ephemeral.
 
-**Parameters**:
+| Option     | Type        | Required | Description                           |
+| ---------- | ----------- | -------- | ------------------------------------- |
+| `upgrade`  | Choice      | No       | Which upgrade to buy. Omit to browse. |
+| `quantity` | Integer ≥ 1 | No       | How many levels. Default 1.           |
 
-| Parameter  | Type        | Required | Description                               |
-| ---------- | ----------- | -------- | ----------------------------------------- |
-| `upgrade`  | Choice      | No       | Upgrade to purchase (omit to just browse) |
-| `quantite` | Integer ≥ 1 | No       | Number of levels to buy (default: 1)      |
+**Browsing** lists every upgrade with its level, current effect, next-level price, and how many levels the balance covers and for how much.
 
-**Behavior**:
+**Buying** runs the affordability check and the debit inside a single synchronous mutator, so a shell gain landing mid-purchase cannot let the check pass and the debit fail. Four outcomes:
 
-- **Without `upgrade`** (listing mode):
-  1. Loads the user's current shells and upgrade levels.
-  2. Displays each upgrade with its current level, current gain, next-level cost, and how many levels the user can afford.
-  3. Response is ephemeral (only visible to the requesting user).
+| Outcome                                  | Reply                                                           |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `quantity` not a positive integer        | Asks for a positive integer.                                    |
+| Cannot afford one level                  | The next-level price and the current balance.                   |
+| `quantity` above what the balance covers | The maximum affordable count.                                   |
+| Bought                                   | Old → new level, total cost, old → new gain, remaining balance. |
 
-- **With `upgrade`** (purchase mode):
-  1. Validates the requested quantity against the user's shell balance.
-  2. Deducts the total cost (geometric series) from the user's shells.
-  3. Increments the upgrade level(s) and recomputes `shellsPerMessage`.
-  4. Returns a confirmation embed showing old → new level, cost, and new gain.
-  5. Responds with an error if the user cannot afford even one level.
+The first row is unreachable through Discord, which enforces `min_value: 1` itself; it guards against a malformed payload. `GameInstance.buyUpgrade` throws a `RangeError` on the same condition, since below 1 the cost sum is empty: a 0 would be a free no-op purchase reported as a success, a negative one would refund shells and lower the level. It throws just the same above `MAX_LEVELS_PER_PURCHASE` (1000 levels), so summing a caller-supplied count cannot become a long loop inside the storage mutator; a player never sees it, since anything that large exceeds what the balance covers and gets the third row instead.
 
-**Response format**: Ephemeral Discord embed (listing: color `#4FC3F7`, purchase: color `#66BB6A`)
+The purchase is flushed to disk before the confirmation is sent — the player is told it happened, so it must not ride the 1-second write delay.
 
-**Available in**: servers only
+Prices are rounded up once, at the point where they are both displayed and charged, so the price shown is exactly the price paid.
+
+The `upgrade` choices are generated from the upgrade registry, so adding an upgrade needs no edit here.
 
 ---
 
 ## `/heat`
 
-**Description**: Displays the current conversation heat of the channel and its active contributors.
+The channel's current conversation heat.
 
-**Parameters**: none
+| Option   | Type    | Required | Description                      |
+| -------- | ------- | -------- | -------------------------------- |
+| `public` | Boolean | No       | Show to everyone. Default false. |
 
-**Behavior**:
+Renders a 12-block progress bar, the raw heat value, the resulting multiplier and the active contributors with their contribution and relative share. The embed colour scales with the multiplier: green → yellow → orange → red.
 
-1. Reads the in-memory heat state for the current channel.
-2. Renders a 12-block progress bar representing the heat level.
-3. Shows the heat value and the resulting shells multiplier (×1.0 to ×2.0).
-4. Lists active contributors with their relative share of channel activity (%).
-5. The embed color scales with the multiplier: green (×1.0–1.0) → yellow → orange → red (×2.0).
+The bar saturates at heat 7, while the ×2.0 bucket only starts at 12 — so a full bar does not mean a maxed multiplier. The number next to it is the one that matters.
 
-**Response format**: Discord embed (color varies with heat level)
-
-**Available in**: servers only
-
----
-
-## Registering commands
-
-Commands are registered with Discord using:
-
-```bash
-npm run register
-```
-
-This script reads the definitions from `app/commands/` and pushes them via the Discord REST API. Re-run after any command change.
+Heat is in-memory only, so a fresh restart shows a cold channel.

@@ -9,11 +9,21 @@
  *   tsx scripts/analyze-upgrade.ts "Nageoires hydrodynamiques" 1 20 --base-spm=10
  */
 
-import { ALL_UPGRADES } from '../app/idle/upgrades-list.js';
-import { getUpgradeCost, getUpgradeGain } from '../app/idle/upgrades.js';
-import { UpgradeKind, type UpgradeDefinition } from '../app/idle/types.js';
-import { DEFAULT_SHELLS_PER_MESSAGE } from '../app/idle/shells-storage.js';
-import { bn, bnSub, bnMul, bnDiv, bnCeil, formatBigNum, type BigNum } from '../app/commons/big-number.js';
+import { ALL_UPGRADE_CLASSES } from '../app/idle/core/upgrades/upgrade-registry.ts';
+import type { BaseUpgrade } from '../app/idle/core/upgrades/base-upgrade.ts';
+import { UpgradeKind } from '../app/idle/core/types.ts';
+import { DEFAULT_SHELLS_PER_MESSAGE } from '../app/idle/core/game-instance.ts';
+import {
+    bn,
+    bnSub,
+    bnMul,
+    bnDiv,
+    bnCeil,
+    formatBigNum,
+    type BigNum,
+} from '../app/idle/core/big-number.ts';
+
+type UpgradeConstructor = new (level: number) => BaseUpgrade;
 
 type Args = {
     upgradeInput: string;
@@ -43,95 +53,90 @@ function parseArgs(argv: string[]): Args | null {
     return { upgradeInput, minLevel, maxLevel, baseSpm };
 }
 
-function findUpgrade(input: string): UpgradeDefinition | null {
+function findUpgrade(input: string): UpgradeConstructor | null {
     const norm = input.trim().toLowerCase();
-    const exactId = ALL_UPGRADES.find((u) => u.id.toLowerCase() === norm);
-    if (exactId) return exactId;
-
-    const exactName = ALL_UPGRADES.find((u) => u.name.toLowerCase() === norm);
-    if (exactName) return exactName;
-
-    const partial = ALL_UPGRADES.find(
-        (u) => u.id.toLowerCase().includes(norm) || u.name.toLowerCase().includes(norm),
+    return (
+        ALL_UPGRADE_CLASSES.find((Cls) => {
+            const u = new Cls(0);
+            return u.id.toLowerCase() === norm || u.name.toLowerCase() === norm;
+        }) ?? null
     );
-    return partial ?? null;
 }
 
 function formatTable(headers: string[], rows: string[][]): string[] {
     const widths = headers.map((header, colIndex) => {
-        const maxRowWidth = rows.reduce(
-            (max, row) => Math.max(max, row[colIndex]?.length ?? 0),
-            0,
-        );
+        const maxRowWidth = rows.reduce((max, row) => Math.max(max, row[colIndex]?.length ?? 0), 0);
         return Math.max(header.length, maxRowWidth);
     });
 
-    const fmtRow = (row: string[]): string => row.map((cell, i) => cell.padEnd(widths[i])).join(' | ');
-    return [
-        fmtRow(headers),
-        widths.map((w) => '-'.repeat(w)).join('-|-'),
-        ...rows.map(fmtRow),
-    ];
+    const fmtRow = (row: string[]): string =>
+        row.map((cell, i) => cell.padEnd(widths[i])).join(' | ');
+    return [fmtRow(headers), widths.map((w) => '-'.repeat(w)).join('-|-'), ...rows.map(fmtRow)];
 }
 
-function gainAndPaybackForLevel(upgrade: UpgradeDefinition, level: number, baseSpm: number): {
+function gainAndPaybackForLevel(
+    Upgrade: UpgradeConstructor,
+    level: number,
+    baseSpm: number,
+): {
     cost: BigNum;
     gainDisplay: string;
     paybackMessages: BigNum | null;
 } {
     const previousLevel = level - 1;
-    const cost = bnCeil(getUpgradeCost(upgrade, previousLevel));
+    const cost = bnCeil(new Upgrade(previousLevel).getCost());
+    const current = new Upgrade(level);
+    const previous = new Upgrade(previousLevel);
 
-    if (upgrade.kind === UpgradeKind.ADDITIVE) {
-        const current = getUpgradeGain(upgrade, level);
-        const previous = getUpgradeGain(upgrade, previousLevel);
-        const marginalSpm = bnSub(current, previous);
+    if (current.kind === UpgradeKind.ADDITIVE) {
+        const marginalSpm = bnSub(current.getGain(), previous.getGain());
         const paybackMessages = marginalSpm.lte(0) ? null : bnDiv(cost, marginalSpm);
-
-        return {
-            cost,
-            gainDisplay: `+${marginalSpm.toFixed(2)} 🐚/msg`,
-            paybackMessages,
-        };
+        return { cost, gainDisplay: `+${marginalSpm.toFixed(2)} 🐚/msg`, paybackMessages };
     }
 
-    const currentMultiplier = getUpgradeGain(upgrade, level);
-    const previousMultiplier = getUpgradeGain(upgrade, previousLevel);
-    const deltaSpm = bnSub(bnMul(baseSpm, currentMultiplier), bnMul(baseSpm, previousMultiplier));
+    const deltaSpm = bnSub(bnMul(baseSpm, current.getGain()), bnMul(baseSpm, previous.getGain()));
     const paybackMessages = deltaSpm.lte(0) ? null : bnDiv(cost, deltaSpm);
-
-    return {
-        cost,
-        gainDisplay: `+${deltaSpm.toFixed(2)} 🐚/msg`,
-        paybackMessages,
-    };
+    return { cost, gainDisplay: `+${deltaSpm.toFixed(2)} 🐚/msg`, paybackMessages };
 }
 
 function main(): void {
     const args = parseArgs(process.argv.slice(2));
     if (!args) {
-        console.log('Usage: tsx scripts/analyze-upgrade.ts <upgrade> <minLevel> <maxLevel> [--base-spm=10]');
+        console.log(
+            'Usage: tsx scripts/analyze-upgrade.ts <upgrade> <minLevel> <maxLevel> [--base-spm=10]',
+        );
         process.exitCode = 1;
         return;
     }
 
-    const upgrade = findUpgrade(args.upgradeInput);
-    if (!upgrade) {
+    const Upgrade = findUpgrade(args.upgradeInput);
+    if (!Upgrade) {
         console.log(`Upgrade introuvable: ${args.upgradeInput}`);
-        console.log(`Disponibles: ${ALL_UPGRADES.map((u) => `${u.id} (${u.name})`).join(', ')}`);
+        console.log(
+            `Disponibles: ${ALL_UPGRADE_CLASSES.map((Cls) => {
+                const u = new Cls(0);
+                return `${u.id} (${u.name})`;
+            }).join(', ')}`,
+        );
         process.exitCode = 1;
         return;
     }
 
+    const meta = new Upgrade(0);
     const headers = ['Niveau', 'Gain total', 'Cout niveau', 'Gain niveau', 'Payback (msg)'];
     const rows: string[][] = [];
 
     for (let level = args.minLevel; level <= args.maxLevel; level += 1) {
-        const { cost, gainDisplay, paybackMessages } = gainAndPaybackForLevel(upgrade, level, args.baseSpm);
-        const totalGain = getUpgradeGain(upgrade, level);
-        const totalGainDisplay = upgrade.kind === UpgradeKind.ADDITIVE
-            ? `${formatBigNum(totalGain)} 🐚/msg`
-            : `×${formatBigNum(totalGain)}`;
+        const { cost, gainDisplay, paybackMessages } = gainAndPaybackForLevel(
+            Upgrade,
+            level,
+            args.baseSpm,
+        );
+        const totalGain = new Upgrade(level).getGain();
+        const totalGainDisplay =
+            meta.kind === UpgradeKind.ADDITIVE
+                ? `${formatBigNum(totalGain)} 🐚/msg`
+                : `×${formatBigNum(totalGain)}`;
         rows.push([
             String(level),
             totalGainDisplay,
@@ -141,9 +146,9 @@ function main(): void {
         ]);
     }
 
-    console.log(`Upgrade: ${upgrade.name} (${upgrade.id})`);
+    console.log(`Upgrade: ${meta.name} (${meta.id})`);
     console.log(`Range: niveaux ${args.minLevel} -> ${args.maxLevel}`);
-    if (upgrade.kind === UpgradeKind.MULTIPLICATIVE) {
+    if (meta.kind === UpgradeKind.MULTIPLICATIVE) {
         console.log(`Base pour payback multiplicatif: ${bn(args.baseSpm).toFixed(2)} 🐚/msg`);
     }
     console.log('');

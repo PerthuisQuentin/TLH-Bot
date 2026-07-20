@@ -9,11 +9,18 @@
     "node": ">=18.x"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/app.js",
     "register": "tsx commands.ts",
     "register:local": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx commands.ts",
-    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx watch app.ts"
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx watch app.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,js,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,md}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage"
   },
   "author": "Shay DeWael",
   "license": "MIT",
@@ -30,15 +37,16 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
-    "nodemon": "^3.1.14",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
-  },
-  "nodemonConfig": {
-    "ignore": [
-      "files/*"
-    ]
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
   }
 }

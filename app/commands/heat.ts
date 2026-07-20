@@ -1,13 +1,13 @@
 import type { Request, Response } from 'express';
+import { getChannelHeatSnapshot } from '../idle/core/heat/channel-activity.ts';
 import {
     ApplicationCommandOptionType,
     ApplicationCommandType,
     ApplicationIntegrationType,
     InteractionContextType,
 } from 'discord-api-types/v10';
-import { getChannelHeatSnapshot } from '../idle/channel-activity.js';
-import { replyText, replyEmbed, isPublicOption } from '../commons/utils.js';
-import type { Command } from './types.js';
+import type { Command } from './types.ts';
+import { isPublicOption, replyEmbed, replyText } from '../commons/utils.ts';
 
 const PARAM_PUBLIC = 'public';
 
@@ -35,7 +35,14 @@ function formatHeatEmbed(channelId: string): HeatEmbed {
     const embed: HeatEmbed = {
         title: '🔥 Chaleur du canal',
         description,
-        color: multiplier >= 2.0 ? 0xe74c3c : multiplier >= 1.6 ? 0xe67e22 : multiplier >= 1.2 ? 0xf1c40f : 0x2ecc71,
+        color:
+            multiplier >= 2.0
+                ? 0xe74c3c
+                : multiplier >= 1.6
+                  ? 0xe67e22
+                  : multiplier >= 1.2
+                    ? 0xf1c40f
+                    : 0x2ecc71,
     };
 
     if (contributors.length > 0) {

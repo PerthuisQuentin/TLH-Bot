@@ -1,86 +1,150 @@
-# Architecture & project structure
+# Architecture
+
+## Two runtimes in one process
+
+`app.ts` boots two concurrent runtimes. Knowing which one a code path belongs to is the key to navigating the repo.
+
+| Runtime            | Entry point                                          | Handles                                                                                           |
+| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Express webhook    | `POST /interactions` → `app/discord/interactions.ts` | Slash commands. Discord signs the request; `verifyKeyMiddleware` validates the signature.         |
+| discord.js gateway | `app/discord/setup.ts` → `app/discord/handlers.ts`   | `messageCreate` and `messageReactionAdd` → shell earning, role promotions, jackpot announcements. |
+
+A third surface sits alongside them: a key-protected REST API under `/api` (`x-api-key` header) exposing per-guild data files, guild roles and message deletion. It is used by an external admin tool, not by Discord.
+
+Slash commands never reach the gateway client, and gateway events never reach Express. The two paths share only the storage layer and the domain code.
+
+---
 
 ## Folder structure
 
-| Folder          | Role                                                                                          |
-| --------------- | --------------------------------------------------------------------------------------------- |
-| `app/commands/` | Slash command definitions and handlers (`/ping`, `/ask`, `/leaderboard`)                      |
-| `app/commons/`  | Shared utilities: file I/O, memory, message fetching, prompt building, response parsing       |
-| `app/gemini/`   | Google Gemini client and request logic with tool/function calling support                     |
-| `app/ollama/`   | Alternative AI backend using Ollama (local or cloud models)                                   |
-| `app/idle/`     | Shells gamification: award shells on messages, cooldown management, role threshold promotions |
-| `app/jobs/`     | Scheduled jobs — processes expired reminders every 60 seconds                                 |
-| `app/routes/`   | Express HTTP routes: Discord webhook (`/interactions`) and REST API (`/api/…`)                |
-| `app/tools/`    | AI-callable tools: weather (World Weather Online) and reminder creation                       |
-| `files/`        | Persistent per-server storage: config, system prompt, memory, shells, reminders               |
+| Folder               | Role                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `app/commands/`      | One file per slash command: `{ definition, handler }`. Orchestrates and formats the Discord response.                           |
+| `app/commons/`       | Shared helpers: prompt building, response parsing, Discord REST helpers, the in-memory cooldown cache.                          |
+| `app/discord/`       | Gateway client, interaction dispatch, event handlers, message parsing, role application, discord.js-free shared types.          |
+| `app/gemini/`        | Gemini client, prompt loop, function calling.                                                                                   |
+| `app/ollama/`        | Alternative AI backend.                                                                                                         |
+| `app/idle/core/`     | Pure game logic: `GameInstance`, upgrades, heat, streak, passive income, jackpot, big-number, modifier DSL. No I/O, no Discord. |
+| `app/idle/handlers/` | Turns a `DiscordEvent` into game rules and returns a plain result.                                                              |
+| `app/idle/`          | Game persistence (`game-instance-storage.ts`), leaderboard, role thresholds.                                                    |
+| `app/routes/`        | Express REST handlers (`/api/files`, `/api/guilds`, `/api/messages`).                                                           |
+| `app/storage/`       | The file store: RAM cache, atomic writes, zod schemas, file-type registry.                                                      |
+| `app/tools/`         | AI-callable tools: weather.                                                                                                     |
+| `files/`             | Per-guild persistent data (configurable via `FILES_DIR`).                                                                       |
+| `scripts/`           | Dev, analysis and migration scripts. Excluded from the build.                                                                   |
 
 ---
 
-## Main processing flows
-
-### `/ask` command
+## Layering
 
 ```
-User → /ask question
+app/routes/     parse only
     ↓
-POST /interactions (Express)
+app/commands/   orchestrate + format the Discord response
     ↓
-app/routes/interactions.ts → app/commands/ask.ts
+domain          app/idle/, app/tools/
     ↓
-Load last 50 messages from the channel
-Load server config, memory and system prompt
+storage         app/storage/
+```
+
+Two rules hold this together:
+
+- Domain code must not import `discord.js` or an AI SDK. `app/idle/` may import the plain type declarations in `app/discord/types.ts` (`DiscordEvent`, `PendingRoleChanges`) — those are deliberately discord.js-free.
+- AI backends stay isolated in `app/gemini/` and `app/ollama/`. New AI-callable tools go in `app/tools/`.
+
+The seam between Discord and the game lives in exactly two files. `app/discord/handlers.ts` builds a `DiscordEvent`; `app/idle/handlers/handle-event.ts` returns a plain result (`jackpot`, `pendingRoleChanges`) that the caller turns back into Discord side effects.
+
+---
+
+## Adding a slash command
+
+A command is one object exported from `app/commands/<name>.ts` and listed in the `commands` array in `app/commands/index.ts`. That single array drives both dispatch (`interactions.ts` matches on `definition.name`) and registration (`commands.ts` → `npm run register`).
+
+Handlers receive raw Express `req`/`res`, not discord.js interaction objects, and reply through the helpers in `app/commons/utils.ts`: `replyText`, `replyEmbed`, `replyDeferred`, `getOption`, `isPublicOption`, `requireGuild`. A command that defers answers later through `updateInteractionResponse`, the project's one Components V2 path — that flag makes `content` and `embeds` unusable, so it stays separate from the reply helpers. `updateInteractionResponseOrLog` is the same edit for a handler's own error path, where rethrowing would have nowhere to go — see [Error handling](#error-handling).
+
+Re-run `npm run register` after any change to a command's `definition`.
+
+---
+
+## Main flows
+
+### `/ask`
+
+```
+User → /ask question:…
+    ↓
+POST /interactions  (signature verified by discord-interactions)
+    ↓
+app/discord/interactions.ts → app/commands/ask.ts
+    ├── channel in noAskChannels? → ephemeral refusal
+    │     (config read guarded: a normal reply is only possible before the defer)
+    ├── replyDeferred()            (Discord gives 15 min from here)
+    ├── REST fetch: channel name + last 50 messages
+    └── app/discord/messages.ts → ConversationMessage[]
     ↓
 app/gemini/ask-gemini.ts
-    ├── Build prompt (date, timezone, personality)
-    ├── Call Gemini with tools (weather, reminders)
-    └── Process tool calls if needed
+    ├── app/commons/prompts.ts builds system + user prompt
+    │     (formatConversation renders the messages to text here, not before)
+    ├── call Gemini with the tool declarations from app/tools/
+    └── loop while the model returns tool calls, up to MAX_TOOL_ROUNDS
+          (last round is sent with no tool declared, forcing a textual answer)
     ↓
-app/commons/response.ts: extract memory (### [MEMORY] marker)
+app/commons/response.ts splits on the ### [MÉMOIRE] marker
     ↓
-Post response to Discord + save memory if updated
+Edit the deferred response  +  persist the memory half silently
 ```
 
-### Shells system (passive)
+### Shell earning (gateway)
 
 ```
-User sends a message
+messageCreate / messageReactionAdd
     ↓
-bot.ts: messageCreate event
+app/discord/setup.ts       (try/catch: discord.js never awaits its listeners)
     ↓
-app/idle/shells.ts
-    ├── Check cooldown (node-cache, 10 sec)
-    ├── Award 1–10 random shells
-    └── Check role thresholds
-        ↓
-app/idle/shells-roles.ts
-    ├── Read server shellsRoles config
-    ├── Assign new Discord role if threshold reached
-    └── Generate promotion message via Gemini
-```
-
-### Reminders (scheduled job)
-
-```
-Every 60 seconds
+app/discord/handlers.ts    builds a DiscordEvent
     ↓
-app/jobs/reminder-job.ts
+app/idle/handlers/handle-event.ts
+    ├── channel in noShellChannels?  → stop
+    ├── updateChannelHeat            (always, even on cooldown)
+    ├── 5 s per-user cooldown        → stop
+    ├── one synchronous mutator:
+    │     passive income → streak → heat × streak × activity fraction → jackpot roll
+    ├── credit the reacted message's author  (reactions only)
+    └── getShellsRolesConfig() → computeRoleChanges(roles, maxShells, currentRoleIds)
     ↓
-Iterate over all servers' reminder.json files
-    ↓
-For each expired reminder:
-    ├── Call Gemini with the reminder context
-    ├── Post response to the original channel
-    └── Delete the reminder
+back in app/discord/handlers.ts
+    ├── jackpot   → generated announcement → channel.send()
+    └── role change → applyRoleChanges() → generated congratulation → channel.send()
 ```
 
 ---
 
-## Hybrid event model
+## Gateway configuration
 
-The bot combines three processing models:
+`app/discord/setup.ts` declares the intents and partials the event handlers depend on:
 
-| Model          | Technology  | Usage                                         |
-| -------------- | ----------- | --------------------------------------------- |
-| Real-time      | Discord.js  | Shell gains, role promotions, event listeners |
-| HTTP webhooks  | Express     | Slash commands, Discord interactions          |
-| Scheduled jobs | setInterval | Process expired reminders                     |
+- Intents: `Guilds`, `GuildMessages`, `GuildMembers`, `DirectMessages`, `MessageContent`, `GuildMessageReactions`.
+- Partials: `Message`, `Channel`, `Reaction` — reactions on messages older than the cache arrive partial and are fetched on demand in `handleReaction`.
+
+`GuildMembers` is what makes `member.displayName` (server nickname) available on gateway events.
+
+---
+
+## Error handling
+
+discord.js never awaits its listeners, and Express 5 only forwards _awaited_ async rejections to its error middleware. A floating rejection in either path is unhandled, and Node kills the process — taking all three runtimes with it.
+
+Every entry point therefore owns a try/catch:
+
+- Both gateway listeners in `setup.ts`.
+- `handleEvent` in `handlers.ts`, with nested catches so a failed announcement never loses the shell gain.
+- Each command handler, so exactly one reply is sent on the error path.
+
+`replyDeferred` splits a handler in two, and the halves fail differently — `/ask` is the one command that has both:
+
+|                      | Before the defer                                                   | After it                                                                                  |
+| -------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Reaching the user    | a normal reply is still possible                                   | only editing the deferred reply                                                           |
+| A rejection escaping | nothing was sent, so Discord shows "L'application n'a pas répondu" | headers are already sent, so Express can do nothing and the spinner runs until it expires |
+
+So work before the defer must be wrapped even when it looks like plain bookkeeping — reading the guild config is I/O and a malformed file throws — and the error path's own edit must swallow its failure rather than rethrow, because there is nowhere left to report it.

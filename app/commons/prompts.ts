@@ -1,4 +1,5 @@
-import { getFilePath, readTextFile, AllowedFiles } from './files.js';
+import { fileStore, getFilePath, AllowedFiles } from '../storage/index.ts';
+import type { ConversationMessage } from '../discord/types.ts';
 
 export async function createSystemPrompt(guildId: string): Promise<string> {
     const now = new Date();
@@ -15,20 +16,14 @@ export async function createSystemPrompt(guildId: string): Promise<string> {
         timeZone: 'Europe/Paris',
     });
 
-    const parisTime = new Date(
-        now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }),
-    );
-    const utcTime = new Date(
-        now.toLocaleString('en-US', { timeZone: 'UTC' }),
-    );
-    const offsetHours = Math.round(
-        (parisTime.getTime() - utcTime.getTime()) / (1000 * 60 * 60),
-    );
+    const parisTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const utcTime = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const offsetHours = Math.round((parisTime.getTime() - utcTime.getTime()) / (1000 * 60 * 60));
     const offsetStr = offsetHours >= 0 ? `+${offsetHours}` : `${offsetHours}`;
 
-    let systemContent = '';
+    let systemContent: string;
     try {
-        systemContent = await readTextFile(guildId, AllowedFiles.SYSTEM);
+        systemContent = await fileStore.readText(guildId, AllowedFiles.SYSTEM);
     } catch (error) {
         console.error(
             `Error reading system file (${getFilePath(guildId, AllowedFiles.SYSTEM)}):`,
@@ -42,22 +37,56 @@ ${systemContent}
 
 INFORMATIONS TEMPORELLES :
 Nous sommes le ${dateStr} et il est ${timeStr} (Europe/Paris, UTC${offsetStr}).
-Quand tu génères des dates ISO 8601 (pour les rappels par exemple), tu DOIS convertir l'heure locale en UTC.
-Par exemple, si l'utilisateur demande un rappel à 14h30 heure locale et qu'on est en UTC${offsetHours > 0 ? '13:30:00.000Z (14:30 - 1h)' : '15:30:00.000Z (14:30 + 1h)'}.
 `.trim();
 }
 
 export const CONTEXT_MESSAGES_LIMIT = 50;
 
+function formatMessage(message: ConversationMessage, disambiguate: boolean): string {
+    // The handle carries no '@': the only @-shaped token the model should ever
+    // write is a real mention, `<@id>`.
+    const name = disambiguate ? `${message.displayName} (${message.handle})` : message.displayName;
+    const author = message.isBot ? `🤖 ${name}` : name;
+    const date = message.sentAt.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+    });
+    const time = message.sentAt.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+
+    return `👤 ${author} [ID:${message.userId}] • 🕐 ${date} ${time}\n${message.content}`;
+}
+
+/**
+ * Display names collide, handles do not. Rather than spend tokens on a handle for
+ * everyone, one is added only where two userIds share a name in this conversation.
+ */
+export function formatConversation(messages: ConversationMessage[]): string {
+    const idsByName = new Map<string, Set<string>>();
+    for (const message of messages) {
+        const ids = idsByName.get(message.displayName) ?? new Set<string>();
+        ids.add(message.userId);
+        idsByName.set(message.displayName, ids);
+    }
+
+    return messages
+        .map((message) =>
+            formatMessage(message, (idsByName.get(message.displayName)?.size ?? 0) > 1),
+        )
+        .join('\n\n---\n\n');
+}
+
 export async function createUserPrompt(
     channelName: string,
-    conversationContext: string,
+    conversation: ConversationMessage[],
     instruction: string,
     guildId: string,
 ): Promise<string> {
     let memory = '';
     try {
-        memory = await readTextFile(guildId, AllowedFiles.MEMORY);
+        memory = await fileStore.readText(guildId, AllowedFiles.MEMORY);
     } catch (error) {
         console.error(
             `Error reading memory file (${getFilePath(guildId, AllowedFiles.MEMORY)}):`,
@@ -71,15 +100,15 @@ Canal : #${channelName}
 
 ════════════════════════════════════════
 
-� SYSTÈME DE COQUILLAGES :
+🐚 SYSTÈME DE COQUILLAGES :
 Les coquillages (🐚) sont la monnaie passive du serveur. Les membres en gagnent automatiquement de deux façons :
 - **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente) et le streak journalier (×1.0 à ×2.0 selon les jours consécutifs actifs). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
 - **Revenu passif** : quand un membre revient après une absence, il reçoit les coquillages accumulés pendant son inactivité. Le taux est plein (1 message-équivalent/heure) pendant les 24 premières heures d'absence, puis dégressif : environ ×0.5 à 48h, ×0.2 à 72h, quasi nul après une semaine. Le revenu passif est basé sur le gain par message du membre (upgrades inclus), sans multiplicateur heat ni streak.
 - **Réaction** : quand quelqu'un pose une réaction sur un message, la personne qui réagit ET l'auteur du message reçoivent chacun 10 % du gain habituel par message.
 
-Le **streak journalier** augmente chaque jour où le membre envoie au moins un message. Il donne un bonus progressif de ×1.0 (1er jour) jusqu'à ×2.0 (7 jours consécutifs ou plus). Un jour sans message remet le streak à zéro. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 heat × ×2 streak).
+Le **streak journalier** augmente chaque jour où le membre gagne des coquillages, en postant un message **ou** en réagissant à un message : une seule réaction dans la journée suffit à entretenir la série. Il donne un bonus progressif de ×1.0 (1er jour) jusqu'à ×2.0 (7 jours consécutifs ou plus). Une journée entière sans aucune activité fait repartir la série à 1. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 heat × ×2 streak).
 
-- **Jackpot** : chaque message a 1 chance sur 1 000 de déclencher un jackpot, qui multiplie le gain du message par 1 000. Le jackpot est annoncé publiquement dans le salon.
+- **Jackpot** : chaque message a 1 chance sur 1 000 de déclencher un jackpot, qui rapporte 1 000 fois le gain de base par message, **en plus** du gain normal du message. Ni la chaleur du salon ni le streak ne s'appliquent au jackpot : il vaut la même chose pour tout le monde à gain par message égal. Le jackpot est annoncé publiquement dans le salon.
 
 Le gain augmente grâce aux upgrades achetables dans \`/shop\` :
 - 🦦 **Loutres plongeuses** : augmente le gain de base par message (s'accélère avec les niveaux).
@@ -101,13 +130,13 @@ Règle d'assistance :
 
 ════════════════════════════════════════
 
-�📚 TA MÉMOIRE ACTUELLE :
+📚 TA MÉMOIRE ACTUELLE :
 ${memory.trim() ? memory : 'Aucune mémoire enregistrée.'}
 
 ════════════════════════════════════════
 
 📜 HISTORIQUE DES ${CONTEXT_MESSAGES_LIMIT} DERNIERS MESSAGES :
-${conversationContext}
+${formatConversation(conversation)}
 
 ════════════════════════════════════════
 
@@ -115,24 +144,19 @@ ${instruction}
 `.trim();
 }
 
-export function createQuestionInstruction(
-    userName: string,
-    userQuestion: string,
-): string {
+export function createQuestionInstruction(userName: string, userQuestion: string): string {
     return `❓ QUESTION DE ${userName} :
 ${userQuestion}
 
 Réponds à cette question en tenant compte de l'historique si pertinent.`;
 }
 
-export function createRolePromotionInstruction(
-    userName: string,
-    roleName: string,
-): string {
-    return `🎉 PROMOTION DE RÔLE :
+export function createRolePromotionInstruction(userName: string, roleName: string): string {
+    return `🏅 PROMOTION DE RÔLE :
 ${userName} vient d'obtenir le rôle "${roleName}" grâce à son activité sur le serveur.
 
-Génère un court message de félicitations (1-2 phrases max) pour ${userName}. Sois créatif et enthousiaste ! Ne mets pas de balises <response> ou <memory>.`;
+Génère un court message de félicitations (1-2 phrases max) pour ${userName}. Sois créatif et enthousiaste !
+Commence et termine ton message par 🏅, le marqueur réservé aux montées de rang. N'utilise jamais 🎉, qui signale un jackpot.`;
 }
 
 export function createJackpotInstruction(
@@ -140,8 +164,9 @@ export function createJackpotInstruction(
     amount: string,
     multiplier: number,
 ): string {
-    return `🎰 JACKPOT :
+    return `🎉 JACKPOT :
 ${userName} vient de déclencher le jackpot et gagne ${amount} 🐚 (×${multiplier} son income habituel) !
 
-Génère un court message d'annonce épique (1-2 phrases max) pour ${userName}. Sois dramatique et enthousiaste ! Ne mets pas de balises <response> ou <memory>.`;
+Génère un court message d'annonce épique (1-2 phrases max) pour ${userName}. Sois dramatique et enthousiaste !
+Commence et termine ton message par 🎉, le marqueur réservé aux jackpots. N'utilise jamais 🏅, qui signale une montée de rang.`;
 }

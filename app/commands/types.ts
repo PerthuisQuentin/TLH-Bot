@@ -4,4 +4,4 @@ import type { RESTPostAPIApplicationCommandsJSONBody } from 'discord-api-types/v
 export type Command = {
     definition: RESTPostAPIApplicationCommandsJSONBody;
     handler: (req: Request, res: Response) => Promise<unknown>;
-}
+};

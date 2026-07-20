@@ -5,7 +5,15 @@
  * Tweak the parameters below to explore different behaviours.
  */
 
-import { DECAY_LAMBDA, MIN_CONTRIBUTION, HeatState, createHeatState, heatToMultiplier, recordActivity, advanceDecay } from '../app/idle/heat-config.js';
+import {
+    DECAY_LAMBDA,
+    MIN_CONTRIBUTION,
+    HeatState,
+    createHeatState,
+    heatToMultiplier,
+    recordActivity,
+    advanceDecay,
+} from '../app/idle/core/heat/heat-config.ts';
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
@@ -40,7 +48,9 @@ function fmt(n: number, decimals = 2): string {
 
 // Total visible width: 9 + 22 + 9 + 10 + 9 + 15 = 74 cols
 function printHeader(title: string): void {
-    console.log(`\n${BOLD}${CYAN}══ ${title} ${'═'.repeat(Math.max(0, 55 - title.length))}${RESET}`);
+    console.log(
+        `\n${BOLD}${CYAN}══ ${title} ${'═'.repeat(Math.max(0, 55 - title.length))}${RESET}`,
+    );
     console.log(
         `${DIM}${'t(s)'.padStart(6)}  ${'event'.padEnd(20)}  ${'heat'.padStart(6)}  ${'×mult'.padStart(6)}  ${'~shells'.padStart(7)}  bar${RESET}`,
     );
@@ -171,8 +181,14 @@ function printSilence(state: HeatState, fromMs: number, toMs: number, stepS = 30
 
 // 6. λ sensitivity: show halving times for common values
 {
-    console.log(`\n${BOLD}${CYAN}══ λ reference — contribution half-life ${'═'.repeat(22)}${RESET}`);
-    console.log(DIM + `${'λ'.padStart(10)}  ${'half-life'.padStart(12)}  ${'~0 (×0.01)'.padStart(14)}` + RESET);
+    console.log(
+        `\n${BOLD}${CYAN}══ λ reference — contribution half-life ${'═'.repeat(22)}${RESET}`,
+    );
+    console.log(
+        DIM +
+            `${'λ'.padStart(10)}  ${'half-life'.padStart(12)}  ${'~0 (×0.01)'.padStart(14)}` +
+            RESET,
+    );
     console.log(DIM + '─'.repeat(42) + RESET);
     for (const λ of [0.003, 0.005, 0.008, 0.012, 0.02]) {
         const halfLife = Math.log(2) / λ;

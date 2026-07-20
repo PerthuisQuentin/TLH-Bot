@@ -11,12 +11,19 @@
         "statusBar.background": "#674616",
         "statusBar.foreground": "#e7e7e7",
         "statusBarItem.hoverBackground": "#91631f",
-        "statusBarItem.remoteBackground": "#674616",
+        "statusBarItem.remoteBackground": "#061a12",
         "statusBarItem.remoteForeground": "#e7e7e7",
         "titleBar.activeBackground": "#674616",
         "titleBar.activeForeground": "#e7e7e7",
         "titleBar.inactiveBackground": "#67461699",
-        "titleBar.inactiveForeground": "#e7e7e799"
+        "titleBar.inactiveForeground": "#e7e7e799",
+        "activityBarTop.activeBackground": "#91631f",
+        "activityBarTop.background": "#91631f",
+        "activityBarTop.foreground": "#e7e7e7",
+        "activityBarTop.inactiveForeground": "#e7e7e799",
+        "commandCenter.foreground": "#e7e7e7",
+        "statusBar.debuggingBackground": "#674616",
+        "statusBar.debuggingForeground": "#e7e7e7"
     },
     "peacock.color": "#674616",
     "chat.tools.terminal.autoApprove": {
@@ -28,5 +35,6 @@
             "approve": true,
             "matchCommandLine": true
         }
-    }
+    },
+    "js/ts.tsdk.path": "node_modules/typescript/lib"
 }
