@@ -11,7 +11,7 @@ Create a `.env` at the project root.
 | `PUBLIC_KEY`      | Yes      | Discord public key, used to verify interaction signatures.                                           |
 | `GOOGLE_API_KEY`  | Yes      | Gemini API key, from AI Studio.                                                                      |
 | `WEATHER_API_KEY` | Yes      | World Weather Online key, for the weather tool.                                                      |
-| `OLLAMA_API_KEY`  | No       | Only if the Ollama backend is used.                                                                  |
+| `OLLAMA_API_KEY`  | No       | Read by `app/ollama/`, which nothing calls today, so setting it has no effect.                       |
 | `API_KEY`         | No       | Protects the REST routes. Without it no `x-api-key` can ever match, so `/api` is effectively closed. |
 | `PORT`            | No       | HTTP port. Default `3000`.                                                                           |
 | `FILES_DIR`       | No       | Data directory, resolved relative to the project root. Default `files`.                              |
@@ -55,11 +55,11 @@ npm start            # node dist/app.js
 
 **Before the first start of a refactored deployment**, build `game-instances.json` from the legacy files — see [scripts.md](./scripts.md#migrate-game-instancests). Skipping it makes every player restart from zero.
 
-There is no test framework and no linter. `npx tsc --noEmit` is the only automated check, and it must come back clean.
+Four automated checks must come back clean: `npx tsc --noEmit`, `npm run lint`, `npm run format:check` and `npm test`.
 
 ### Shutdown
 
-`SIGTERM` and `SIGINT` destroy the gateway client, close the HTTP server, and flush every dirty file to disk. A forced exit fires after 10 s if something hangs.
+`SIGTERM` and `SIGINT` run one shutdown path, and the order is the point: intake stops first (the HTTP server, then the gateway client) so nothing can dirty a file again, and only then is every dirty file flushed to disk. Each step is bounded at 3 s and swallows its own error, so a stuck step can neither eat the grace period nor skip the flush behind it. A forced exit fires after 10 s overall. An uncaught exception takes the same path but exits non-zero.
 
 ---
 
@@ -71,23 +71,35 @@ There is no test framework and no linter. `npx tsc --noEmit` is the only automat
 {
     "noAskChannels": ["excluded-channel-id"],
     "noShellChannels": ["spam-channel-id"],
+    "noChatChannels": ["quiet-channel-id"],
     "shellsRoles": [
         { "roleId": "bronze-role-id", "threshold": "500" },
         { "roleId": "silver-role-id", "threshold": "2000" },
         { "roleId": "gold-role-id", "threshold": "10000" }
-    ]
+    ],
+    "chatEnabled": true,
+    "chatNicknames": ["Gégé", "le bot"],
+    "chatIndirectProbability": 0.1,
+    "chatRandomProbability": 0.01
 }
 ```
 
-| Field                     | Type       | Description                                                        |
-| ------------------------- | ---------- | ------------------------------------------------------------------ |
-| `noAskChannels`           | `string[]` | Channels where `/ask` refuses to answer.                           |
-| `noShellChannels`         | `string[]` | Channels excluded from shell earning. Heat is still tracked there. |
-| `shellsRoles`             | `object[]` | Roles awarded by shell threshold.                                  |
-| `shellsRoles[].roleId`    | `string`   | Discord role ID.                                                   |
-| `shellsRoles[].threshold` | `string`   | Shells required, as a **string**.                                  |
+| Field                     | Type       | Description                                                                                                                                                                            |
+| ------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `noAskChannels`           | `string[]` | Channels where `/ask` refuses to answer.                                                                                                                                               |
+| `noShellChannels`         | `string[]` | Channels excluded from shell earning. Heat is still tracked there.                                                                                                                     |
+| `noChatChannels`          | `string[]` | Channels excluded from spontaneous chat (mentions and random joins alike).                                                                                                             |
+| `shellsRoles`             | `object[]` | Roles awarded by shell threshold.                                                                                                                                                      |
+| `shellsRoles[].roleId`    | `string`   | Discord role ID.                                                                                                                                                                       |
+| `shellsRoles[].threshold` | `string`   | Shells required, as a **string**.                                                                                                                                                      |
+| `chatEnabled`             | `boolean`  | Kill switch for spontaneous chat. Default `true` when unset.                                                                                                                           |
+| `chatNicknames`           | `string[]` | Words/nicknames (case-insensitive substring match) that count as an indirect mention, e.g. the bot's name in its `system.txt` persona. Empty/unset means indirect mentions never fire. |
+| `chatIndirectProbability` | `number`   | Chance (0-1) of replying to an indirect mention. Default `0.1`.                                                                                                                        |
+| `chatRandomProbability`   | `number`   | Chance (0-1) of replying to any other message. Default `0.01`.                                                                                                                         |
 
 Thresholds are strings because balances outgrow `Number.MAX_SAFE_INTEGER`. They are parsed with `bnFromJSON`, which still accepts legacy numbers, so an old config keeps working — but write new ones as strings.
+
+A direct `@mention` of the bot always triggers a spontaneous reply — that one is not probabilistic and has no config field.
 
 All fields are optional; a missing file reads back as `{}`.
 
@@ -101,7 +113,7 @@ Every write goes through the store's zod schema, so a malformed payload is rejec
 
 **Memory** — `files/{guildId}-memory.txt` is written by the model itself, after a `### [MÉMOIRE]` marker in its response. The instruction to emit that marker lives in the same guild's `system.txt`; `app/commons/response.ts` matches it loosely (accent optional, `MEMORY` accepted, case-insensitive), so a system prompt that phrases it slightly differently still works. Entries are keyed by Discord ID, not by name.
 
-Both are plain text and can be edited by hand or through the REST API. An out-of-band edit is picked up within 60 seconds.
+Both are plain text and can be edited by hand or through the REST API. A hand edit is picked up on the first read occurring more than 60 seconds after the file was last loaded: there is no watcher, so the delay is bounded by that read, not by a timer. A file holding an unflushed change keeps its RAM copy and overwrites the disk instead, which is why a hand edit is only safe on a file the bot is not currently writing. Going through the REST API has neither the delay nor the risk, since it replaces the RAM copy and the file together.
 
 ---
 

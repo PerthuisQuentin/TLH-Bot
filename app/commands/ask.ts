@@ -12,7 +12,7 @@ import { parseApiMessages } from '../discord/messages.ts';
 import { guildDisplayNameResolver } from '../discord/members.ts';
 import type { ConversationMessage } from '../discord/types.ts';
 import { ask } from '../gemini/ask-gemini.ts';
-import { fileStore, AllowedFiles } from '../storage/index.ts';
+import { readGuildConfigOrNull } from '../commons/guild-config.ts';
 import {
     type APIChatInputApplicationCommandInteraction,
     ApplicationCommandType,
@@ -32,11 +32,8 @@ const PARAM_QUESTION = 'question';
  * reads as an early-return guard like `requireGuild`.
  */
 async function canAnswerHere(res: Response, guildId: string, channelId: string): Promise<boolean> {
-    let config;
-    try {
-        config = await fileStore.readJson(guildId, AllowedFiles.CONFIG);
-    } catch (error) {
-        console.error(`[Bot] Error reading config | guildId=${guildId}`, error);
+    const config = await readGuildConfigOrNull(guildId);
+    if (!config) {
         replyText(res, 'Une erreur est survenue lors de la requête.', { ephemeral: true });
         return false;
     }

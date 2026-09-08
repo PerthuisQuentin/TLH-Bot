@@ -40,6 +40,9 @@ Nous sommes le ${dateStr} et il est ${timeStr} (Europe/Paris, UTC${offsetStr}).
 `.trim();
 }
 
+/** How many messages callers fetch. What reaches the prompt can be fewer (a short or
+ *  filtered channel) or one more (a trigger message appended to the fetched window), so
+ *  the prompt counts what it actually holds rather than repeating this. */
 export const CONTEXT_MESSAGES_LIMIT = 50;
 
 function formatMessage(message: ConversationMessage, disambiguate: boolean): string {
@@ -135,8 +138,8 @@ ${memory.trim() ? memory : 'Aucune mémoire enregistrée.'}
 
 ════════════════════════════════════════
 
-📜 HISTORIQUE DES ${CONTEXT_MESSAGES_LIMIT} DERNIERS MESSAGES :
-${formatConversation(conversation)}
+📜 HISTORIQUE DES ${conversation.length} DERNIERS MESSAGES :
+${conversation.length > 0 ? formatConversation(conversation) : 'Aucun message.'}
 
 ════════════════════════════════════════
 
@@ -157,6 +160,13 @@ ${userName} vient d'obtenir le rôle "${roleName}" grâce à son activité sur l
 
 Génère un court message de félicitations (1-2 phrases max) pour ${userName}. Sois créatif et enthousiaste !
 Commence et termine ton message par 🏅, le marqueur réservé aux montées de rang. N'utilise jamais 🎉, qui signale un jackpot.`;
+}
+
+export function createNaturalChatInstruction(userName: string): string {
+    return `💬 INTERVENTION SPONTANÉE :
+${userName} vient de te mentionner, de parler de toi, ou tu réagis simplement à la conversation ci-dessus.
+
+Réponds naturellement, comme si tu participais spontanément à la discussion — pas comme si on te posait une question formelle. Reste bref (1 à 3 phrases, sauf si le sujet le demande vraiment). Appuie-toi sur l'historique et ta mémoire si pertinent.`;
 }
 
 export function createJackpotInstruction(

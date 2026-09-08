@@ -146,14 +146,21 @@ The file is read and written through `app/idle/game-instance-storage.ts`.
 {
     "noAskChannels": ["channel-id"],
     "noShellChannels": ["channel-id"],
+    "noChatChannels": ["channel-id"],
     "shellsRoles": [
         { "roleId": "111...", "threshold": "500" },
         { "roleId": "222...", "threshold": "2000" }
-    ]
+    ],
+    "chatEnabled": true,
+    "chatNicknames": ["Gégé", "le bot"],
+    "chatIndirectProbability": 0.1,
+    "chatRandomProbability": 0.01
 }
 ```
 
 Thresholds are **strings**, parsed with `bnFromJSON` (which still accepts legacy numbers). See [configuration.md](./configuration.md) for the field reference.
+
+A file that cannot be parsed is not the same as a missing one: a missing file reads back as `{}` (nothing excluded), while a malformed one makes `readGuildConfigOrNull` return `null`, which both gating callers treat as "not allowed here". A stray comma therefore silences the bot rather than unlocking every channel the file was meant to exclude.
 
 ### `{guildId}-system.txt`
 

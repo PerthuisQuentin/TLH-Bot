@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatConversation } from './prompts.ts';
+import { formatConversation, createNaturalChatInstruction } from './prompts.ts';
 import type { ConversationMessage } from '../discord/types.ts';
 
 function makeMessage(overrides: Partial<ConversationMessage> = {}): ConversationMessage {
@@ -77,5 +77,11 @@ describe('formatConversation', () => {
 
     it('returns an empty string for no messages', () => {
         expect(formatConversation([])).toBe('');
+    });
+});
+
+describe('createNaturalChatInstruction', () => {
+    it('names the triggering user', () => {
+        expect(createNaturalChatInstruction('Alice')).toContain('Alice');
     });
 });
