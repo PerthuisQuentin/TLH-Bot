@@ -1,11 +1,20 @@
 import type { Request, Response } from 'express';
-import { client } from '../../bot.js';
+import { client } from '../discord/setup.ts';
+import { isValidGuildId } from '../storage/index.ts';
 
 export async function listRoles(req: Request, res: Response): Promise<void> {
     const guildId = req.params.guildId as string;
 
     if (!guildId) {
         res.status(400).set('Content-Type', 'text/plain').send('Missing guildId');
+        return;
+    }
+
+    // Nothing here touches the filesystem, so this is not the path-traversal guard it is
+    // on /api/files — it just keeps a malformed id from reaching discord.js and coming
+    // back as a 500, which would blame this service for the caller's bad request.
+    if (!isValidGuildId(guildId)) {
+        res.status(400).set('Content-Type', 'text/plain').send('Invalid guildId');
         return;
     }
 

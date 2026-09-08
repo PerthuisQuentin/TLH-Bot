@@ -2,15 +2,12 @@ import { readdir } from 'fs/promises';
 import type { Request, Response } from 'express';
 import {
     AllowedFiles,
+    fileStore,
     getFilesDirectory,
     isTextFile,
-    readJsonFile,
-    readTextFile,
+    isValidGuildId,
     validateJsonFile,
-    writeJsonFile,
-    writeTextFile,
-    type JsonFile,
-} from '../commons/files.js';
+} from '../storage/index.ts';
 
 export async function listFiles(_req: Request, res: Response): Promise<void> {
     try {
@@ -38,13 +35,17 @@ export async function getFile(req: Request, res: Response): Promise<void> {
         return;
     }
 
+    // Express decodes %2F in a route param, so this is what stops `../` from
+    // reaching getFilePath. Answering 400 here only avoids the 500 it would throw.
+    if (!isValidGuildId(guildId)) {
+        res.status(400).set('Content-Type', 'text/plain').send('Invalid guildId');
+        return;
+    }
+
     if (!Object.values(AllowedFiles).includes(fileType as never)) {
-        res
-            .status(400)
+        res.status(400)
             .set('Content-Type', 'text/plain')
-            .send(
-                `Invalid file type. Allowed values: ${Object.values(AllowedFiles).join(', ')}`,
-            );
+            .send(`Invalid file type. Allowed values: ${Object.values(AllowedFiles).join(', ')}`);
         return;
     }
 
@@ -52,20 +53,17 @@ export async function getFile(req: Request, res: Response): Promise<void> {
 
     try {
         if (isTextFile(resolvedType)) {
-            const content = await readTextFile(guildId, resolvedType);
+            const content = await fileStore.readText(guildId, resolvedType);
             res.set('Content-Type', 'text/plain; charset=utf-8');
             res.send(content);
         } else {
-            const content = await readJsonFile(guildId, resolvedType as JsonFile);
+            const content = await fileStore.readJson(guildId, resolvedType);
             res.set('Content-Type', 'application/json; charset=utf-8');
             res.send(JSON.stringify(content, null, 2));
         }
     } catch (error) {
         console.error(`Error reading ${fileType} file:`, error);
-        res
-            .status(500)
-            .set('Content-Type', 'text/plain')
-            .send(`Failed to read ${fileType} file`);
+        res.status(500).set('Content-Type', 'text/plain').send(`Failed to read ${fileType} file`);
     }
 }
 
@@ -78,13 +76,15 @@ export async function writeFile(req: Request, res: Response): Promise<void> {
         return;
     }
 
+    if (!isValidGuildId(guildId)) {
+        res.status(400).set('Content-Type', 'text/plain').send('Invalid guildId');
+        return;
+    }
+
     if (!Object.values(AllowedFiles).includes(fileType as never)) {
-        res
-            .status(400)
+        res.status(400)
             .set('Content-Type', 'text/plain')
-            .send(
-                `Invalid file type. Allowed values: ${Object.values(AllowedFiles).join(', ')}`,
-            );
+            .send(`Invalid file type. Allowed values: ${Object.values(AllowedFiles).join(', ')}`);
         return;
     }
 
@@ -94,30 +94,33 @@ export async function writeFile(req: Request, res: Response): Promise<void> {
     try {
         if (isTextFile(resolvedType)) {
             if (typeof content !== 'string') {
-                res.status(400).set('Content-Type', 'text/plain').send('Content must be plain text');
+                res.status(400)
+                    .set('Content-Type', 'text/plain')
+                    .send('Content must be plain text');
                 return;
             }
-            await writeTextFile(guildId, resolvedType, content);
+            await fileStore.writeText(guildId, resolvedType, content);
         } else {
             if (content === null || typeof content !== 'object') {
-                res.status(400).set('Content-Type', 'text/plain').send('Content must be valid JSON');
+                res.status(400)
+                    .set('Content-Type', 'text/plain')
+                    .send('Content must be valid JSON');
                 return;
             }
-            const jsonFileType = resolvedType as JsonFile;
+            const jsonFileType = resolvedType;
             const validationError = validateJsonFile(jsonFileType, content);
             if (validationError) {
-                res.status(400).set('Content-Type', 'text/plain').send(`Invalid JSON content: ${validationError}`);
+                res.status(400)
+                    .set('Content-Type', 'text/plain')
+                    .send(`Invalid JSON content: ${validationError}`);
                 return;
             }
-            await writeJsonFile(guildId, jsonFileType, content as never);
+            await fileStore.writeJson(guildId, jsonFileType, content);
         }
         res.set('Content-Type', 'text/plain; charset=utf-8');
         res.send(`${fileType} file updated successfully`);
     } catch (error) {
         console.error(`Error writing ${fileType} file:`, error);
-        res
-            .status(500)
-            .set('Content-Type', 'text/plain')
-            .send(`Failed to write ${fileType} file`);
+        res.status(500).set('Content-Type', 'text/plain').send(`Failed to write ${fileType} file`);
     }
 }

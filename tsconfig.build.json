@@ -1,0 +1,22 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        // This is an application, not a library: `node dist/app.js` never reads a
+        // .d.ts. Emitting them is also actively wrong here, because
+        // rewriteRelativeImportExtensions does not apply to declaration files —
+        // they would keep pointing at `./foo.ts`, which does not exist in dist/.
+        "declaration": false
+    },
+    // `exclude` replaces the parent's rather than merging, so it is repeated here.
+    // scripts/ are dev tools run through tsx and must not reach dist/.
+    // *.test.ts files are co-located with the source they cover and must not reach dist/ either.
+    // vitest.config.ts is tooling: `npm test` reads the source, so its build output was
+    // only ever dead weight shipped to production.
+    "exclude": [
+        "node_modules",
+        "dist",
+        "scripts",
+        "**/*.test.ts",
+        "vitest.config.ts"
+    ]
+}

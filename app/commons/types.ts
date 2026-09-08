@@ -1,14 +1,5 @@
 import { z } from 'zod';
 
-export type ReminderObject = {
-    id: string;
-    userId: string;
-    channelId: string;
-    date: string;
-    question: string;
-    createdAt: string;
-}
-
 export type ShellsUser = {
     userId: string;
     shells: string;
@@ -17,36 +8,27 @@ export type ShellsUser = {
     streak?: number;
     lastStreakDate?: string;
     lastActiveAt?: string;
-}
+};
 
 export type ShellsRoleConfig = {
     roleId: string;
     threshold: string;
-}
+};
 
 export type GuildConfig = {
     noAskChannels?: string[];
     noShellChannels?: string[];
     shellsRoles?: ShellsRoleConfig[];
-}
+};
 
 export type UserUpgrades = {
     userId: string;
     divingOtters: number;
     hydrodynamicFlippers: number;
     harvestBags: number;
-}
+};
 
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
-
-export const ReminderObjectSchema = z.object({
-    id: z.string(),
-    userId: z.string(),
-    channelId: z.string(),
-    date: z.string(),
-    question: z.string(),
-    createdAt: z.string(),
-});
 
 export const ShellsUserSchema = z.object({
     userId: z.string(),
@@ -58,7 +40,7 @@ export const ShellsUserSchema = z.object({
     lastActiveAt: z.string().optional(),
 });
 
-export const ShellsRoleConfigSchema = z.object({
+const ShellsRoleConfigSchema = z.object({
     roleId: z.string(),
     threshold: z.string(),
 });

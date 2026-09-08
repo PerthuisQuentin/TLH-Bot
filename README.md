@@ -1,51 +1,54 @@
-# TLH Bot — Documentation
+# TLH Bot
 
-TLH Bot is a Discord bot written in TypeScript that combines artificial intelligence (Google Gemini), gamification, and utility features for Discord servers.
+A Discord bot in TypeScript for the _The Local Host_ server, combining a Gemini-backed assistant, an idle game and a few utilities. Every server it joins gets its own isolated configuration, memory and game state.
 
 ## Features
 
-| Feature                     | Description                                                                                                                         |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **AI Questions**            | Users ask questions via `/ask`; the bot responds using the Google Gemini API with conversation context                              |
-| **Shells 🐚**               | Gamification system: users passively earn shells by participating in the server, with automatic role assignment based on thresholds |
-| **Reminders**               | Create reminders using natural language, automatically processed by a scheduled job                                                 |
-| **Weather**                 | The AI can call a weather tool (World Weather Online) to answer weather-related questions                                           |
-| **Leaderboard**             | `/leaderboard` command displaying a paginated shells ranking per server                                                             |
-| **Multi-server**            | Each Discord server has its own isolated configuration, memory, and data                                                            |
-| **Adaptive AI personality** | Each server can customize the system prompt and AI memory                                                                           |
+| Feature               | Description                                                                                                       |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **AI assistant**      | `/ask` answers with the channel's recent conversation, the guild memory and a per-guild system prompt as context. |
+| **Shells 🐚**         | An idle game: members earn shells by taking part, buy upgrades, and unlock Discord roles by threshold.            |
+| **Weather**           | The model can call a weather tool to answer weather questions.                                                    |
+| **Leaderboard**       | `/leaderboard` ranks the guild by record, balance or income.                                                      |
+| **Persistent memory** | The model keeps its own notes per guild, keyed by Discord ID.                                                     |
 
-## Table of contents
+## Documentation
 
-- [Architecture & structure](./docs/architecture.md)
-- [Available commands](./docs/commands.md)
-- [Configuration & deployment](./docs/configuration.md)
-- [Data storage](./docs/data-storage.md)
+| Document                                   | Covers                                                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| [Architecture](./docs/architecture.md)     | The two runtimes, the layering, the main flows.                         |
+| [Commands](./docs/commands.md)             | Every slash command and its options.                                    |
+| [Shells](./docs/shells.md)                 | The game: earn pipeline, heat, streak, passive income, upgrades, roles. |
+| [Storage](./docs/storage.md)               | The file store and the format of every data file.                       |
+| [Configuration](./docs/configuration.md)   | Environment, deployment, per-guild config, REST API.                    |
+| [Scripts](./docs/scripts.md)               | Migration, analysis and simulation tools.                               |
+| [Shells backlog](./docs/shells-backlog.md) | Ideas for the game. Intent only, not current behaviour.                 |
+
+`CLAUDE.md` at the root holds the working conventions for the codebase.
 
 ## Quick start
 
 ```bash
-# Install dependencies
-npm install
-
-# Compile TypeScript
-npm run build
-
-# Register slash commands with Discord
-npm run register
-
-# Start the bot
-npm start
-
-# Development mode (auto-reload)
-npm run dev
+npm install          # then create .env — see docs/configuration.md
+npm run dev          # tsx watch, auto-reload
 ```
+
+Deploying:
+
+```bash
+npm run register     # push slash command definitions to Discord
+npm run build        # → dist/
+npm start
+```
+
+`npx tsc --noEmit` is the only automated check — there is no test framework and no linter.
 
 ## Tech stack
 
-- **Runtime**: Node.js + TypeScript
-- **Discord bot**: discord.js v14
-- **HTTP server**: Express v5
-- **Primary AI**: Google Gemini (`@google/genai`)
-- **Alternative AI**: Ollama
-- **Cache**: node-cache
-- **TS execution**: tsx + nodemon
+- **Runtime**: Node.js, TypeScript strict, ES2022, NodeNext modules.
+- **Discord**: discord.js v14 for the gateway, `discord-interactions` for webhook signature verification.
+- **HTTP**: Express v5.
+- **AI**: Google Gemini (`@google/genai`), with Ollama as an alternative backend.
+- **Numbers**: decimal.js, wrapped in `app/idle/core/big-number.ts` — shell balances outgrow `Number.MAX_SAFE_INTEGER`.
+- **Validation**: zod, on the REST write route.
+- **Persistence**: flat files under `files/`, held in RAM by `app/storage/`.

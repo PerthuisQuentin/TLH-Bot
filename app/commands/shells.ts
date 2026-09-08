@@ -5,25 +5,23 @@ import {
     ApplicationIntegrationType,
     InteractionContextType,
 } from 'discord-api-types/v10';
-import { getUserLeaderboardEntry } from '../idle/shells.js';
-import { getShellsPerMessage, getUserShellsData } from '../idle/shells-storage.js';
-import { getStreakMultiplier } from '../idle/streak.js';
-import { getRoleForShells, getShellsRolesConfig } from '../idle/shells-roles.js';
-import { getUserUpgrades } from '../idle/upgrades-storage.js';
-import { ALL_UPGRADES } from '../idle/upgrades-list.js';
-import { formatUpgradeGain } from '../idle/upgrades.js';
-import { bn, bnSub, bnFromJSON, bnGt, bnMul, formatBigNum, type BigNum } from '../commons/big-number.js';
-import { replyText, replyEmbed, getOption, isPublicOption, requireGuild } from '../commons/utils.js';
-import type { UserUpgrades } from '../idle/types.js';
-import type { Command } from './types.js';
+import type { Command } from './types.ts';
+import { getShellsRolesConfig, nextRoleAfter, roleForShells } from '../idle/shells-roles.ts';
+import { bnFromJSON, bnMul, bnSub, formatBigNum } from '../idle/core/big-number.ts';
+import {
+    getOption,
+    isPublicOption,
+    replyEmbed,
+    replyText,
+    requireGuild,
+} from '../commons/utils.ts';
+import { getAllGameInstances, getGameInstance } from '../idle/game-instance-storage.ts';
+import { Leaderboard } from '../idle/leaderboard.ts';
+import { ALL_UPGRADE_IDS } from '../idle/core/upgrades/upgrade-registry.ts';
+import { ResourceId } from '../idle/core/types.ts';
 
 const PARAM_USER = 'user';
 const PARAM_PUBLIC = 'public';
-
-function getNextRole(guildId: string, maxShells: BigNum) {
-    const roles = getShellsRolesConfig(guildId);
-    return roles.find((role) => bnGt(bnFromJSON(role.threshold), maxShells)) ?? null;
-}
 
 async function handleShellsCommand(req: Request, res: Response): Promise<void> {
     try {
@@ -46,33 +44,41 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        const entry = getUserLeaderboardEntry(guild_id, targetId);
-        const currentShells = entry?.shells ?? bn(0);
-        const maxShells = entry?.maxShells ?? bn(0);
+        const [instances, instance] = await Promise.all([
+            getAllGameInstances(guild_id),
+            getGameInstance(guild_id, targetId),
+        ]);
+
+        const currentShells = instance.resources[ResourceId.SHELLS];
+        const { maxShells } = instance.stats;
+        const shellsPerMessage = instance.income[ResourceId.SHELLS];
+        const { streak, upgrades } = instance;
+        const leaderboard = new Leaderboard(instances);
+        const entry = leaderboard.getUserEntry(targetId);
+
         const rankText = entry ? `#${entry.rank}` : 'Non classé';
-        const shellsPerMessage = getShellsPerMessage(guild_id, targetId);
-        const userUpgrades = getUserUpgrades(guild_id, targetId);
 
-        const userData = getUserShellsData(guild_id, targetId);
-        const streak = userData?.streak ?? 0;
-        const streakMultiplier = getStreakMultiplier(Math.max(streak, 1));
+        const streakMultiplier = streak.getMultiplier();
 
-        const upgradeLines = ALL_UPGRADES.map((u) => {
-            const level = (userUpgrades[u.id as keyof UserUpgrades] as number | undefined) ?? 0;
-            return `${u.emoji} **${u.name}** — Niv. ${level} · ${formatUpgradeGain(u, level)}`;
+        const upgradeLines = ALL_UPGRADE_IDS.map((id) => {
+            const upgrade = upgrades[id];
+            return `${upgrade.emoji} **${upgrade.name}** — Niv. ${upgrade.level} · ${upgrade.formatGain()}`;
         });
 
-        const currentRole = getRoleForShells(guild_id, maxShells);
-        const nextRole = getNextRole(guild_id, maxShells);
+        const shellsRoles = await getShellsRolesConfig(guild_id);
+        const currentRole = roleForShells(shellsRoles, maxShells);
+        const nextRole = nextRoleAfter(shellsRoles, maxShells);
 
         const currentRoleText = currentRole ? `<@&${currentRole.roleId}>` : 'Aucun';
         const nextRoleText = nextRole
             ? `<@&${nextRole.roleId}> — encore **${formatBigNum(bnSub(bnFromJSON(nextRole.threshold), maxShells))} 🐚**`
             : '✨ Rang maximum atteint';
 
-        const streakText = streak === 0
-            ? 'Streak : aucun 🔥'
-            : `Streak : ${streak} jour${streak > 1 ? 's' : ''} 🔥 — ×${streakMultiplier.toFixed(2)}`;
+        const streakDays = streak.currentValue;
+        const streakText =
+            streakDays === 0
+                ? 'Streak : aucun 🔥'
+                : `Streak : ${streakDays} jour${streakDays > 1 ? 's' : ''} 🔥 — ×${streakMultiplier.toFixed(2)}`;
 
         const fields = [
             {
@@ -88,16 +94,20 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             { name: 'Upgrades', value: upgradeLines.join('\n'), inline: false },
         ];
 
-        replyEmbed(res, {
-            title: '🐚 Profil Coquillages',
-            description: `<@${targetId}>`,
-            color: 0xffd700,
-            fields,
-            timestamp: new Date().toISOString(),
-            ...(!maxShells.eq(currentShells) && {
-                footer: { text: `Max historique : ${formatBigNum(maxShells)} 🐚` },
-            }),
-        }, { ephemeral: !isPublic, suppressMentions: true });
+        replyEmbed(
+            res,
+            {
+                title: '🐚 Profil Coquillages',
+                description: `<@${targetId}>`,
+                color: 0xffd700,
+                fields,
+                timestamp: new Date().toISOString(),
+                ...(!maxShells.eq(currentShells) && {
+                    footer: { text: `Max historique : ${formatBigNum(maxShells)} 🐚` },
+                }),
+            },
+            { ephemeral: !isPublic, suppressMentions: true },
+        );
     } catch (error) {
         console.error('Error handling rank command:', error);
         replyText(res, 'Une erreur est survenue en récupérant le profil.', { ephemeral: true });
@@ -109,8 +119,15 @@ export const shellsCommand: Command = {
         name: 'shells',
         description: "Affiche le profil Coquillages d'un utilisateur",
         type: ApplicationCommandType.ChatInput,
-        integration_types: [ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall],
-        contexts: [InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel],
+        integration_types: [
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
+        ],
+        contexts: [
+            InteractionContextType.Guild,
+            InteractionContextType.BotDM,
+            InteractionContextType.PrivateChannel,
+        ],
         options: [
             {
                 type: ApplicationCommandOptionType.User,

@@ -10,8 +10,14 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "declaration": true,
-        "sourceMap": true
+        "sourceMap": true,
+        // Imports name the source file (`./foo.ts`); tsc rewrites the specifier
+        // to `./foo.js` on emit, which is what Node's ESM loader needs.
+        "allowImportingTsExtensions": true,
+        "rewriteRelativeImportExtensions": true
     },
+    // Covers scripts/ too, so the editor and `tsc --noEmit` typecheck them.
+    // The build uses tsconfig.build.json, which keeps scripts out of dist/.
     "include": [
         "**/*.ts"
     ],

@@ -1,43 +1,30 @@
-import { readJsonFileSync, AllowedFiles } from '../commons/files.js';
-import { memoryCache } from '../commons/memory.js';
-import { bnFromJSON, bnGte, bnGt, bnLt, type BigNum } from '../commons/big-number.js';
-import type { ShellsRoleConfig } from '../commons/types.js';
-import type { GuildMember } from 'discord.js';
-import type { RoleChanges } from './types.js';
+import { fileStore, AllowedFiles } from '../storage/index.ts';
+import type { ShellsRoleConfig } from '../commons/types.ts';
+import { BigNum, bnFromJSON } from './core/big-number.ts';
+import type { PendingRoleChanges } from '../discord/types.ts';
 
-const CONFIG_CACHE_TTL = 60;
-
-export function getShellsRolesConfig(guildId: string): ShellsRoleConfig[] {
-    const cacheKey = `shellsRoles:${guildId}`;
-
-    const cached = memoryCache.get<ShellsRoleConfig[]>(cacheKey);
-    if (cached !== undefined) {
-        return cached;
-    }
-
-    const config = readJsonFileSync(guildId, AllowedFiles.CONFIG);
-    const shellsRoles = config.shellsRoles ?? [];
-    const sortedRoles = [...shellsRoles].sort((a, b) => {
+/**
+ * The only I/O in this module, and the only place the sort happens — everything
+ * below takes the result and stays synchronous. The store already keeps config in
+ * RAM, so no extra cache layer here.
+ */
+export async function getShellsRolesConfig(guildId: string): Promise<ShellsRoleConfig[]> {
+    const config = await fileStore.readJson(guildId, AllowedFiles.CONFIG);
+    return [...(config.shellsRoles ?? [])].sort((a, b) => {
         const at = bnFromJSON(a.threshold);
         const bt = bnFromJSON(b.threshold);
-        return bnLt(at, bt) ? -1 : bnGt(at, bt) ? 1 : 0;
+        return at.lt(bt) ? -1 : at.gt(bt) ? 1 : 0;
     });
-
-    memoryCache.set(cacheKey, sortedRoles, CONFIG_CACHE_TTL);
-
-    return sortedRoles;
 }
 
-export function getRoleForShells(
-    guildId: string,
-    shells: BigNum,
-): ShellsRoleConfig | null {
-    const shellsRoles = getShellsRolesConfig(guildId);
-    if (shellsRoles.length === 0) return null;
+// The three functions below require `roles` sorted by ascending threshold, which is
+// what getShellsRolesConfig returns: both walk the list in order and stop early.
 
+/** Highest tier `shells` qualifies for, or null below the first threshold. */
+export function roleForShells(roles: ShellsRoleConfig[], shells: BigNum): ShellsRoleConfig | null {
     let qualifiedRole: ShellsRoleConfig | null = null;
-    for (const role of shellsRoles) {
-        if (bnGte(shells, bnFromJSON(role.threshold))) {
+    for (const role of roles) {
+        if (shells.gte(bnFromJSON(role.threshold))) {
             qualifiedRole = role;
         } else {
             break;
@@ -46,54 +33,28 @@ export function getRoleForShells(
     return qualifiedRole;
 }
 
-export async function updateMemberShellsRoles(
-    member: GuildMember,
+/** Cheapest tier still out of reach, or null once the top one is held. */
+export function nextRoleAfter(roles: ShellsRoleConfig[], shells: BigNum): ShellsRoleConfig | null {
+    return roles.find((role) => bnFromJSON(role.threshold).gt(shells)) ?? null;
+}
+
+/**
+ * Which shells role to add and which to strip. Only ever touches ids that appear in
+ * `roles`, so a member's unrelated roles survive.
+ */
+export function computeRoleChanges(
+    roles: ShellsRoleConfig[],
     maxShells: BigNum,
-): Promise<RoleChanges> {
-    const guildId = member.guild.id;
-    const shellsRoles = getShellsRolesConfig(guildId);
+    currentRoleIds: string[],
+): PendingRoleChanges {
+    if (roles.length === 0) return { addRoleId: null, removeRoleIds: [] };
 
-    if (shellsRoles.length === 0) {
-        return { added: null, addedRoleName: null, removed: [] };
-    }
+    const shellsRoleIds = roles.map((r) => r.roleId);
+    const targetRoleId = roleForShells(roles, maxShells)?.roleId ?? null;
 
-    const shellsRoleIds = shellsRoles.map((r) => r.roleId);
-    const targetRole = getRoleForShells(guildId, maxShells);
-    const targetRoleId = targetRole?.roleId ?? null;
+    const currentShellsRoleIds = currentRoleIds.filter((id) => shellsRoleIds.includes(id));
+    const addRoleId = targetRoleId && !currentRoleIds.includes(targetRoleId) ? targetRoleId : null;
+    const removeRoleIds = currentShellsRoleIds.filter((id) => id !== targetRoleId);
 
-    const currentShellsRoles = member.roles.cache.filter((role) =>
-        shellsRoleIds.includes(role.id),
-    );
-
-    const rolesToRemove: string[] = [];
-    let roleToAdd: string | null = null;
-
-    if (targetRoleId && !member.roles.cache.has(targetRoleId)) {
-        roleToAdd = targetRoleId;
-    }
-
-    for (const [roleId] of currentShellsRoles) {
-        if (roleId !== targetRoleId) {
-            rolesToRemove.push(roleId);
-        }
-    }
-
-    if (rolesToRemove.length > 0) {
-        await member.roles.remove(rolesToRemove);
-        console.log(
-            `[Shells] Role removed | userId=${member.id} | roleIds=${rolesToRemove.join(',')}`,
-        );
-    }
-
-    let addedRoleName: string | null = null;
-    if (roleToAdd) {
-        await member.roles.add(roleToAdd);
-        const role = member.guild.roles.cache.get(roleToAdd);
-        addedRoleName = role?.name ?? null;
-        console.log(
-            `[Shells] Role added | userId=${member.id} | roleId=${roleToAdd} | roleName=${addedRoleName}`,
-        );
-    }
-
-    return { added: roleToAdd, addedRoleName, removed: rolesToRemove };
+    return { addRoleId, removeRoleIds };
 }

@@ -1,16 +1,18 @@
 import type { Request, Response } from 'express';
 import {
-    createMessageBody,
     updateInteractionResponse,
+    updateInteractionResponseOrLog,
     DiscordRequest,
     replyText,
     replyDeferred,
     getOption,
-} from '../commons/utils.js';
-import { CONTEXT_MESSAGES_LIMIT } from '../commons/prompts.js';
-import { formatMessagesContext } from '../commons/messages.js';
-import { ask } from '../gemini/ask-gemini.js';
-import { readJsonFile, AllowedFiles } from '../commons/files.js';
+} from '../commons/utils.ts';
+import { CONTEXT_MESSAGES_LIMIT } from '../commons/prompts.ts';
+import { parseApiMessages } from '../discord/messages.ts';
+import { guildDisplayNameResolver } from '../discord/members.ts';
+import type { ConversationMessage } from '../discord/types.ts';
+import { ask } from '../gemini/ask-gemini.ts';
+import { fileStore, AllowedFiles } from '../storage/index.ts';
 import {
     type APIChatInputApplicationCommandInteraction,
     ApplicationCommandType,
@@ -18,55 +20,81 @@ import {
     ApplicationIntegrationType,
     InteractionContextType,
 } from 'discord-api-types/v10';
-import { Command } from './types.js';
+import { Command } from './types.ts';
 
 const PARAM_QUESTION = 'question';
+
+/**
+ * Everything that can still produce a normal reply, since it runs before the defer.
+ * Reading the config is I/O and can fail — a malformed `{guildId}-config.json` used to
+ * throw out of the handler with nothing sent at all, which Discord shows as
+ * « L'application n'a pas répondu ». Returns false once a reply has been sent, so it
+ * reads as an early-return guard like `requireGuild`.
+ */
+async function canAnswerHere(res: Response, guildId: string, channelId: string): Promise<boolean> {
+    let config;
+    try {
+        config = await fileStore.readJson(guildId, AllowedFiles.CONFIG);
+    } catch (error) {
+        console.error(`[Bot] Error reading config | guildId=${guildId}`, error);
+        replyText(res, 'Une erreur est survenue lors de la requête.', { ephemeral: true });
+        return false;
+    }
+
+    if ((config.noAskChannels ?? []).includes(channelId)) {
+        replyText(res, 'Je ne suis pas autorisé à répondre dans ce canal.', { ephemeral: true });
+        return false;
+    }
+
+    return true;
+}
 
 async function handleAskCommand(req: Request, res: Response): Promise<void> {
     const body = req.body as APIChatInputApplicationCommandInteraction;
     const { data } = body;
     const guildId = body.guild_id ?? 'dm';
-    const channelId = body.channel_id!;
+    const channelId = body.channel_id;
 
-    const config = await readJsonFile(guildId, AllowedFiles.CONFIG);
-    const noAskChannels = config.noAskChannels ?? [];
-    if (noAskChannels.includes(channelId)) {
-        replyText(res, "Je ne suis pas autorisé à répondre dans ce canal.", { ephemeral: true });
-        return;
-    }
+    if (!(await canAnswerHere(res, guildId, channelId))) return;
 
     const userQuestion = getOption<string>(data?.options, PARAM_QUESTION);
 
     replyDeferred(res);
 
     try {
-        const userId =
-            body.member?.user?.id ?? body.user?.id ?? '';
+        const userId = body.member?.user?.id ?? body.user?.id ?? '';
+
+        // Question header and history lines must name the asker identically, so both
+        // read the same resolver. The interaction already carries their nickname.
+        const known = new Map<string, string>();
+        if (body.member?.nick) known.set(userId, body.member.nick);
+        const resolveDisplayName = guildDisplayNameResolver(guildId, known);
+
         const userName =
-            body.member?.nick ??
+            resolveDisplayName(userId) ??
             body.member?.user?.global_name ??
             body.member?.user?.username ??
             body.user?.global_name ??
             body.user?.username ??
             'Utilisateur';
 
-        let conversationContext = '';
+        let conversationContext: ConversationMessage[] = [];
         let channelName = 'canal inconnu';
 
         try {
             const channelResponse = await DiscordRequest(`channels/${channelId}`, {
                 method: 'GET',
             });
-            const channelData = await channelResponse.json() as { name?: string };
+            const channelData = (await channelResponse.json()) as { name?: string };
             channelName = channelData.name ?? 'canal inconnu';
 
             const messagesResponse = await DiscordRequest(
                 `channels/${channelId}/messages?limit=${CONTEXT_MESSAGES_LIMIT}`,
                 { method: 'GET' },
             );
-            const messages = await messagesResponse.json() as unknown[];
-            conversationContext = formatMessagesContext(
-                messages as Parameters<typeof formatMessagesContext>[0],
+            conversationContext = parseApiMessages(
+                (await messagesResponse.json()) as unknown[],
+                resolveDisplayName,
             );
         } catch (error) {
             console.error('Error fetching messages:', error);
@@ -74,8 +102,6 @@ async function handleAskCommand(req: Request, res: Response): Promise<void> {
 
         const { response: botResponse } = await ask({
             guildId,
-            userId,
-            channelId,
             channelName,
             conversationContext,
             userName,
@@ -83,12 +109,10 @@ async function handleAskCommand(req: Request, res: Response): Promise<void> {
         });
 
         const interactionToken = body.token;
-        const updatedMessage = await updateInteractionResponse(
+        const updatedMessage = (await updateInteractionResponse(
             interactionToken,
-            createMessageBody(
-                `**Question de ${userName} :** ${userQuestion}\n\n${botResponse}`,
-            ),
-        ) as { id?: string } | null;
+            `**Question de ${userName} :** ${userQuestion}\n\n${botResponse}`,
+        )) as { id?: string } | null;
 
         const logTimestamp = new Date().toISOString();
         const questionPreview = (userQuestion ?? '').substring(0, 20);
@@ -109,10 +133,8 @@ async function handleAskCommand(req: Request, res: Response): Promise<void> {
             ? 'Mon cerveau Google est surchargé 🧠💥 Réessaie dans quelques instants !'
             : 'Une erreur est survenue lors de la requête.';
 
-        await updateInteractionResponse(
-            interactionToken,
-            createMessageBody(errorMessage),
-        );
+        // Last resort: this edit is the error report, so its own failure is only logged.
+        await updateInteractionResponseOrLog(interactionToken, errorMessage);
     }
 }
 
@@ -121,8 +143,15 @@ export const askCommand: Command = {
         name: 'ask',
         description: 'Pose une question au bot',
         type: ApplicationCommandType.ChatInput,
-        integration_types: [ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall],
-        contexts: [InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel],
+        integration_types: [
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
+        ],
+        contexts: [
+            InteractionContextType.Guild,
+            InteractionContextType.BotDM,
+            InteractionContextType.PrivateChannel,
+        ],
         options: [
             {
                 type: ApplicationCommandOptionType.String,

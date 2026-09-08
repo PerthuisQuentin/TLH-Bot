@@ -6,76 +6,64 @@ import {
     InteractionContextType,
 } from 'discord-api-types/v10';
 import {
-    getPaginatedShellsLeaderboard,
-    getUserLeaderboardEntry,
-    getUserShells,
-} from '../idle/shells.js';
-import { DEFAULT_SHELLS_PER_MESSAGE, LeaderboardSort } from '../idle/shells-storage.js';
-import { bn, bnFromJSON, formatBigNum, type BigNum } from '../commons/big-number.js';
-import { replyText, replyEmbed, getOption, isPublicOption, requireGuild } from '../commons/utils.js';
-import type { ShellsUser, LeaderboardEntry } from '../idle/types.js';
-import type { Command } from './types.js';
+    replyText,
+    replyEmbed,
+    getOption,
+    isPublicOption,
+    requireGuild,
+} from '../commons/utils.ts';
+import type { Command } from './types.ts';
+import { Leaderboard, LeaderboardSort, type LeaderboardEntry } from '../idle/leaderboard.ts';
+import { getAllGameInstances } from '../idle/game-instance-storage.ts';
+import { formatBigNum } from '../idle/core/big-number.ts';
 
 const PARAM_PAGE = 'page';
 const PARAM_PUBLIC = 'public';
 const PARAM_SORT = 'sort';
 
-type FormatLeaderboardParams = {
-    pageUsers: ShellsUser[];
-    startIndex: number;
-    pageSize: number;
-    requesterId: string | undefined;
-    requesterEntry: LeaderboardEntry | null;
-    requesterShells: BigNum;
-}
-
 function formatUserLine(entry: LeaderboardEntry): string {
     return `#${entry.rank} <@${entry.userId}> — ${formatBigNum(entry.maxShells)} 🐚 *(${formatBigNum(entry.shells)} · +${formatBigNum(entry.shellsPerMessage)}/msg)*`;
 }
 
+type FormatLeaderboardParams = {
+    entries: LeaderboardEntry[];
+    startIndex: number;
+    pageSize: number;
+    requesterId: string | undefined;
+    requesterEntry: LeaderboardEntry | null;
+};
+
 function formatLeaderboardDescription({
-    pageUsers,
+    entries,
     startIndex,
     pageSize,
     requesterId,
     requesterEntry,
-    requesterShells,
 }: FormatLeaderboardParams): string {
-    const leaderboardText = pageUsers
-        .map((user, index) => {
-            const rank = startIndex + index + 1;
-            const entry: LeaderboardEntry = {
-                rank,
-                userId: user.userId,
-                maxShells: bnFromJSON(user.maxShells ?? user.shells),
-                shells: bnFromJSON(user.shells),
-                shellsPerMessage: bnFromJSON(user.shellsPerMessage ?? DEFAULT_SHELLS_PER_MESSAGE),
-            };
+    const leaderboardText = entries
+        .map((entry) => {
             const line = formatUserLine(entry);
-            return requesterId && user.userId === requesterId ? `**${line}**` : line;
+            return requesterId && entry.userId === requesterId ? `**${line}**` : line;
         })
         .join('\n');
 
     if (!requesterId) return leaderboardText;
 
     const requesterIsOnPage =
-        requesterEntry &&
+        requesterEntry !== null &&
         requesterEntry.rank > startIndex &&
         requesterEntry.rank <= startIndex + pageSize;
 
     if (requesterIsOnPage) return leaderboardText;
 
     if (requesterEntry) {
-        return `${leaderboardText}\n—\n**${formatUserLine({ ...requesterEntry, userId: requesterId })}**`;
+        return `${leaderboardText}\n—\n**${formatUserLine(requesterEntry)}**`;
     }
 
-    return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}> - ${formatBigNum(requesterShells)} 🐚**`;
+    return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}>**`;
 }
 
-async function handleLeaderboardCommand(
-    req: Request,
-    res: Response,
-): Promise<void> {
+async function handleLeaderboardCommand(req: Request, res: Response): Promise<void> {
     try {
         const body = req.body as {
             guild_id?: string;
@@ -95,47 +83,47 @@ async function handleLeaderboardCommand(
             ? (sortOption as LeaderboardSort)
             : LeaderboardSort.MAX;
         const requestedPage =
-            Number.isInteger(pageOption) && (pageOption as number) > 0
-                ? (pageOption as number)
-                : 1;
+            Number.isInteger(pageOption) && (pageOption as number) > 0 ? (pageOption as number) : 1;
 
-        const paginated = getPaginatedShellsLeaderboard(guild_id, requestedPage, 10, sort);
+        const instances = await getAllGameInstances(guild_id);
+        const leaderboard = new Leaderboard(instances, sort);
 
-        if (paginated.totalUsers === 0) {
-            replyText(res, 'Aucun utilisateur avec des coquillages pour le moment.', { ephemeral: !isPublic });
+        if (leaderboard.totalUsers === 0) {
+            replyText(res, 'Aucun utilisateur avec des coquillages pour le moment.', {
+                ephemeral: !isPublic,
+            });
             return;
         }
 
-        const pageUsers = paginated.users;
-        const startIndex = paginated.startIndex;
-        const currentPage = paginated.currentPage;
-        const totalPages = paginated.totalPages;
-        const requesterEntry = requesterId
-            ? getUserLeaderboardEntry(guild_id, requesterId, sort)
-            : null;
-        const requesterShells = requesterId ? getUserShells(guild_id, requesterId) : bn(0);
+        const paginated = leaderboard.getPage(requestedPage);
+        const requesterEntry = requesterId ? leaderboard.getUserEntry(requesterId) : null;
 
         const description = formatLeaderboardDescription({
-            pageUsers,
-            startIndex,
+            entries: paginated.entries,
+            startIndex: paginated.startIndex,
             pageSize: paginated.pageSize,
             requesterId,
             requesterEntry,
-            requesterShells,
         });
 
-        replyEmbed(res, {
-            title: '🐚 Classement Coquillages',
-            description,
-            color: 0xffd700,
-            timestamp: new Date().toISOString(),
-            footer: {
-                text: `Page ${currentPage}/${totalPages} • ${paginated.totalUsers} utilisateurs • tri : ${sort}`,
+        replyEmbed(
+            res,
+            {
+                title: '🐚 Classement Coquillages',
+                description,
+                color: 0xffd700,
+                timestamp: new Date().toISOString(),
+                footer: {
+                    text: `Page ${paginated.currentPage}/${paginated.totalPages} • ${paginated.totalUsers} utilisateurs • tri : ${sort}`,
+                },
             },
-        }, { ephemeral: !isPublic, suppressMentions: true });
+            { ephemeral: !isPublic, suppressMentions: true },
+        );
     } catch (error) {
         console.error('Error handling leaderboard command:', error);
-        replyText(res, 'Une erreur est survenue en récupérant le classement.');
+        replyText(res, 'Une erreur est survenue en récupérant le classement.', {
+            ephemeral: true,
+        });
     }
 }
 
@@ -144,8 +132,15 @@ export const leaderboardCommand: Command = {
         name: 'leaderboard',
         description: 'Affiche le classement Coquillages du serveur',
         type: ApplicationCommandType.ChatInput,
-        integration_types: [ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall],
-        contexts: [InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel],
+        integration_types: [
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
+        ],
+        contexts: [
+            InteractionContextType.Guild,
+            InteractionContextType.BotDM,
+            InteractionContextType.PrivateChannel,
+        ],
         options: [
             {
                 type: ApplicationCommandOptionType.Integer,
