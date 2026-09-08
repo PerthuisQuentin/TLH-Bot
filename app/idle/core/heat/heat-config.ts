@@ -5,7 +5,7 @@ export const DECAY_LAMBDA = 0.006;
 export const MIN_CONTRIBUTION = 0.01;
 
 // How much a single message adds to a user's contribution (capped at MAX_CONTRIBUTION).
-// A user needs ~7 messages in quick succession to reach full contribution.
+// A user needs 10 back-to-back messages to reach MAX_CONTRIBUTION, more once decay sets in.
 export const MSG_INCREMENT = 0.5;
 
 // How much a single reaction adds to a user's contribution.

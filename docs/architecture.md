@@ -4,10 +4,10 @@
 
 `app.ts` boots two concurrent runtimes. Knowing which one a code path belongs to is the key to navigating the repo.
 
-| Runtime            | Entry point                                          | Handles                                                                                           |
-| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Express webhook    | `POST /interactions` → `app/discord/interactions.ts` | Slash commands. Discord signs the request; `verifyKeyMiddleware` validates the signature.         |
-| discord.js gateway | `app/discord/setup.ts` → `app/discord/handlers.ts`   | `messageCreate` and `messageReactionAdd` → shell earning, role promotions, jackpot announcements. |
+| Runtime            | Entry point                                          | Handles                                                                                                             |
+| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Express webhook    | `POST /interactions` → `app/discord/interactions.ts` | Slash commands. Discord signs the request; `verifyKeyMiddleware` validates the signature.                           |
+| discord.js gateway | `app/discord/setup.ts` → `app/discord/handlers.ts`   | `messageCreate` and `messageReactionAdd` → shell earning, role promotions, jackpot announcements, spontaneous chat. |
 
 A third surface sits alongside them: a key-protected REST API under `/api` (`x-api-key` header) exposing per-guild data files, guild roles and message deletion. It is used by an external admin tool, not by Discord.
 
@@ -117,6 +117,53 @@ back in app/discord/handlers.ts
     └── role change → applyRoleChanges() → generated congratulation → channel.send()
 ```
 
+### Spontaneous chat (gateway)
+
+Runs concurrently with shell earning, not after it: the two share no state, and only this
+one takes a per-guild AI queue slot (announcements pass `saveMemory: false` and skip it),
+so neither can block the other. Each swallows its own errors, so a failure here never
+touches the economy path.
+
+```
+messageCreate
+    ↓
+app/discord/handlers.ts    handleMessage() → Promise.allSettled([handleEvent, maybeChatNaturally])
+    ↓
+app/discord/chat.ts        maybeChatNaturally()
+    ├── read {guildId}-config.json → chatEnabled === false, or channel in noChatChannels?  → stop
+    ├── direct @mention of the bot?              → always triggers
+    ├── else message contains a chatNicknames entry?  → triggers with probability chatIndirectProbability (default 0.10)
+    ├── else                                     → triggers with probability chatRandomProbability (default 0.01)
+    └── no trigger → stop
+    ↓
+channel.messages.fetch() (discord.js cache/REST, not the raw DiscordRequest wrapper /ask uses)
+    → parseMessage() per message → chronological ConversationMessage[]
+    ↓
+app/gemini/ask-gemini.ts   chatNaturally() → same chatWithGemini() engine as /ask
+    (createNaturalChatInstruction instead of createQuestionInstruction; memory still saved)
+    ↓
+message.reply()
+```
+
+### The per-guild AI queue
+
+Reading `{guildId}-memory.txt`, calling Gemini and writing the result back is one
+read-modify-write whose middle step takes seconds. `fileStore.writeText` replaces the file
+wholesale — it is not the read-modify-write `updateJson` offers — so two overlapping cycles
+for the same guild would both start from the same snapshot and the later write would
+silently discard the earlier one. Since spontaneous chat can fire unattended in any channel,
+that overlap stopped being hypothetical.
+
+`enqueueForGuild` (`app/commons/guild-queue.ts`) therefore serializes the **whole** cycle
+per guild, which is why `chatWithGemini` builds the prompt itself instead of receiving one:
+the memory read has to happen once the guild's turn arrives, not before. Only memory-writing
+callers queue (`ask`, `chatNaturally`); announcements pass `saveMemory: false` and run
+straight through, so a jackpot is never delayed by a conversation.
+
+A rejected task rejects for its own caller — `/ask` still sees the original error object,
+which is what keeps its 503 detection working — without blocking the next task for that
+guild. The known cost: a hung Gemini call holds that guild's queue until it settles.
+
 ---
 
 ## Gateway configuration
@@ -132,13 +179,13 @@ back in app/discord/handlers.ts
 
 ## Error handling
 
-discord.js never awaits its listeners, and Express 5 only forwards _awaited_ async rejections to its error middleware. A floating rejection in either path is unhandled, and Node kills the process — taking all three runtimes with it.
+discord.js never awaits its listeners, and Express 5 only forwards _awaited_ async rejections to its error middleware. A floating rejection in either path is unhandled, and Node kills the process — taking both runtimes and the REST API with it.
 
 Every entry point therefore owns a try/catch:
 
 - Both gateway listeners in `setup.ts`.
 - `handleEvent` in `handlers.ts`, with nested catches so a failed announcement never loses the shell gain.
-- Each command handler, so exactly one reply is sent on the error path.
+- Each command handler that touches I/O, so exactly one reply is sent on the error path. `/ping` and `/heat` have none, and need none: both are fully synchronous and read nothing from disk, Discord or the AI.
 
 `replyDeferred` splits a handler in two, and the halves fail differently — `/ask` is the one command that has both:
 

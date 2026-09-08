@@ -24,7 +24,7 @@ A Discord bot in TypeScript for the _The Local Host_ server, combining a Gemini-
 | [Scripts](./docs/scripts.md)               | Migration, analysis and simulation tools.                               |
 | [Shells backlog](./docs/shells-backlog.md) | Ideas for the game. Intent only, not current behaviour.                 |
 
-`CLAUDE.md` at the root holds the working conventions for the codebase.
+[`.claude/CLAUDE.md`](./.claude/CLAUDE.md) holds the working conventions for the codebase.
 
 ## Quick start
 
@@ -41,7 +41,7 @@ npm run build        # → dist/
 npm start
 ```
 
-`npx tsc --noEmit` is the only automated check — there is no test framework and no linter.
+Four automated checks, all expected to come back clean: `npx tsc --noEmit`, `npm run lint`, `npm run format:check` and `npm test` (vitest; `npm run coverage` for the report).
 
 ## Tech stack
 
@@ -52,3 +52,4 @@ npm start
 - **Numbers**: decimal.js, wrapped in `app/idle/core/big-number.ts` — shell balances outgrow `Number.MAX_SAFE_INTEGER`.
 - **Validation**: zod, on the REST write route.
 - **Persistence**: flat files under `files/`, held in RAM by `app/storage/`.
+- **Tooling**: vitest for tests, ESLint with the type-checked `typescript-eslint` preset, Prettier for formatting.

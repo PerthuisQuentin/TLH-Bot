@@ -15,6 +15,7 @@ import { formatBigNum } from '../idle/core/big-number.ts';
 import { generateJackpotMessage, generateRolePromotionMessage } from '../gemini/ask-gemini.ts';
 import { applyRoleChanges } from './roles.ts';
 import { parseMessage } from './messages.ts';
+import { maybeChatNaturally } from './chat.ts';
 
 // `conversation` only feeds the generated announcements, so it stays out of
 // DiscordEvent, which the game domain consumes.
@@ -98,7 +99,15 @@ export async function handleMessage(message: Message): Promise<void> {
         currentRoleIds: member?.roles.cache.map((r) => r.id) ?? [],
     };
 
-    await handleEvent(event, message.channel as TextChannel, member, toConversation(message));
+    // Independent, so they run concurrently: the economy writes game instances and posts
+    // its own announcements, the chat reads config/memory and replies to this message.
+    // Only the chat takes a per-guild AI queue slot — announcements pass `saveMemory: false`
+    // and skip it — so neither can block the other. Both swallow their own errors, which is
+    // what allSettled records rather than relies on.
+    await Promise.allSettled([
+        handleEvent(event, message.channel as TextChannel, member, toConversation(message)),
+        maybeChatNaturally(message, channelName),
+    ]);
 }
 
 // The actor is the reactor; crediting the message author is a domain rule.
