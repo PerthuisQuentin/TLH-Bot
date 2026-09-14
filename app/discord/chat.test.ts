@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Collection } from 'discord.js';
 import type { Chat } from '@google/genai';
 import type { Message } from 'discord.js';
-import { genai } from '../gemini/gemini.ts';
+import { genai } from '../llm/gemini/gemini.ts';
 import type { GuildConfig } from '../commons/types.ts';
 import { maybeChatNaturally } from './chat.ts';
 

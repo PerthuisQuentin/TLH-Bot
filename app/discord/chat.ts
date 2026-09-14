@@ -1,6 +1,6 @@
 import type { Message, TextChannel } from 'discord.js';
 import { readGuildConfigOrNull } from '../commons/guild-config.ts';
-import { chatNaturally } from '../gemini/ask-gemini.ts';
+import { chatNaturally } from '../llm/index.ts';
 import { CONTEXT_MESSAGES_LIMIT } from '../commons/prompts.ts';
 import { hasNicknameMention, shouldTriggerChat } from '../commons/chat-trigger.ts';
 import { parseMessage } from './messages.ts';

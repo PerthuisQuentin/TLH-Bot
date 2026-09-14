@@ -10,10 +10,13 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "check:core": "npm run build && tsx scripts/check-core-purity.ts",
     "start": "node dist/app.js",
-    "register": "tsx commands.ts",
-    "register:local": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx commands.ts",
-    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx watch app.ts",
+    "register": "tsx --env-file=.env.dev commands.ts",
+    "register:prod": "tsx --env-file=.env.prod commands.ts",
+    "register:local": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx --env-file=.env.dev commands.ts",
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx watch --env-file=.env.dev app.ts",
+    "dev:prod": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx watch --env-file=.env.prod app.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,js,md}\"",
@@ -26,14 +29,13 @@
   "license": "MIT",
   "dependencies": {
     "@google/genai": "^1.48.0",
+    "@openrouter/sdk": "^1.2.120",
     "decimal.js": "^10.6.0",
     "discord-api-types": "^0.38.43",
     "discord-interactions": "^4.4.0",
     "discord.js": "^14.26.0",
-    "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "node-cache": "^5.1.2",
-    "ollama": "^0.6.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

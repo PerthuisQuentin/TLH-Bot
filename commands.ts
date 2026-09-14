@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { InstallGlobalCommands } from './app/commons/utils.ts';
 import { commands } from './app/commands/index.ts';
 

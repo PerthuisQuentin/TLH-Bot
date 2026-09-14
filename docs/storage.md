@@ -137,6 +137,7 @@ The file is read and written through `app/idle/game-instance-storage.ts`.
 
 - `mutate` must be synchronous. It runs between the load and the write-back, which is what makes the read-modify-write atomic; an `await` in it would let a concurrent event write back a stale snapshot. Whatever it returns is returned by `updateGameInstance`.
 - The instance must not escape the callback. Keeping a reference and mutating it afterwards is the detached-copy problem again, this time with no type to catch it.
+- The same split holds one level down: `instance.upgrades[id]` is a `ReadonlyUpgrade`, and its `addLevels` exists for `buyUpgrade` alone.
 - The write is deferred by about a second. A change the player is told succeeded — a shop purchase — needs `flushGameInstances(guildId)` behind it.
 - A player absent from the file is created on first write, so callers never have to pre-register anyone.
 

@@ -1,5 +1,9 @@
-import 'dotenv/config';
-import { ToolParamType, type ToolFunctionDeclaration, type WeatherData } from './types.ts';
+import {
+    ToolParamType,
+    type Tool,
+    type ToolFunctionDeclaration,
+    type WeatherData,
+} from './types.ts';
 
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
 const WEATHER_BASE_URL = 'https://api.worldweatheronline.com/premium/v1';
@@ -76,26 +80,7 @@ export function formatWeatherData(weather: WeatherData): string {
 ☀️ Index UV: ${weather.uvIndex}`;
 }
 
-export const weatherToolOllama = {
-    type: 'function',
-    function: {
-        name: 'get_weather',
-        description: 'Récupère la météo actuelle et la température pour une ville donnée',
-        parameters: {
-            type: 'object',
-            properties: {
-                city: {
-                    type: 'string',
-                    description:
-                        'Le nom de la ville (ex: "Paris", "Lyon", "Marseille"). Peut inclure le code pays (ex: "Paris,FR")',
-                },
-            },
-            required: ['city'],
-        },
-    },
-};
-
-export const weatherToolGemini: ToolFunctionDeclaration = {
+const weatherDeclaration: ToolFunctionDeclaration = {
     name: 'get_weather',
     description:
         "Récupère la météo actuelle et la température pour une ville donnée. Utilise cette fonction quand l'utilisateur demande la météo, la température, ou les conditions climatiques d'une ville.",
@@ -109,5 +94,18 @@ export const weatherToolGemini: ToolFunctionDeclaration = {
             },
         },
         required: ['city'],
+    },
+};
+
+export const weatherTool: Tool = {
+    declaration: weatherDeclaration,
+    // A failed lookup is reported to the model rather than thrown: it can then say so in
+    // its own words, or ask for another city, instead of taking the whole answer down.
+    execute: async (args) => {
+        try {
+            return formatWeatherData(await getWeather(args.city));
+        } catch (error) {
+            return `Erreur lors de la récupération de la météo: ${(error as Error).message}`;
+        }
     },
 };

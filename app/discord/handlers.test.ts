@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Collection } from 'discord.js';
 import type { Message, MessageReaction, User } from 'discord.js';
 import type { Chat } from '@google/genai';
-import { genai } from '../gemini/gemini.ts';
+import { genai } from '../llm/gemini/gemini.ts';
 import { handleMessage, handleReaction } from './handlers.ts';
 import { getGameInstance, flushGameInstances } from '../idle/game-instance-storage.ts';
 import { ResourceId } from '../idle/core/types.ts';

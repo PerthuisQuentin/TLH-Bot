@@ -34,7 +34,7 @@ Asks the AI a question, with the channel's recent conversation, the guild memory
 1. Refuses if the channel is in `noAskChannels`, or if that config could not be read at all.
 2. Defers the reply, which buys 15 minutes. Everything after this point can only reach the user by editing that reply — see the defer boundary in [architecture.md](./architecture.md#error-handling).
 3. Fetches the channel name and its last 50 messages over REST, parsed into `ConversationMessage[]` by `app/discord/messages.ts`.
-4. Calls Gemini with the tool declarations from `app/tools/`, looping while the model returns tool calls, bounded by `MAX_TOOL_ROUNDS`. The last round declares no tool, so a model that will not converge still produces an answer rather than running until the interaction expires.
+4. Calls the configured AI backend (`AI_PROVIDER`) with the tool declarations from `app/llm/tools/`, looping while the model returns tool calls, bounded by `MAX_TOOL_ROUNDS`. The last round is sent with the tools disarmed, so a model that will not converge still produces an answer rather than running until the interaction expires.
 5. Splits the response on the `### [MÉMOIRE]` marker, matched loosely (see `docs/storage.md`): the first half is posted, the second is persisted silently.
 
 | Tool          | Triggered by       | Action                      |

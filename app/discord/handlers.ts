@@ -12,7 +12,7 @@ import type { ConversationMessage, DiscordEvent } from './types.ts';
 import { ChannelActivityType } from '../idle/core/types.ts';
 import { handleDiscordEvent } from '../idle/handlers/handle-event.ts';
 import { formatBigNum } from '../idle/core/big-number.ts';
-import { generateJackpotMessage, generateRolePromotionMessage } from '../gemini/ask-gemini.ts';
+import { generateJackpotMessage, generateRolePromotionMessage } from '../llm/index.ts';
 import { applyRoleChanges } from './roles.ts';
 import { parseMessage } from './messages.ts';
 import { maybeChatNaturally } from './chat.ts';
