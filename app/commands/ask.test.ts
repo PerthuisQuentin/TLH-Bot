@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Request, Response } from 'express';
 import type { Chat } from '@google/genai';
-import { genai } from '../gemini/gemini.ts';
+import { genai } from '../llm/gemini/gemini.ts';
 import { askCommand } from './ask.ts';
 
 let dir: string;
@@ -112,6 +112,39 @@ describe('askCommand, after the defer', () => {
         expect(edit).toBeDefined();
         expect(edit?.[0]).toContain('/webhooks/app-1/tok-1/messages/@original');
         expect(JSON.stringify(edit?.[1])).toContain('Ça va bien.');
+    });
+
+    // The overloaded case is the provider's to recognize; this pins that the handler
+    // still tells the two apart once that knowledge moved into the adapter.
+    it('names an overloaded model, and stays generic for any other failure', async () => {
+        const overloaded = Object.assign(new Error('503 UNAVAILABLE'), { status: 503 });
+        vi.spyOn(genai.chats, 'create').mockImplementation(() => {
+            throw overloaded;
+        });
+        const fetchMock = stubDiscord();
+
+        const { res } = mockRes();
+        await askCommand.handler(mockReq(askBody('g-503')), res);
+
+        const edit = fetchMock.mock.calls.find(
+            ([, init]) => (init as RequestInit | undefined)?.method === 'PATCH',
+        );
+        expect(JSON.stringify(edit?.[1])).toContain('surchargé');
+    });
+
+    it('falls back to the generic failure message for anything else', async () => {
+        vi.spyOn(genai.chats, 'create').mockImplementation(() => {
+            throw new Error('bad request');
+        });
+        const fetchMock = stubDiscord();
+
+        const { res } = mockRes();
+        await askCommand.handler(mockReq(askBody('g-other')), res);
+
+        const edit = fetchMock.mock.calls.find(
+            ([, init]) => (init as RequestInit | undefined)?.method === 'PATCH',
+        );
+        expect(JSON.stringify(edit?.[1])).toContain('Une erreur est survenue');
     });
 
     // The second regression: the error path's own edit was unprotected, so a failure

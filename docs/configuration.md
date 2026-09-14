@@ -2,19 +2,24 @@
 
 ## Environment variables
 
-Create a `.env` at the project root.
+Two files at the project root, one per environment: `.env.dev` and `.env.prod`. Both are gitignored, and each command names the one it reads — `npm run dev` loads `.env.dev`, `npm run dev:prod` loads `.env.prod`, same split for `register`. Nothing falls back to the other file: a missing one aborts the start with `node: .env.dev: not found`, which is the point.
 
-| Variable          | Required | Description                                                                                          |
-| ----------------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| `DISCORD_TOKEN`   | Yes      | Bot token, from the Bot tab of the developer portal.                                                 |
-| `APP_ID`          | Yes      | Discord application ID.                                                                              |
-| `PUBLIC_KEY`      | Yes      | Discord public key, used to verify interaction signatures.                                           |
-| `GOOGLE_API_KEY`  | Yes      | Gemini API key, from AI Studio.                                                                      |
-| `WEATHER_API_KEY` | Yes      | World Weather Online key, for the weather tool.                                                      |
-| `OLLAMA_API_KEY`  | No       | Read by `app/ollama/`, which nothing calls today, so setting it has no effect.                       |
-| `API_KEY`         | No       | Protects the REST routes. Without it no `x-api-key` can ever match, so `/api` is effectively closed. |
-| `PORT`            | No       | HTTP port. Default `3000`.                                                                           |
-| `FILES_DIR`       | No       | Data directory, resolved relative to the project root. Default `files`.                              |
+They hold the same variables with different values — a different Discord application on each side, and a different `FILES_DIR` (`files` for dev, `prod-files` for prod) so neither writes into the other's data.
+
+The deployed bot reads no file at all: the host injects these variables into the environment, which is why `npm start` and the `Procfile` carry no `--env-file`.
+
+| Variable             | Required | Description                                                                                                   |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`      | Yes      | Bot token, from the Bot tab of the developer portal.                                                          |
+| `APP_ID`             | Yes      | Discord application ID.                                                                                       |
+| `PUBLIC_KEY`         | Yes      | Discord public key, used to verify interaction signatures.                                                    |
+| `GOOGLE_API_KEY`     | Yes\*    | Gemini API key, from AI Studio. Required unless `AI_PROVIDER` is `openrouter`.                                |
+| `WEATHER_API_KEY`    | Yes      | World Weather Online key, for the weather tool.                                                               |
+| `AI_PROVIDER`        | No       | Which AI backend serves every model call: `gemini` (default) or `openrouter`. Any other value fails the boot. |
+| `OPENROUTER_API_KEY` | No       | OpenRouter key. Required when `AI_PROVIDER` is `openrouter`, ignored otherwise.                               |
+| `API_KEY`            | No       | Protects the REST routes. Without it no `x-api-key` can ever match, so `/api` is effectively closed.          |
+| `PORT`               | No       | HTTP port. Default `3000`.                                                                                    |
+| `FILES_DIR`          | No       | Data directory, resolved relative to the project root. Default `files`.                                       |
 
 ---
 
@@ -22,7 +27,7 @@ Create a `.env` at the project root.
 
 - Node.js ≥ 18 (developed on 24).
 - A Discord application with a bot user.
-- A Gemini API key.
+- A Gemini API key, or an OpenRouter key with `AI_PROVIDER=openrouter`.
 - A World Weather Online key.
 
 Two **privileged intents** must be enabled in the developer portal, matching what `app/discord/setup.ts` declares: **Message Content** and **Server Members**. Without the first the bot receives empty message bodies; without the second it falls back to global names instead of server nicknames.
@@ -37,7 +42,7 @@ cd tlh-bot
 npm install
 ```
 
-Then create `.env` with the variables above. There is no `.env.example` in the repo.
+Then create `.env.dev` (and `.env.prod` if you also run the production bot locally) with the variables above. There is no `.env.example` in the repo.
 
 ---
 
@@ -49,7 +54,9 @@ npm run build        # tsc -p tsconfig.build.json → dist/
 npm start            # node dist/app.js
 ```
 
-`npm run dev` runs `tsx watch app.ts` with auto-reload. `npm run register:local` is the same as `register` with TLS verification disabled, for a corporate proxy.
+`npm run dev` runs `tsx watch app.ts` with auto-reload against `.env.dev`; `npm run dev:prod` is the same against `.env.prod`. `npm run register` targets the dev application, `npm run register:prod` the production one, and `npm run register:local` is `register` with TLS verification disabled, for a corporate proxy.
+
+Watch the flag order when editing these scripts: `tsx watch --env-file=… app.ts` works, `tsx --env-file=… watch app.ts` crashes. Without `watch`, either order is fine.
 
 `register` prints the commands it pushed and exits non-zero if the push failed — a missing `APP_ID`, or a definition Discord rejected — so it is safe to chain or to run in CI.
 

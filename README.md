@@ -29,7 +29,7 @@ A Discord bot in TypeScript for the _The Local Host_ server, combining a Gemini-
 ## Quick start
 
 ```bash
-npm install          # then create .env — see docs/configuration.md
+npm install          # then create .env.dev — see docs/configuration.md
 npm run dev          # tsx watch, auto-reload
 ```
 
@@ -48,7 +48,7 @@ Four automated checks, all expected to come back clean: `npx tsc --noEmit`, `npm
 - **Runtime**: Node.js, TypeScript strict, ES2022, NodeNext modules.
 - **Discord**: discord.js v14 for the gateway, `discord-interactions` for webhook signature verification.
 - **HTTP**: Express v5.
-- **AI**: Google Gemini (`@google/genai`), with Ollama as an alternative backend.
+- **AI**: one backend-agnostic engine in `app/llm/`, with Google Gemini (`@google/genai`) or OpenRouter (`@openrouter/sdk`) behind it, picked by `AI_PROVIDER`.
 - **Numbers**: decimal.js, wrapped in `app/idle/core/big-number.ts` — shell balances outgrow `Number.MAX_SAFE_INTEGER`.
 - **Validation**: zod, on the REST write route.
 - **Persistence**: flat files under `files/`, held in RAM by `app/storage/`.

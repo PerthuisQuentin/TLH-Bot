@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import { verifyKeyMiddleware } from 'discord-interactions';
 import { handleInteraction } from './app/discord/interactions.ts';
@@ -7,6 +6,7 @@ import { deleteMessage } from './app/routes/messages.ts';
 import { listRoles } from './app/routes/guilds.ts';
 import { startBot, client } from './app/discord/setup.ts';
 import { startFileStore, stopFileStore } from './app/storage/index.ts';
+import { getProvider } from './app/llm/index.ts';
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -53,6 +53,10 @@ app.use('/api', apiRouter);
 // ─── Startup ─────────────────────────────────────────────────────────────────
 
 let shuttingDown = false;
+
+// Before anything else: a misspelt AI_PROVIDER must kill the boot, not the first /ask.
+const llm = getProvider();
+console.log(`[LLM] Provider=${llm.id} | model=${llm.model}`);
 
 // Mirror of the shutdown order below: storage comes up before anything that can
 // write to it, and goes down last.

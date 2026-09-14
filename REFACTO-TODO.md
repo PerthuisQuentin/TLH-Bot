@@ -71,7 +71,6 @@ inactifs.
 
 | Zone                    | Stmts  |
 | ----------------------- | ------ |
-| `ollama/`               | 0 %    |
 | `storage/index.ts`      | 14,3 % |
 | `tools/weather.ts`      | 21,1 % |
 | `discord/setup.ts`      | 27,3 % |
@@ -84,10 +83,9 @@ inactifs.
 ## Housekeeping (au merge)
 
 - [ ] Supprimer ce fichier.
-- [ ] Decider du sort de `app/ollama/` : non cable (aucun import hors du dossier), 0 % de
-      couverture, mais documente comme backend alternatif dans `docs/architecture.md` et
-      CLAUDE.md. Si retire : la dependance npm `ollama` et `weatherToolOllama`
-      (`app/tools/weather.ts`) deviennent morts a leur tour.
+- [x] Sort de `app/ollama/` tranche : retire. Le dossier, la dependance npm `ollama` et
+      `weatherToolOllama` ont disparu. `AI_PROVIDER` reste, avec `gemini` seul enregistre
+      dans la map `PROVIDERS` de `app/llm/provider.ts`.
 - [ ] Confirmer que `.claude/` (hooks lint/test + `settings.json`) doit rester versionne :
       ca impose les hooks a tout le monde sur le repo.
 - [ ] Retirer `ShellsUser` / `UserUpgrades` et les types de fichier `shells` / `upgrades`

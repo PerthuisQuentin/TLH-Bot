@@ -6,12 +6,13 @@ They are typechecked all the same: `tsconfig.json` includes them, `tsconfig.buil
 
 Everything here reads the game rules from `app/idle/core/`, so a new upgrade or a rebalanced curve shows up in these tools with no edit.
 
-| Script                      | Purpose                                                     | State                            |
-| --------------------------- | ----------------------------------------------------------- | -------------------------------- |
-| `migrate-game-instances.ts` | Builds `game-instances.json` from the legacy files.         | Ready. Run once per environment. |
-| `analyze-upgrade.ts`        | Level-by-level cost / gain / payback table for one upgrade. | Ready.                           |
-| `simulate-heat.ts`          | Replays heat scenarios against the real decay constants.    | Ready.                           |
-| `simulate-idle.ts`          | Simulates the progression curve over days.                  | Ready.                           |
+| Script                      | Purpose                                                               | State                                    |
+| --------------------------- | --------------------------------------------------------------------- | ---------------------------------------- |
+| `migrate-game-instances.ts` | Builds `game-instances.json` from the legacy files.                   | Ready. Run once per environment.         |
+| `analyze-upgrade.ts`        | Level-by-level cost / gain / payback table for one upgrade.           | Ready.                                   |
+| `simulate-heat.ts`          | Replays heat scenarios against the real decay constants.              | Ready.                                   |
+| `simulate-idle.ts`          | Simulates the progression curve over days.                            | Ready.                                   |
+| `check-core-purity.ts`      | Fails if `app/idle/core/` depends on a package outside its allowlist. | Ready. Run through `npm run check:core`. |
 
 ---
 
@@ -127,3 +128,15 @@ Two consequences worth knowing. The simulation is only as good as that number, s
 The progression table gives shells, income and the level of each upgrade at sampled days, plus the running count of levels bought. Then the final per-upgrade state — level, current effect, next-level price, what that level would add, and its payback in messages — and the day each power-of-ten income threshold was first crossed.
 
 Purchases are evaluated once per simulated day, after that day's earnings land. A continuous buyer would compound slightly faster.
+
+---
+
+## `check-core-purity.ts`
+
+Reads every emitted file under `dist/app/idle/core/` and fails if one imports a package other than `decimal.js` or `zod`. It checks the build output rather than the sources because that is where an enum imported from outside `core/` shows up as the runtime dependency it is.
+
+```bash
+npm run check:core     # builds, then runs the check
+```
+
+Exits 1 with the offending file and package when it fails, 0 otherwise. Why the rule exists: [tooling.md](./tooling.md#core-purity).

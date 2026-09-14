@@ -11,7 +11,7 @@ import { CONTEXT_MESSAGES_LIMIT } from '../commons/prompts.ts';
 import { parseApiMessages } from '../discord/messages.ts';
 import { guildDisplayNameResolver } from '../discord/members.ts';
 import type { ConversationMessage } from '../discord/types.ts';
-import { ask } from '../gemini/ask-gemini.ts';
+import { ask, getProvider, LlmErrorKind } from '../llm/index.ts';
 import { readGuildConfigOrNull } from '../commons/guild-config.ts';
 import {
     type APIChatInputApplicationCommandInteraction,
@@ -117,18 +117,14 @@ async function handleAskCommand(req: Request, res: Response): Promise<void> {
             `[Bot] Message posted | channelId=${channelId} | messageId=${updatedMessage?.id} | date=${logTimestamp} | question="${questionPreview}"`,
         );
     } catch (err) {
-        const error = err as { status?: number; message?: string };
         console.error(`[Bot] Error handling ask command | channelId=${channelId}`, err);
         const interactionToken = body.token;
 
-        const isOverloaded =
-            error?.status === 503 ||
-            error?.message?.includes('503') ||
-            error?.message?.includes('UNAVAILABLE');
-
-        const errorMessage = isOverloaded
-            ? 'Mon cerveau Google est surchargé 🧠💥 Réessaie dans quelques instants !'
-            : 'Une erreur est survenue lors de la requête.';
+        // What counts as "overloaded" is the backend's business, not this handler's.
+        const errorMessage =
+            getProvider().classifyError(err) === LlmErrorKind.OVERLOADED
+                ? 'Mon cerveau est surchargé 🧠💥 Réessaie dans quelques instants !'
+                : 'Une erreur est survenue lors de la requête.';
 
         // Last resort: this edit is the error report, so its own failure is only logged.
         await updateInteractionResponseOrLog(interactionToken, errorMessage);

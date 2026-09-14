@@ -46,9 +46,12 @@ export default tseslint.config(
     },
 
     // Layering, checked mechanically rather than left to CLAUDE.md prose alone.
-    // Domain code must not import discord.js or an AI SDK directly.
+    // Domain code must not import discord.js or an AI SDK directly. The glob stops at the
+    // root of app/llm/ plus tools/: the engine and the tool declarations must stay
+    // backend-agnostic, while app/llm/gemini/ and app/llm/openrouter/ exist precisely to
+    // hold the SDK calls.
     {
-        files: ['app/idle/**/*.ts', 'app/tools/**/*.ts'],
+        files: ['app/idle/**/*.ts', 'app/llm/*.ts', 'app/llm/tools/**/*.ts'],
         rules: {
             'no-restricted-imports': [
                 'error',
@@ -65,7 +68,7 @@ export default tseslint.config(
                                 'Domain code must not import an AI SDK — see CLAUDE.md Layering.',
                         },
                         {
-                            name: 'ollama',
+                            name: '@openrouter/sdk',
                             message:
                                 'Domain code must not import an AI SDK — see CLAUDE.md Layering.',
                         },
@@ -108,6 +111,25 @@ export default tseslint.config(
                                 'core/ must not import outside core/ — see CLAUDE.md Layering.',
                         },
                     ],
+                },
+            ],
+        },
+    },
+
+    // Named exports only. The two root config files are exempt: their tools require a
+    // default export.
+    {
+        files: ['app/**/*.ts', 'app.ts', 'commands.ts', 'scripts/**/*.ts'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: 'ExportDefaultDeclaration',
+                    message: 'Named exports only — see CLAUDE.md Conventions.',
+                },
+                {
+                    selector: "ExportSpecifier[exported.name='default']",
+                    message: 'Named exports only — see CLAUDE.md Conventions.',
                 },
             ],
         },

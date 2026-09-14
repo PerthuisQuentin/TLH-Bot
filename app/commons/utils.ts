@@ -4,7 +4,6 @@ import {
     MessageComponentTypes,
 } from 'discord-interactions';
 import type { Response as ExpressResponse } from 'express';
-import 'dotenv/config';
 
 type DiscordRequestOptions = {
     method: string;
