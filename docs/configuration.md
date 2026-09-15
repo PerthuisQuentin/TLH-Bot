@@ -70,6 +70,8 @@ Four automated checks must come back clean: `npx tsc --noEmit`, `npm run lint`, 
 
 `SIGTERM` and `SIGINT` run one shutdown path, and the order is the point: intake stops first (the HTTP server, then the gateway client) so nothing can dirty a file again, and only then is every dirty file flushed to disk. Each step is bounded at 3 s and swallows its own error, so a stuck step can neither eat the grace period nor skip the flush behind it. A forced exit fires after 10 s overall. An uncaught exception takes the same path but exits non-zero.
 
+On Railway, `railway.json` sets both halves of that contract. `drainingSeconds` (the delay between `SIGTERM` and `SIGKILL`) is 15, above the 10 s forced exit: with a shorter one the old deployment is killed mid-flush, exits 137, shows as _Crashed_ and loses the writes still held in RAM. `startCommand` runs `node` directly, because `npm start` does not forward `SIGTERM` to the app. A value set in the service's Settings pane is overridden by this file.
+
 ---
 
 ## Per-guild configuration
