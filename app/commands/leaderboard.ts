@@ -13,55 +13,16 @@ import {
     requireGuild,
 } from '../commons/utils.ts';
 import type { Command } from './types.ts';
-import { Leaderboard, LeaderboardSort, type LeaderboardEntry } from '../idle/leaderboard.ts';
-import { getAllGameInstances } from '../idle/game-instance-storage.ts';
-import { formatBigNum } from '../idle/core/big-number.ts';
+import { LeaderboardSort } from '../idle/leaderboard.ts';
+import {
+    getLeaderboardView,
+    parseLeaderboardPage,
+    parseLeaderboardSort,
+} from '../idle/leaderboard-view.ts';
 
 const PARAM_PAGE = 'page';
 const PARAM_PUBLIC = 'public';
 const PARAM_SORT = 'sort';
-
-function formatUserLine(entry: LeaderboardEntry): string {
-    return `#${entry.rank} <@${entry.userId}> — ${formatBigNum(entry.maxShells)} 🐚 *(${formatBigNum(entry.shells)} · +${formatBigNum(entry.shellsPerMessage)}/msg)*`;
-}
-
-type FormatLeaderboardParams = {
-    entries: LeaderboardEntry[];
-    startIndex: number;
-    pageSize: number;
-    requesterId: string | undefined;
-    requesterEntry: LeaderboardEntry | null;
-};
-
-function formatLeaderboardDescription({
-    entries,
-    startIndex,
-    pageSize,
-    requesterId,
-    requesterEntry,
-}: FormatLeaderboardParams): string {
-    const leaderboardText = entries
-        .map((entry) => {
-            const line = formatUserLine(entry);
-            return requesterId && entry.userId === requesterId ? `**${line}**` : line;
-        })
-        .join('\n');
-
-    if (!requesterId) return leaderboardText;
-
-    const requesterIsOnPage =
-        requesterEntry !== null &&
-        requesterEntry.rank > startIndex &&
-        requesterEntry.rank <= startIndex + pageSize;
-
-    if (requesterIsOnPage) return leaderboardText;
-
-    if (requesterEntry) {
-        return `${leaderboardText}\n—\n**${formatUserLine(requesterEntry)}**`;
-    }
-
-    return `${leaderboardText}\n\n—\n**Non classé • <@${requesterId}>**`;
-}
 
 async function handleLeaderboardCommand(req: Request, res: Response): Promise<void> {
     try {
@@ -79,42 +40,31 @@ async function handleLeaderboardCommand(req: Request, res: Response): Promise<vo
         const isPublic = isPublicOption(data?.options);
         const pageOption = getOption<number>(data?.options, PARAM_PAGE);
         const sortOption = getOption<string>(data?.options, PARAM_SORT);
-        const sort = (Object.values(LeaderboardSort) as string[]).includes(sortOption ?? '')
-            ? (sortOption as LeaderboardSort)
-            : LeaderboardSort.MAX;
-        const requestedPage =
-            Number.isInteger(pageOption) && (pageOption as number) > 0 ? (pageOption as number) : 1;
+        const sort = parseLeaderboardSort(sortOption);
+        const requestedPage = parseLeaderboardPage(pageOption);
 
-        const instances = await getAllGameInstances(guild_id);
-        const leaderboard = new Leaderboard(instances, sort);
+        const view = await getLeaderboardView(guild_id, {
+            sort,
+            page: requestedPage,
+            pinnedUserId: requesterId,
+        });
 
-        if (leaderboard.totalUsers === 0) {
+        if (view.isEmpty) {
             replyText(res, 'Aucun utilisateur avec des coquillages pour le moment.', {
                 ephemeral: !isPublic,
             });
             return;
         }
 
-        const paginated = leaderboard.getPage(requestedPage);
-        const requesterEntry = requesterId ? leaderboard.getUserEntry(requesterId) : null;
-
-        const description = formatLeaderboardDescription({
-            entries: paginated.entries,
-            startIndex: paginated.startIndex,
-            pageSize: paginated.pageSize,
-            requesterId,
-            requesterEntry,
-        });
-
         replyEmbed(
             res,
             {
                 title: '🐚 Classement Coquillages',
-                description,
+                description: view.description,
                 color: 0xffd700,
                 timestamp: new Date().toISOString(),
                 footer: {
-                    text: `Page ${paginated.currentPage}/${paginated.totalPages} • ${paginated.totalUsers} utilisateurs • tri : ${sort}`,
+                    text: `Page ${view.currentPage}/${view.totalPages} • ${view.totalUsers} utilisateurs • tri : ${view.sort}`,
                 },
             },
             { ephemeral: !isPublic, suppressMentions: true },

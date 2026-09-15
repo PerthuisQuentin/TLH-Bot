@@ -16,6 +16,7 @@ import { generateJackpotMessage, generateRolePromotionMessage } from '../llm/ind
 import { applyRoleChanges } from './roles.ts';
 import { parseMessage } from './messages.ts';
 import { maybeChatNaturally } from './chat.ts';
+import { USER_MENTIONS_ONLY } from '../commons/utils.ts';
 
 // `conversation` only feeds the generated announcements, so it stays out of
 // DiscordEvent, which the game domain consumes.
@@ -38,7 +39,10 @@ async function handleEvent(
                     amount: formatBigNum(result.jackpot.amount),
                     multiplier: result.jackpot.multiplier,
                 });
-                await channel.send(`<@${event.userId}> ${jackpotMessage}`);
+                await channel.send({
+                    content: `<@${event.userId}> ${jackpotMessage}`,
+                    allowedMentions: USER_MENTIONS_ONLY,
+                });
             } catch (error) {
                 console.error(
                     `[Bot] Error sending jackpot message | userId=${event.userId}`,
@@ -59,7 +63,10 @@ async function handleEvent(
                             userName: event.displayName,
                             roleName: addedRoleName,
                         });
-                        await channel.send(`<@${event.userId}> ${promotionMessage}`);
+                        await channel.send({
+                            content: `<@${event.userId}> ${promotionMessage}`,
+                            allowedMentions: USER_MENTIONS_ONLY,
+                        });
                     } catch (error) {
                         console.error(
                             `[Bot] Error sending promotion | userId=${event.userId}`,

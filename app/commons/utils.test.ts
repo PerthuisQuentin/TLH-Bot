@@ -191,6 +191,7 @@ describe('updateInteractionResponse', () => {
         expect(JSON.parse(init.body as string)).toEqual({
             flags: InteractionResponseFlags.IS_COMPONENTS_V2,
             components: [{ type: MessageComponentTypes.TEXT_DISPLAY, content: 'hello' }],
+            allowed_mentions: { parse: ['users'] },
         });
         expect(result).toEqual({ id: '42' });
     });

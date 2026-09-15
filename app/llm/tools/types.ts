@@ -41,11 +41,16 @@ export type ToolResult = {
     response: string;
 };
 
+/** What a tool call runs with, outside anything the model supplies as an argument. */
+export type ToolContext = {
+    guildId: string;
+};
+
 /** A declaration and the code behind it, so no adapter has to know either. */
 export type Tool = {
     declaration: ToolFunctionDeclaration;
     /** Never throws: a failure is an answer the model can read and work around. */
-    execute: (args: Record<string, string>) => Promise<string>;
+    execute: (args: Record<string, string>, context: ToolContext) => Promise<string>;
 };
 
 export type WeatherData = {

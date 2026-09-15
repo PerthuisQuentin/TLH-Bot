@@ -2,6 +2,7 @@ import type { Message, TextChannel } from 'discord.js';
 import { readGuildConfigOrNull } from '../commons/guild-config.ts';
 import { chatNaturally } from '../llm/index.ts';
 import { CONTEXT_MESSAGES_LIMIT } from '../commons/prompts.ts';
+import { USER_MENTIONS_ONLY } from '../commons/utils.ts';
 import { hasNicknameMention, shouldTriggerChat } from '../commons/chat-trigger.ts';
 import { parseMessage } from './messages.ts';
 import type { ConversationMessage } from './types.ts';
@@ -62,7 +63,12 @@ export async function maybeChatNaturally(message: Message, channelName: string):
             userName,
         });
 
-        if (response) await message.reply(response);
+        if (response) {
+            await message.reply({
+                content: response,
+                allowedMentions: { ...USER_MENTIONS_ONLY, repliedUser: true },
+            });
+        }
     } catch (error) {
         console.error(`[Chat] Error generating natural reply | guildId=${guildId}`, error);
     }

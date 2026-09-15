@@ -9,11 +9,12 @@ import { parseResponse } from '../commons/response.ts';
 import { enqueueForGuild } from '../commons/guild-queue.ts';
 
 /**
- * Tool rounds before the model is made to answer. `get_weather` is the only declared
- * tool: a legitimate answer resolves in one round, two if the model chains two cities
- * instead of asking for both at once. Past that it is not converging, and nothing used
- * to stop it — a round of quota burnt each time, and `/ask`'s deferred interaction
- * expiring after 15 minutes with the handler still looping.
+ * Tool rounds before the model is made to answer. `get_weather` and `get_shells_profile`
+ * are single-argument lookups: a legitimate answer resolves in one round, a couple more
+ * if the model chains several cities or members instead of asking for all of them at
+ * once. Past that it is not converging, and nothing used to stop it — a round of quota
+ * burnt each time, and `/ask`'s deferred interaction expiring after 15 minutes with the
+ * handler still looping.
  */
 export const MAX_TOOL_ROUNDS = 5;
 
@@ -97,7 +98,7 @@ export async function chatWithLlm({
                 const results: ToolResult[] = [];
 
                 for (const call of turn.toolCalls) {
-                    results.push(await executeToolCall(call));
+                    results.push(await executeToolCall(call, { guildId }));
                     stats.tools++;
                     console.log(
                         formatLogLine('Tool', {

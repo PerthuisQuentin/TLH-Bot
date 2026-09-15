@@ -108,7 +108,10 @@ describe('maybeChatNaturally, triggers', () => {
 
         await maybeChatNaturally(message, 'general');
 
-        expect(reply).toHaveBeenCalledWith('Oui ?');
+        expect(reply).toHaveBeenCalledWith({
+            content: 'Oui ?',
+            allowedMentions: { parse: ['users'], repliedUser: true },
+        });
     });
 
     it('answers an indirect mention when the roll lands under the configured probability', async () => {
@@ -119,7 +122,10 @@ describe('maybeChatNaturally, triggers', () => {
 
         await maybeChatNaturally(message, 'general');
 
-        expect(reply).toHaveBeenCalledWith('On parle de moi ?');
+        expect(reply).toHaveBeenCalledWith({
+            content: 'On parle de moi ?',
+            allowedMentions: { parse: ['users'], repliedUser: true },
+        });
     });
 
     it('stays quiet on an indirect mention when the roll lands over the probability', async () => {
@@ -141,7 +147,10 @@ describe('maybeChatNaturally, triggers', () => {
 
         await maybeChatNaturally(message, 'general');
 
-        expect(reply).toHaveBeenCalledWith('Je passais par là.');
+        expect(reply).toHaveBeenCalledWith({
+            content: 'Je passais par là.',
+            allowedMentions: { parse: ['users'], repliedUser: true },
+        });
     });
 
     it('stays quiet on a plain message when the random roll lands over the probability', async () => {
