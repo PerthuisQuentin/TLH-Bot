@@ -6,8 +6,7 @@ import {
     InteractionContextType,
 } from 'discord-api-types/v10';
 import type { Command } from './types.ts';
-import { getShellsRolesConfig, nextRoleAfter, roleForShells } from '../idle/shells-roles.ts';
-import { bnFromJSON, bnMul, bnSub, formatBigNum } from '../idle/core/big-number.ts';
+import { getShellsProfile } from '../idle/shells-profile.ts';
 import {
     getOption,
     isPublicOption,
@@ -15,10 +14,6 @@ import {
     replyText,
     requireGuild,
 } from '../commons/utils.ts';
-import { getAllGameInstances, getGameInstance } from '../idle/game-instance-storage.ts';
-import { Leaderboard } from '../idle/leaderboard.ts';
-import { ALL_UPGRADE_IDS } from '../idle/core/upgrades/upgrade-registry.ts';
-import { ResourceId } from '../idle/core/types.ts';
 
 const PARAM_USER = 'user';
 const PARAM_PUBLIC = 'public';
@@ -44,54 +39,20 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        const [instances, instance] = await Promise.all([
-            getAllGameInstances(guild_id),
-            getGameInstance(guild_id, targetId),
-        ]);
-
-        const currentShells = instance.resources[ResourceId.SHELLS];
-        const { maxShells } = instance.stats;
-        const shellsPerMessage = instance.income[ResourceId.SHELLS];
-        const { streak, upgrades } = instance;
-        const leaderboard = new Leaderboard(instances);
-        const entry = leaderboard.getUserEntry(targetId);
-
-        const rankText = entry ? `#${entry.rank}` : 'Non classé';
-
-        const streakMultiplier = streak.getMultiplier();
-
-        const upgradeLines = ALL_UPGRADE_IDS.map((id) => {
-            const upgrade = upgrades[id];
-            return `${upgrade.emoji} **${upgrade.name}** — Niv. ${upgrade.level} · ${upgrade.formatGain()}`;
-        });
-
-        const shellsRoles = await getShellsRolesConfig(guild_id);
-        const currentRole = roleForShells(shellsRoles, maxShells);
-        const nextRole = nextRoleAfter(shellsRoles, maxShells);
-
-        const currentRoleText = currentRole ? `<@&${currentRole.roleId}>` : 'Aucun';
-        const nextRoleText = nextRole
-            ? `<@&${nextRole.roleId}> — encore **${formatBigNum(bnSub(bnFromJSON(nextRole.threshold), maxShells))} 🐚**`
-            : '✨ Rang maximum atteint';
-
-        const streakDays = streak.currentValue;
-        const streakText =
-            streakDays === 0
-                ? 'Streak : aucun 🔥'
-                : `Streak : ${streakDays} jour${streakDays > 1 ? 's' : ''} 🔥 — ×${streakMultiplier.toFixed(2)}`;
+        const profile = await getShellsProfile(guild_id, targetId);
 
         const fields = [
             {
                 name: 'Rôles',
-                value: `Rang : ${rankText}\nActuel : ${currentRoleText}\nProchain : ${nextRoleText}`,
+                value: `Rang : ${profile.rankText}\nActuel : ${profile.currentRoleText}\nProchain : ${profile.nextRoleText}`,
                 inline: false,
             },
             {
                 name: 'Coquillages',
-                value: `${formatBigNum(currentShells)} 🐚\nPar message : ${formatBigNum(shellsPerMessage)} 🐚 (±10%)\nPar réaction : ${formatBigNum(bnMul(shellsPerMessage, 0.1))} 🐚\n${streakText}`,
+                value: `${profile.balanceText}\nPar message : ${profile.incomePerMessageText}\nPar réaction : ${profile.incomePerReactionText}\n${profile.streakText}`,
                 inline: false,
             },
-            { name: 'Upgrades', value: upgradeLines.join('\n'), inline: false },
+            { name: 'Upgrades', value: profile.upgradeLines.join('\n'), inline: false },
         ];
 
         replyEmbed(
@@ -102,8 +63,8 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
                 color: 0xffd700,
                 fields,
                 timestamp: new Date().toISOString(),
-                ...(!maxShells.eq(currentShells) && {
-                    footer: { text: `Max historique : ${formatBigNum(maxShells)} 🐚` },
+                ...(profile.hasSpentBelowMax && {
+                    footer: { text: `Max historique : ${profile.maxShellsText}` },
                 }),
             },
             { ephemeral: !isPublic, suppressMentions: true },

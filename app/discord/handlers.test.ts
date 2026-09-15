@@ -87,7 +87,10 @@ describe('handleMessage', () => {
 
         const author = await getGameInstance('g1', 'u2');
         expect(author.resources[ResourceId.SHELLS].gt(0)).toBe(true);
-        expect(reply).toHaveBeenCalledWith('Présent !');
+        expect(reply).toHaveBeenCalledWith({
+            content: 'Présent !',
+            allowedMentions: { parse: ['users'], repliedUser: true },
+        });
     });
 });
 

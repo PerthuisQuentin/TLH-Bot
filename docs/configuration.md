@@ -8,18 +8,20 @@ They hold the same variables with different values — a different Discord appli
 
 The deployed bot reads no file at all: the host injects these variables into the environment, which is why `npm start` and the `Procfile` carry no `--env-file`.
 
-| Variable             | Required | Description                                                                                                   |
-| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_TOKEN`      | Yes      | Bot token, from the Bot tab of the developer portal.                                                          |
-| `APP_ID`             | Yes      | Discord application ID.                                                                                       |
-| `PUBLIC_KEY`         | Yes      | Discord public key, used to verify interaction signatures.                                                    |
-| `GOOGLE_API_KEY`     | Yes\*    | Gemini API key, from AI Studio. Required unless `AI_PROVIDER` is `openrouter`.                                |
-| `WEATHER_API_KEY`    | Yes      | World Weather Online key, for the weather tool.                                                               |
-| `AI_PROVIDER`        | No       | Which AI backend serves every model call: `gemini` (default) or `openrouter`. Any other value fails the boot. |
-| `OPENROUTER_API_KEY` | No       | OpenRouter key. Required when `AI_PROVIDER` is `openrouter`, ignored otherwise.                               |
-| `API_KEY`            | No       | Protects the REST routes. Without it no `x-api-key` can ever match, so `/api` is effectively closed.          |
-| `PORT`               | No       | HTTP port. Default `3000`.                                                                                    |
-| `FILES_DIR`          | No       | Data directory, resolved relative to the project root. Default `files`.                                       |
+| Variable             | Required | Description                                                                                                                                                                         |
+| -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`      | Yes      | Bot token, from the Bot tab of the developer portal.                                                                                                                                |
+| `APP_ID`             | Yes      | Discord application ID.                                                                                                                                                             |
+| `PUBLIC_KEY`         | Yes      | Discord public key, used to verify interaction signatures.                                                                                                                          |
+| `GOOGLE_API_KEY`     | Yes\*    | Gemini API key, from AI Studio. Required unless `AI_PROVIDER` is `openrouter`.                                                                                                      |
+| `WEATHER_API_KEY`    | Yes      | World Weather Online key, for the weather tool.                                                                                                                                     |
+| `AI_PROVIDER`        | No       | Which AI backend serves every model call: `gemini` (default) or `openrouter`. Any other value fails the boot.                                                                       |
+| `OPENROUTER_API_KEY` | No       | OpenRouter key. Required when `AI_PROVIDER` is `openrouter`, ignored otherwise.                                                                                                     |
+| `GEMINI_MODEL`       | No       | Model id passed to `@google/genai`. Default `gemini-3.1-flash-lite`. Read once at import, so a change needs a restart.                                                              |
+| `OPENROUTER_MODEL`   | No       | Model id passed to `@openrouter/sdk`, any id from openrouter.ai/models declaring `tools`. Default `google/gemini-3.5-flash-lite`. Read once at import, so a change needs a restart. |
+| `API_KEY`            | No       | Protects the REST routes. Without it no `x-api-key` can ever match, so `/api` is effectively closed.                                                                                |
+| `PORT`               | No       | HTTP port. Default `3000`.                                                                                                                                                          |
+| `FILES_DIR`          | No       | Data directory, resolved relative to the project root. Default `files`.                                                                                                             |
 
 ---
 

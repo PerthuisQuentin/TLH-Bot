@@ -65,6 +65,14 @@ export async function InstallGlobalCommands(
 }
 
 /**
+ * Model-generated text can echo any mention syntax a tool handed it (e.g. a role mention
+ * from `get_role_thresholds`). Keeping `users` lets a deliberate `<@id>` ping through —
+ * pinging the one member a question is about is expected — while dropping `roles` and
+ * `everyone` stops a role listing from mass-pinging everyone who holds each role.
+ */
+export const USER_MENTIONS_ONLY = { parse: ['users'] } as const;
+
+/**
  * Edits an interaction's deferred reply. Components V2, unlike every immediate reply below:
  * the flag makes `content` and `embeds` unusable, so this path is components-only.
  */
@@ -78,6 +86,7 @@ export async function updateInteractionResponse(
         body: {
             flags: InteractionResponseFlags.IS_COMPONENTS_V2,
             components: [{ type: MessageComponentTypes.TEXT_DISPLAY, content }],
+            allowed_mentions: USER_MENTIONS_ONLY,
         },
     });
     return response.json();
