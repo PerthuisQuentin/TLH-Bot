@@ -11,7 +11,8 @@
 
 import { ALL_UPGRADE_CLASSES } from '../app/idle/core/upgrades/upgrade-registry.ts';
 import type { BaseUpgrade } from '../app/idle/core/upgrades/base-upgrade.ts';
-import { UpgradeKind } from '../app/idle/core/types.ts';
+import { ResourceId, UpgradeKind } from '../app/idle/core/types.ts';
+import { formatResource } from '../app/idle/core/resources.ts';
 import { DEFAULT_SHELLS_PER_MESSAGE } from '../app/idle/core/game-instance.ts';
 import {
     bn,
@@ -88,14 +89,29 @@ function gainAndPaybackForLevel(
     const current = new Upgrade(level);
     const previous = new Upgrade(previousLevel);
 
+    // Both halves of the column are per-message figures, so neither means anything for an
+    // upgrade that does not pay in shells: the polyps pay coral, once, at a prestige.
+    if (current.gainResourceId !== ResourceId.SHELLS) {
+        return {
+            cost,
+            gainDisplay: `${previous.formatGain()} -> ${current.formatGain()}`,
+            paybackMessages: null,
+        };
+    }
+
+    // Amortising a price in messages only means something when the level is paid for in the
+    // resource it earns. A coral price against shells per message is a unit mismatch.
+    const amortisable = current.costResourceId === current.gainResourceId;
+
     if (current.kind === UpgradeKind.ADDITIVE) {
         const marginalSpm = bnSub(current.getGain(), previous.getGain());
-        const paybackMessages = marginalSpm.lte(0) ? null : bnDiv(cost, marginalSpm);
+        const paybackMessages =
+            !amortisable || marginalSpm.lte(0) ? null : bnDiv(cost, marginalSpm);
         return { cost, gainDisplay: `+${marginalSpm.toFixed(2)} 🐚/msg`, paybackMessages };
     }
 
     const deltaSpm = bnSub(bnMul(baseSpm, current.getGain()), bnMul(baseSpm, previous.getGain()));
-    const paybackMessages = deltaSpm.lte(0) ? null : bnDiv(cost, deltaSpm);
+    const paybackMessages = !amortisable || deltaSpm.lte(0) ? null : bnDiv(cost, deltaSpm);
     return { cost, gainDisplay: `+${deltaSpm.toFixed(2)} 🐚/msg`, paybackMessages };
 }
 
@@ -140,7 +156,7 @@ function main(): void {
         rows.push([
             String(level),
             totalGainDisplay,
-            `${formatBigNum(cost)} 🐚`,
+            formatResource(cost, meta.costResourceId),
             gainDisplay,
             paybackMessages ? formatBigNum(paybackMessages) : '∞',
         ]);
@@ -148,7 +164,7 @@ function main(): void {
 
     console.log(`Upgrade: ${meta.name} (${meta.id})`);
     console.log(`Range: niveaux ${args.minLevel} -> ${args.maxLevel}`);
-    if (meta.kind === UpgradeKind.MULTIPLICATIVE) {
+    if (meta.kind === UpgradeKind.MULTIPLICATIVE && meta.gainResourceId === ResourceId.SHELLS) {
         console.log(`Base pour payback multiplicatif: ${bn(args.baseSpm).toFixed(2)} 🐚/msg`);
     }
     console.log('');

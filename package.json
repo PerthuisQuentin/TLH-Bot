@@ -21,6 +21,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,js,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,md}\"",
+    "sandbox": "tsx scripts/sandbox.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage"

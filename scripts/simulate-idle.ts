@@ -16,10 +16,9 @@
 
 import { GameInstance, DEFAULT_SHELLS_PER_MESSAGE } from '../app/idle/core/game-instance.ts';
 import { ALL_UPGRADE_IDS, UPGRADE_REGISTRY } from '../app/idle/core/upgrades/upgrade-registry.ts';
-import { ResourceId, UpgradeId, UpgradeKind } from '../app/idle/core/types.ts';
+import { ResourceId, UpgradeId } from '../app/idle/core/types.ts';
 import {
     bn,
-    bnAdd,
     bnCeil,
     bnDiv,
     bnGte,
@@ -28,8 +27,7 @@ import {
     formatBigNum,
     type BigNum,
 } from '../app/idle/core/big-number.ts';
-
-type PurchaseStrategy = 'cheapest' | 'best-payback';
+import { numberArg, projectedIncome, table, tryBuy, type PurchaseStrategy } from './sim-common.ts';
 
 type SimulationConfig = {
     days: number;
@@ -54,38 +52,32 @@ const DEFAULT_CONFIG: SimulationConfig = {
 function parseArgs(argv: string[]): SimulationConfig {
     const config = { ...DEFAULT_CONFIG };
 
-    const num = (arg: string, prefix: string): number | null => {
-        if (!arg.startsWith(prefix)) return null;
-        const value = Number(arg.slice(prefix.length));
-        return Number.isFinite(value) ? value : null;
-    };
-
     for (const arg of argv) {
-        const days = num(arg, '--days=');
+        const days = numberArg(arg, '--days=');
         if (days !== null && days > 0) {
             config.days = Math.floor(days);
             continue;
         }
 
-        const mpd = num(arg, '--messages-per-day=');
+        const mpd = numberArg(arg, '--messages-per-day=');
         if (mpd !== null && mpd > 0) {
             config.messagesPerDay = mpd;
             continue;
         }
 
-        const start = num(arg, '--start-shells=');
+        const start = numberArg(arg, '--start-shells=');
         if (start !== null && start >= 0) {
             config.startingShells = start;
             continue;
         }
 
-        const delay = num(arg, '--delay=');
+        const delay = numberArg(arg, '--delay=');
         if (delay !== null && delay >= 0) {
             config.delayMs = Math.floor(delay);
             continue;
         }
 
-        const every = num(arg, '--every=');
+        const every = numberArg(arg, '--every=');
         if (every !== null && every > 0) {
             config.every = Math.floor(every);
             continue;
@@ -98,66 +90,6 @@ function parseArgs(argv: string[]): SimulationConfig {
     }
 
     return config;
-}
-
-// ─── Purchases ───────────────────────────────────────────────────────────────
-
-/**
- * Shells income as it would be with one extra level on `bumpId`. GameInstance only
- * computes the income it actually has, and answering "what if" must not mutate it.
- */
-function projectedIncome(instance: GameInstance, bumpId?: UpgradeId): BigNum {
-    let additive = bn(DEFAULT_SHELLS_PER_MESSAGE);
-    let multiplier = bn(1);
-
-    for (const id of ALL_UPGRADE_IDS) {
-        const upgrade = instance.upgrades[id];
-        if (upgrade.gainResourceId !== ResourceId.SHELLS) continue;
-        const gain = upgrade.computeGain(upgrade.level + (id === bumpId ? 1 : 0));
-        if (upgrade.kind === UpgradeKind.ADDITIVE) additive = bnAdd(additive, gain);
-        else multiplier = bnMul(multiplier, gain);
-    }
-
-    return bnMul(additive, multiplier);
-}
-
-type Candidate = {
-    id: UpgradeId;
-    cost: BigNum;
-    /** Messages needed to earn the level back. Null when the level adds nothing. */
-    payback: BigNum | null;
-};
-
-function candidates(instance: GameInstance): Candidate[] {
-    const current = instance.income[ResourceId.SHELLS];
-
-    return ALL_UPGRADE_IDS.map((id) => {
-        const cost = bnCeil(instance.upgrades[id].getCost());
-        const delta = bnSub(projectedIncome(instance, id), current);
-        return { id, cost, payback: delta.lte(0) ? null : bnDiv(cost, delta) };
-    });
-}
-
-/** Buys one level if the strategy finds a target it can afford. */
-function tryBuy(instance: GameInstance, strategy: PurchaseStrategy): UpgradeId | null {
-    const all = candidates(instance);
-    let target: Candidate | undefined;
-
-    if (strategy === 'best-payback') {
-        // Best payback overall, affordable or not: waiting for it beats settling
-        // for a level that pays itself back more slowly.
-        target = all
-            .filter((c) => c.payback !== null)
-            .sort((a, b) => a.payback!.comparedTo(b.payback!) || a.cost.comparedTo(b.cost))[0];
-        if (!target || !bnGte(instance.resources[ResourceId.SHELLS], target.cost)) return null;
-    } else {
-        target = all
-            .filter((c) => bnGte(instance.resources[ResourceId.SHELLS], c.cost))
-            .sort((a, b) => a.cost.comparedTo(b.cost))[0];
-        if (!target) return null;
-    }
-
-    return instance.buyUpgrade(target.id, 1) ? target.id : null;
 }
 
 // ─── Simulation ──────────────────────────────────────────────────────────────
@@ -236,16 +168,6 @@ async function run(
 }
 
 // ─── Rendering ───────────────────────────────────────────────────────────────
-
-function table(headers: string[], rows: string[][]): string {
-    const widths = headers.map((header, i) =>
-        Math.max(header.length, ...rows.map((row) => row[i]?.length ?? 0)),
-    );
-    const line = (cells: string[]) => cells.map((cell, i) => cell.padEnd(widths[i])).join(' | ');
-    return [line(headers), widths.map((w) => '-'.repeat(w)).join('-+-'), ...rows.map(line)].join(
-        '\n',
-    );
-}
 
 function upgradeColumns(): string[] {
     return ALL_UPGRADE_IDS.map((id) => UPGRADE_REGISTRY[id].emoji);

@@ -15,7 +15,7 @@ describe('HarvestBagsUpgrade', () => {
     });
 
     it('computeFormatGain renders the multiplier with formatBigNum', () => {
-        expect(new HarvestBagsUpgrade(0).computeFormatGain(0)).toBe('×1.00');
+        expect(new HarvestBagsUpgrade(0).computeFormatGain(0)).toBe('×1');
         expect(new HarvestBagsUpgrade(0).computeFormatGain(1)).toBe('×1.50');
         expect(new HarvestBagsUpgrade(0).computeFormatGain(10)).toBe('×57.7');
     });

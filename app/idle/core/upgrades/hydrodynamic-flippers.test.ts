@@ -19,7 +19,7 @@ describe('HydrodynamicFlippersUpgrade', () => {
     });
 
     it('computeFormatGain renders the multiplier with formatBigNum', () => {
-        expect(new HydrodynamicFlippersUpgrade(0).computeFormatGain(0)).toBe('×1.00');
+        expect(new HydrodynamicFlippersUpgrade(0).computeFormatGain(0)).toBe('×1');
         expect(new HydrodynamicFlippersUpgrade(0).computeFormatGain(1)).toBe('×1.15');
         expect(new HydrodynamicFlippersUpgrade(0).computeFormatGain(10)).toBe('×4.05');
     });

@@ -138,6 +138,10 @@ function migrateGuild(guildId: string): GuildReport {
             userId,
             resources: { [ResourceId.SHELLS]: balance },
             // maxShells did not always exist; the old readers fell back to shells.
+            // `runMaxShells` and `prestigeCount` are deliberately left out: the GameInstance
+            // constructor defaults them to `maxShells` and 0, which is exactly right for a
+            // player who has never prestiged, and repeating the rule here would be a second
+            // place to keep in sync. Same for `resources.coral`, which defaults to 0.
             stats: { maxShells: toBigNumString(legacy?.maxShells ?? legacy?.shells, balance) },
             income: {
                 [ResourceId.SHELLS]: toBigNumString(

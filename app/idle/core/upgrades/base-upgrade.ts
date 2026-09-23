@@ -10,6 +10,19 @@ export interface UpgradeMeta {
     displayName: string;
     emoji: string;
     description: string;
+    /**
+     * Whether a prestige takes this upgrade back to level 0. Declared rather than derived
+     * from `costResourceId`, so an upgrade bought with one currency and kept across runs, or
+     * the reverse, stays a one-line decision on the class instead of a rule to bend.
+     * Required, so a new upgrade cannot be added without answering the question.
+     */
+    resetOnPrestige: boolean;
+    /**
+     * Highest level this upgrade can reach. Omitted means unbounded, which is every curve
+     * but the one-shot unlocks. `getMaxBuyable` and `GameInstance.buyUpgrade` both enforce
+     * it, so a maxed upgrade cannot be bought again through any path.
+     */
+    maxLevel?: number;
 }
 
 /**
@@ -44,6 +57,16 @@ export abstract class BaseUpgrade {
     get description(): string {
         return (this.constructor as unknown as UpgradeMeta).description;
     }
+    get resetOnPrestige(): boolean {
+        return (this.constructor as unknown as UpgradeMeta).resetOnPrestige;
+    }
+    get maxLevel(): number {
+        return (this.constructor as unknown as UpgradeMeta).maxLevel ?? Infinity;
+    }
+
+    get isMaxed(): boolean {
+        return this.level >= this.maxLevel;
+    }
 
     constructor(level: number) {
         this._level = level;
@@ -53,9 +76,14 @@ export abstract class BaseUpgrade {
         return this._level;
     }
 
-    /** Only mutation point: `GameInstance.buyUpgrade`, which recomputes income right after. */
+    /** Mutated only by `GameInstance.buyUpgrade`, which recomputes income right after. */
     addLevels(count: number): void {
         this._level += count;
+    }
+
+    /** Back to level 0, for a prestige. Like `addLevels`, the caller recomputes income. */
+    reset(): void {
+        this._level = 0;
     }
 
     abstract computeCost(level: number): BigNum;
@@ -92,7 +120,7 @@ export abstract class BaseUpgrade {
         let levels = 0;
         let totalCost = bn(0);
 
-        while (levels < MAX_LEVELS_PER_PURCHASE) {
+        while (levels < MAX_LEVELS_PER_PURCHASE && this.level + levels < this.maxLevel) {
             const next = bnAdd(totalCost, this.computeCost(this.level + levels));
             if (!bnLte(next, shells)) break;
             totalCost = next;
@@ -104,4 +132,4 @@ export abstract class BaseUpgrade {
 }
 
 /** What a caller outside `GameInstance` may do with an upgrade: read everything, move nothing. */
-export type ReadonlyUpgrade = Readonly<Omit<BaseUpgrade, 'addLevels'>>;
+export type ReadonlyUpgrade = Readonly<Omit<BaseUpgrade, 'addLevels' | 'reset'>>;

@@ -4,6 +4,7 @@ import { leaderboardCommand } from './leaderboard.ts';
 import { shellsCommand } from './shells.ts';
 import { shopCommand } from './shop.ts';
 import { heatCommand } from './heat.ts';
+import { prestigeCommand } from './prestige.ts';
 import type { Command } from './types.ts';
 
 export const commands: Command[] = [
@@ -13,4 +14,5 @@ export const commands: Command[] = [
     shellsCommand,
     shopCommand,
     heatCommand,
+    prestigeCommand,
 ];

@@ -32,6 +32,7 @@ describe('computeIncome', () => {
         const income = instance.computeIncome();
 
         expect(income[ResourceId.SHELLS].toString()).toBe(String(DEFAULT_SHELLS_PER_MESSAGE));
+        expect(income[ResourceId.CORAL].toString()).toBe('0');
         expect(Object.keys(income)).toEqual(Object.values(ResourceId));
     });
 
@@ -144,6 +145,34 @@ describe('applyShellsGain', () => {
     });
 });
 
+describe('stats.runMaxShells / stats.prestigeCount', () => {
+    it('defaults runMaxShells to maxShells, so loading a pre-prestige file is not a free prestige', () => {
+        const instance = new GameInstance(makeJson({ stats: { maxShells: '12345' } }));
+
+        expect(instance.stats.runMaxShells.toString()).toBe('12345');
+        expect(instance.stats.prestigeCount).toBe(0);
+    });
+
+    it('reads both back as stored once the fields exist, independently of maxShells', () => {
+        const instance = new GameInstance(
+            makeJson({ stats: { maxShells: '12345', runMaxShells: '42', prestigeCount: 3 } }),
+        );
+
+        expect(instance.stats.maxShells.toString()).toBe('12345');
+        expect(instance.stats.runMaxShells.toString()).toBe('42');
+        expect(instance.stats.prestigeCount).toBe(3);
+    });
+
+    it('tracks the same peak as maxShells as long as nothing has reset it', () => {
+        const instance = new GameInstance(makeJson({ resources: { [ResourceId.SHELLS]: '1000' } }));
+
+        for (let i = 0; i < 20; i++) instance.applyShellsGain(1);
+        instance.buyUpgrade(UpgradeId.DIVING_OTTERS, 1);
+
+        expect(instance.stats.runMaxShells.toString()).toBe(instance.stats.maxShells.toString());
+    });
+});
+
 describe('applyPassiveIncome', () => {
     it('credits shells within the bounds computePassiveShells gives for the elapsed window, and advances lastActiveAt', () => {
         const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
@@ -187,13 +216,199 @@ describe('applyPassiveIncome', () => {
     });
 });
 
+describe('prestige', () => {
+    function readyToPrestige() {
+        return new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                streak: { value: 7, lastDate: '2026-09-15' },
+                upgrades: {
+                    [UpgradeId.DIVING_OTTERS]: 40,
+                    [UpgradeId.HYDRODYNAMIC_FLIPPERS]: 10,
+                    [UpgradeId.HARVEST_BAGS]: 3,
+                    [UpgradeId.CORAL_SEEDLING]: 1,
+                },
+            }),
+        );
+    }
+
+    it('returns null and changes nothing at all when the run has not earned a coral', () => {
+        const instance = new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: '1000' },
+                stats: { maxShells: '1000' },
+                upgrades: { [UpgradeId.DIVING_OTTERS]: 3 },
+            }),
+        );
+        const before = instance.toJson();
+
+        expect(instance.prestige()).toBeNull();
+        expect(instance.toJson()).toEqual(before);
+    });
+
+    it('refuses while the layer is locked, whatever the run peak is worth', () => {
+        const instance = new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                upgrades: { [UpgradeId.DIVING_OTTERS]: 40 },
+            }),
+        );
+        const before = instance.toJson();
+        const preview = instance.previewPrestige();
+
+        expect(instance.coralUnlocked).toBe(false);
+        expect(preview.unlocked).toBe(false);
+        expect(preview.canPrestige).toBe(false);
+        // The formula still answers: only the gate is shut, and the payout is what it would be.
+        expect(preview.coral.gt(0)).toBe(true);
+        expect(instance.prestige()).toBeNull();
+        expect(instance.toJson()).toEqual(before);
+    });
+
+    it('credits coral, wipes the balance, the run peak and every shells-priced upgrade', () => {
+        const instance = readyToPrestige();
+
+        const outcome = instance.prestige();
+
+        expect(outcome?.coral.toString()).toBe('36');
+        expect(outcome?.prestigeCount).toBe(1);
+        expect(instance.resources[ResourceId.CORAL].toString()).toBe('36');
+        expect(instance.resources[ResourceId.SHELLS].toString()).toBe('0');
+        expect(instance.stats.runMaxShells.toString()).toBe('0');
+        expect(instance.stats.prestigeCount).toBe(1);
+        for (const id of Object.values(UpgradeId)) {
+            if (instance.upgrades[id].resetOnPrestige) expect(instance.upgrades[id].level).toBe(0);
+        }
+        // The seedling is the door, not part of the run: losing it would re-lock the layer.
+        expect(instance.upgrades[UpgradeId.CORAL_SEEDLING].level).toBe(1);
+    });
+
+    it('multiplies the payout by the coral upgrades, which no other stack applies', () => {
+        const bare = readyToPrestige().prestige();
+        const instance = new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                upgrades: { [UpgradeId.BUILDING_POLYPS]: 5, [UpgradeId.CORAL_SEEDLING]: 1 },
+            }),
+        );
+
+        expect(instance.coralMultiplier.toFixed(5)).toBe('1.61051');
+        expect(instance.prestige()?.coral.gt(bare!.coral)).toBe(true);
+    });
+
+    // The preview is what `/prestige` quotes before the player confirms. If it read the bare
+    // formula while `prestige` read the multiplied one, the trade would beat its own quote.
+    it('previews exactly what the trade then pays', () => {
+        const instance = new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                upgrades: { [UpgradeId.BUILDING_POLYPS]: 5, [UpgradeId.CORAL_SEEDLING]: 1 },
+            }),
+        );
+        const quoted = instance.previewPrestige().coral;
+
+        expect(instance.prestige()?.coral.toString()).toBe(quoted.toString());
+    });
+
+    it('leaves maxShells, the streak and lastActiveAt alone, so roles and passive income never see it', () => {
+        const instance = readyToPrestige();
+        const before = instance.toJson();
+
+        instance.prestige();
+        const after = instance.toJson();
+
+        expect(after.stats.maxShells).toBe(before.stats.maxShells);
+        // Compared as stored rather than read through `currentValue`, which answers relative
+        // to today and would make this test depend on the day it runs.
+        expect(after.streak).toEqual(before.streak);
+        expect(after.lastActiveAt).toBe(before.lastActiveAt);
+    });
+
+    it('puts income back to the default, since the upgrades that raised it are gone', () => {
+        const instance = readyToPrestige();
+
+        instance.prestige();
+
+        expect(instance.income[ResourceId.SHELLS].toString()).toBe(
+            String(DEFAULT_SHELLS_PER_MESSAGE),
+        );
+    });
+
+    it('leaves the coral upgrades standing, since they are the permanent half', () => {
+        const instance = new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                upgrades: {
+                    [UpgradeId.DIVING_OTTERS]: 40,
+                    [UpgradeId.NOURISHING_REEF]: 2,
+                    [UpgradeId.CORAL_SEEDLING]: 1,
+                },
+            }),
+        );
+
+        instance.prestige();
+
+        expect(instance.upgrades[UpgradeId.NOURISHING_REEF].level).toBe(2);
+        expect(instance.upgrades[UpgradeId.DIVING_OTTERS].level).toBe(0);
+    });
+
+    it('accumulates coral and prestigeCount across runs', () => {
+        const instance = readyToPrestige();
+
+        instance.prestige();
+        for (let i = 0; i < 40; i++) instance.applyShellsGain(1e11);
+        const second = instance.prestige();
+
+        expect(second).not.toBeNull();
+        expect(instance.stats.prestigeCount).toBe(2);
+        expect(instance.resources[ResourceId.CORAL].gt(15)).toBe(true);
+    });
+});
+
+describe('buyUpgrade with a maxLevel', () => {
+    function rich() {
+        return new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: '1e12' },
+                stats: { maxShells: '1e12' },
+            }),
+        );
+    }
+
+    it('sells the one level, then refuses and charges nothing', () => {
+        const instance = rich();
+
+        expect(instance.buyUpgrade(UpgradeId.CORAL_SEEDLING, 1)).not.toBeNull();
+        const afterFirst = instance.resources[ResourceId.SHELLS].toString();
+
+        expect(instance.buyUpgrade(UpgradeId.CORAL_SEEDLING, 1)).toBeNull();
+        expect(instance.resources[ResourceId.SHELLS].toString()).toBe(afterFirst);
+        expect(instance.upgrades[UpgradeId.CORAL_SEEDLING].level).toBe(1);
+    });
+
+    // Without the cap this would price two levels and debit for both.
+    it('refuses a quantity that would overshoot the cap, rather than clamping it', () => {
+        const instance = rich();
+        const balance = instance.resources[ResourceId.SHELLS].toString();
+
+        expect(instance.buyUpgrade(UpgradeId.CORAL_SEEDLING, 2)).toBeNull();
+        expect(instance.upgrades[UpgradeId.CORAL_SEEDLING].level).toBe(0);
+        expect(instance.resources[ResourceId.SHELLS].toString()).toBe(balance);
+    });
+});
+
 describe('toJson / constructor round-trip', () => {
     it('reproduces the same observable state after a serialize/deserialize cycle', () => {
         const original = new GameInstance(
             makeJson({
                 userId: 'round-trip',
                 resources: { [ResourceId.SHELLS]: '4242' },
-                stats: { maxShells: '9999' },
+                stats: { maxShells: '9999', runMaxShells: '512', prestigeCount: 2 },
                 income: { [ResourceId.SHELLS]: '73.5' },
                 streak: { value: 3, lastDate: '2026-08-10' },
                 upgrades: {
@@ -211,6 +426,8 @@ describe('toJson / constructor round-trip', () => {
             original.resources[ResourceId.SHELLS].toString(),
         );
         expect(roundTripped.stats.maxShells.toString()).toBe(original.stats.maxShells.toString());
+        expect(roundTripped.stats.runMaxShells.toString()).toBe('512');
+        expect(roundTripped.stats.prestigeCount).toBe(2);
         expect(roundTripped.income[ResourceId.SHELLS].toString()).toBe(
             original.income[ResourceId.SHELLS].toString(),
         );
@@ -223,7 +440,10 @@ describe('newInstance', () => {
         const instance = GameInstance.newInstance('fresh');
 
         expect(instance.resources[ResourceId.SHELLS].toString()).toBe('0');
+        expect(instance.resources[ResourceId.CORAL].toString()).toBe('0');
         expect(instance.stats.maxShells.toString()).toBe('0');
+        expect(instance.stats.runMaxShells.toString()).toBe('0');
+        expect(instance.stats.prestigeCount).toBe(0);
         expect(instance.income[ResourceId.SHELLS].toString()).toBe(
             String(DEFAULT_SHELLS_PER_MESSAGE),
         );

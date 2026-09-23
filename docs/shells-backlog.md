@@ -10,9 +10,11 @@ Legend: ✅ implemented — 💡 idea — 🔜 good next step
 
 ## Economy & earning
 
-### Prestige 💡
+### Prestige ✅
 
-Reset your shell balance in exchange for a permanent multiplier on future earnings. Lets the economy renew itself and gives long-term players a new goal. Prestige level would be visible on the profile.
+`/prestige` trades the current run, the shell balance and the three otter upgrades, for coral (🪸), spent on permanent upgrades in `/shop page:Corail`. The all-time record, roles and streak are untouched, so a reset costs no rank.
+
+Reference: [shells.md](./shells.md#prestige). How it was calibrated and why the currency is coral: [prestige-design.md](./prestige-design.md).
 
 ### Passive income ✅
 

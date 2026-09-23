@@ -10,6 +10,11 @@ describe('formatBigNum', () => {
         expect(formatBigNum(bn(999))).toBe('999');
         expect(formatBigNum(bn(71.415))).toBe('71.4');
         expect(formatBigNum(bn(0.5))).toBe('0.50');
+        // An integer is printed as one: balances and counters are integers by construction,
+        // and only a fractional value has decimals worth padding out.
+        expect(formatBigNum(bn(1))).toBe('1');
+        expect(formatBigNum(bn(15))).toBe('15');
+        expect(formatBigNum(bn(15.5))).toBe('15.5');
     });
 
     it('switches to the K suffix exactly at 1000, not just below it', () => {
