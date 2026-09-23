@@ -8,13 +8,14 @@ function makeInstance(
     shells: string,
     maxShells: string,
     income: string,
+    ringDays = 0,
 ): GameInstance {
     return new GameInstance({
         userId,
         resources: { [ResourceId.SHELLS]: shells },
         stats: { maxShells },
         income: { [ResourceId.SHELLS]: income },
-        growthRings: { days: 0, lastDate: '' },
+        growthRings: { days: ringDays, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         upgrades: {},
     });
@@ -41,6 +42,30 @@ describe('Leaderboard sorting', () => {
     it('sorts by INCOME descending', () => {
         const board = new Leaderboard(instances, LeaderboardSort.INCOME);
         expect(board.getPage(1, 10).entries.map((e) => e.userId)).toEqual(['u2', 'u3', 'u1']);
+    });
+
+    it('sorts by RINGS descending, ties broken by record', () => {
+        const board = new Leaderboard(
+            [
+                makeInstance('low', '0', '999', '0', 3),
+                makeInstance('tieSmall', '0', '100', '0', 120),
+                makeInstance('tieBig', '0', '500', '0', 120),
+            ],
+            LeaderboardSort.RINGS,
+        );
+        expect(board.getPage(1, 10).entries.map((e) => e.userId)).toEqual([
+            'tieBig',
+            'tieSmall',
+            'low',
+        ]);
+    });
+
+    it('carries the ring days and the effective multiplier on each entry', () => {
+        const board = new Leaderboard([makeInstance('u1', '0', '0', '0', 150)]);
+        expect(board.getUserEntry('u1')).toMatchObject({
+            growthRingDays: 150,
+            growthRingsMultiplier: 2,
+        });
     });
 
     it('assigns rank in the sorted order, 1-indexed', () => {

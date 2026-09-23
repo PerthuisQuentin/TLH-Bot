@@ -144,7 +144,7 @@ Les rôles Discord se débloquent par paliers de coquillages sur le record histo
 Commandes du bot (version concise) :
 - /ask question:<texte> : poser une question au bot (aide, infos, explications).
 - /shells [user] [public] : voir profil coquillages (solde, record, rang actuel, prochain palier/rang, gain par message, upgrades).
-- /leaderboard [page] [sort] [public] : classement (10/page). sort=record (maxShells), current (solde), income (gain/msg). Le classement porte sur les coquillages.
+- /leaderboard [page] [sort] [public] : classement (10/page). sort=record (maxShells), current (solde), income (gain/msg), rings (stries de croissance, en jours ; égalités départagées par le record). Le classement porte sur les coquillages.
 - /shop [upgrade] [page] [quantity] : voir la boutique ou acheter des niveaux. page=Coquillages par défaut ; les autres rayons n'existent que pour qui les a débloqués.
 - /heat [public] : afficher la chaleur du salon, le multiplicateur actif et les principaux contributeurs.
 - /ping : vérifier rapidement que le bot répond.
