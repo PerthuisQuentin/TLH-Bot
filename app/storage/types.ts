@@ -1,14 +1,12 @@
 import { z } from 'zod';
-import type { GuildConfig, ShellsUser, UserUpgrades } from '../commons/types.ts';
-import { GuildConfigSchema, ShellsUserSchema, UserUpgradesSchema } from '../commons/types.ts';
+import type { GuildConfig } from '../commons/types.ts';
+import { GuildConfigSchema } from '../commons/types.ts';
 import type { GameInstanceJson } from '../idle/core/game-instance.ts';
 import { GameInstanceJsonSchema } from '../idle/core/game-instance.ts';
 
 export const AllowedFiles = {
     SYSTEM: 'system',
     MEMORY: 'memory',
-    SHELLS: 'shells',
-    UPGRADES: 'upgrades',
     CONFIG: 'config',
     GAME_INSTANCES: 'game-instances',
 } as const;
@@ -20,8 +18,6 @@ export type TextFile = typeof AllowedFiles.SYSTEM | typeof AllowedFiles.MEMORY;
 
 /** Maps each JSON file type to its TypeScript content type */
 export type JsonFileTypeMap = {
-    [AllowedFiles.SHELLS]: ShellsUser[];
-    [AllowedFiles.UPGRADES]: UserUpgrades[];
     [AllowedFiles.CONFIG]: GuildConfig;
     [AllowedFiles.GAME_INSTANCES]: GameInstanceJson[];
 };
@@ -37,16 +33,12 @@ export function isTextFile(fileType: AllowedFile): fileType is TextFile {
 
 /** Returned when a JSON file does not exist yet; a missing file is not an error. */
 export const JSON_DEFAULTS: JsonFileTypeMap = {
-    [AllowedFiles.SHELLS]: [],
-    [AllowedFiles.UPGRADES]: [],
     [AllowedFiles.CONFIG]: {},
     [AllowedFiles.GAME_INSTANCES]: [],
 };
 
 /** Guards the REST write route against a payload that would corrupt a file. */
 export const JSON_SCHEMAS = {
-    [AllowedFiles.SHELLS]: z.array(ShellsUserSchema),
-    [AllowedFiles.UPGRADES]: z.array(UserUpgradesSchema),
     [AllowedFiles.CONFIG]: GuildConfigSchema,
     [AllowedFiles.GAME_INSTANCES]: z.array(GameInstanceJsonSchema),
 } satisfies Record<JsonFile, z.ZodTypeAny>;

@@ -153,6 +153,31 @@ describe('shopCommand', () => {
         expect(JSON.stringify(embed)).not.toContain('Bouture');
     });
 
+    it('sells the Coquille millénaire for coral on the treasures page once the rings reach the cap', async () => {
+        const veteran = {
+            ...gameInstanceFixture('u1', '0', UNLOCKED),
+            resources: { shells: '0', coral: '20' },
+            growthRings: { days: 100, lastDate: '' },
+        };
+        await writeGameInstances('g1', [veteran]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({
+                guild_id: 'g1',
+                member: { user: { id: 'u1' } },
+                data: { options: [{ name: 'page', value: 'treasures' }] },
+            }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
+            '🌀 Coquille millénaire',
+        ]);
+        expect(embed.description).toContain('20 🪸');
+    });
+
     it('stops advertising the treasures page once nothing is left on it', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
 

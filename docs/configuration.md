@@ -62,8 +62,6 @@ Watch the flag order when editing these scripts: `tsx watch --env-file=… app.t
 
 `register` prints the commands it pushed and exits non-zero if the push failed — a missing `APP_ID`, or a definition Discord rejected — so it is safe to chain or to run in CI.
 
-**Before the first start of a refactored deployment**, build `game-instances.json` from the legacy files — see [scripts.md](./scripts.md#migrate-game-instancests). Skipping it makes every player restart from zero.
-
 Four automated checks must come back clean: `npx tsc --noEmit`, `npm run lint`, `npm run format:check` and `npm test`.
 
 ### Shutdown
@@ -141,6 +139,6 @@ Served on the configured port, under `/api`, behind the `x-api-key` header.
 | `DELETE` | `/api/messages/:channelId/:messageId` | Deletes a Discord message.                                          |
 | `POST`   | `/interactions`                       | Discord webhook. Not behind the API key — Discord signs it instead. |
 
-`:fileType` is one of `system`, `memory`, `shells`, `upgrades`, `config`, `game-instances`. Text types take `text/plain`, JSON types take `application/json` and are validated against their zod schema before anything is written.
+`:fileType` is one of `system`, `memory`, `config`, `game-instances`. Text types take `text/plain`, JSON types take `application/json` and are validated against their zod schema before anything is written.
 
 Writes through this route are write-through: they reach the disk before the response returns.

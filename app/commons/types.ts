@@ -1,15 +1,5 @@
 import { z } from 'zod';
 
-export type ShellsUser = {
-    userId: string;
-    shells: string;
-    maxShells: string;
-    shellsPerMessage: string;
-    streak?: number;
-    lastStreakDate?: string;
-    lastActiveAt?: string;
-};
-
 export type ShellsRoleConfig = {
     roleId: string;
     threshold: string;
@@ -26,24 +16,7 @@ export type GuildConfig = {
     chatRandomProbability?: number;
 };
 
-export type UserUpgrades = {
-    userId: string;
-    divingOtters: number;
-    hydrodynamicFlippers: number;
-    harvestBags: number;
-};
-
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
-
-export const ShellsUserSchema = z.object({
-    userId: z.string(),
-    shells: z.string(),
-    maxShells: z.string(),
-    shellsPerMessage: z.string(),
-    streak: z.number().optional(),
-    lastStreakDate: z.string().optional(),
-    lastActiveAt: z.string().optional(),
-});
 
 const ShellsRoleConfigSchema = z.object({
     roleId: z.string(),
@@ -59,11 +32,4 @@ export const GuildConfigSchema = z.object({
     chatNicknames: z.array(z.string()).optional(),
     chatIndirectProbability: z.number().min(0).max(1).optional(),
     chatRandomProbability: z.number().min(0).max(1).optional(),
-});
-
-export const UserUpgradesSchema = z.object({
-    userId: z.string(),
-    divingOtters: z.number(),
-    hydrodynamicFlippers: z.number(),
-    harvestBags: z.number(),
 });

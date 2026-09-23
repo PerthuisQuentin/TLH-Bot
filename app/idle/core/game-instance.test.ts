@@ -402,6 +402,48 @@ describe('unlock conditions', () => {
     });
 });
 
+describe('growth rings cap', () => {
+    const player = (days: number, upgrades: GameInstanceJson['upgrades'] = {}) =>
+        new GameInstance(
+            makeJson({
+                resources: { [ResourceId.CORAL]: '100' },
+                growthRings: { days, lastDate: '' },
+                upgrades: { [UpgradeId.CORAL_SEEDLING]: 1, ...upgrades },
+            }),
+        );
+
+    it('keeps the Coquille millénaire locked until the rings reach the cap', () => {
+        expect(player(99).isUpgradeUnlocked(UpgradeId.MILLENNIAL_SHELL)).toBe(false);
+        expect(player(99).buyUpgrade(UpgradeId.MILLENNIAL_SHELL, 1)).toBeNull();
+        expect(player(100).isUpgradeUnlocked(UpgradeId.MILLENNIAL_SHELL)).toBe(true);
+    });
+
+    it('pays the banked days at once when the cap is lifted', () => {
+        const instance = player(120);
+        expect(instance.growthRingsMultiplier).toBe(2);
+        expect(instance.growthRingsCapped).toBe(true);
+
+        expect(instance.buyUpgrade(UpgradeId.MILLENNIAL_SHELL, 1)).not.toBeNull();
+
+        expect(instance.growthRingsMultiplier).toBeCloseTo(2.2, 10);
+        expect(instance.growthRingsCapped).toBe(false);
+        expect(instance.isUpgradeVisible(UpgradeId.MILLENNIAL_SHELL)).toBe(false);
+    });
+
+    it('keeps the lift across a prestige', () => {
+        const instance = new GameInstance(
+            makeJson({
+                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                growthRings: { days: 120, lastDate: '' },
+                upgrades: { [UpgradeId.CORAL_SEEDLING]: 1, [UpgradeId.MILLENNIAL_SHELL]: 1 },
+            }),
+        );
+
+        expect(instance.prestige()).not.toBeNull();
+        expect(instance.growthRingsCapLifted).toBe(true);
+    });
+});
+
 describe('buyUpgrade with a maxLevel', () => {
     function rich() {
         return new GameInstance(

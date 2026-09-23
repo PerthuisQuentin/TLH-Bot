@@ -212,12 +212,13 @@ player currently endures without any lever: heat, growth rings, passive income a
 They are exactly what `simulate-idle.ts` folds into its single `--messages-per-day` input.
 Coral is where they become player-facing.
 
-| Upgrade                    | Effect                                     | Why it earns its place                                                                      |
-| -------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Récif nourricier (ships)   | x2 shell income per level                  | The raw lever that drives the loop.                                                         |
-| Polypes bâtisseurs (ships) | +10 % coral per prestige, per level        | Sets the tempo of the layer, and is the cheap buy that keeps a prestige from feeling empty. |
-| Marée montante             | Raises the heat ceiling or slows its decay | Rewards group conversation, which fits the bot's social purpose.                            |
-| Sommeil des loutres        | Multiplies passive income                  | The only upgrade that pays while the player is away.                                        |
+| Upgrade                     | Effect                                     | Why it earns its place                                                                      |
+| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Récif nourricier (ships)    | x2 shell income per level                  | The raw lever that drives the loop.                                                         |
+| Polypes bâtisseurs (ships)  | +10 % coral per prestige, per level        | Sets the tempo of the layer, and is the cheap buy that keeps a prestige from feeling empty. |
+| Marée montante              | Raises the heat ceiling or slows its decay | Rewards group conversation, which fits the bot's social purpose.                            |
+| Sommeil des loutres         | Multiplies passive income                  | The only upgrade that pays while the player is away.                                        |
+| Coquille millénaire (ships) | Lifts the ×2 cap on growth rings, one-shot | Turns the growth rings from a system endured into a lever; sold on the Trésors page.        |
 
 The last two have no cousin in the shell tree, so the coral shop does not read as a second
 page of the same store.
@@ -342,6 +343,24 @@ enough into the curve to see it decelerate — their runs are still shortening a
 mark. The layer opens for them too, just slowly, which is the intended read: the first coral is
 gated on a shell total, not on a date.
 
+### Coquille millénaire calibration
+
+The growth rings reach their ×2 cap at 100 active days, and the lift is sold only from there (`unlockCondition`: seedling owned and 100 days), so a heavy player cannot buy it at day 40 when it would do nothing. The price then decides how long after day 100 an ordinary player can afford it.
+
+The target was "around day 150". **16 coral** lands on the 4th prestige (27-28 lifetime coral), where the next reef level (level 3) and the next polyps level (level 5) cost 16 too: the player picks one of the three, a real choice rather than a formality. 32 coral would have pushed it to the 5th prestige, well past the target.
+
+With the rings modelled and the auto-buyer taking a one-shot unlock first (`simulate-prestige.ts --days=365`):
+
+| msg/day | 1st prestige | Cap lifted | Prestiges in a year |
+| ------- | ------------ | ---------- | ------------------- |
+| 100     | day 108      | day 288    | 6                   |
+| 200     | day 63       | day 160    | 14                  |
+| 400     | day 34       | day 118    | 20                  |
+
+At 200 msg/day, holding the cap at ×2 for the whole year gives 11 prestiges and runs settling around 24 days; the lift gives 14 and around 18 days. Faster, not a runaway: the runs stop shortening.
+
+It is a flat one-shot, not a curve: the effect it buys, +1 % per active day with no ceiling, already grows on its own. Past the cap the banked days pay at once, so a 120-day player jumps from ×2.00 to ×2.20. Linear rather than compound on purpose; `1.01^n` is kept aside, see [shells.md](./shells.md#growth-rings).
+
 ## Why the command has no gate
 
 What `/prestige` does is in [commands.md](./commands.md). Why it does it that way:
@@ -368,7 +387,9 @@ Shipped and live. The follow-up, in order:
    invisible to the player and untouchable. That review is the prerequisite for "Marée
    montante" and "Sommeil des loutres".
 2. **Re-check the balance against real players.** Every number here rests on
-   `--messages-per-day=500`, a rough stand-in for one member sending ~100 real messages a day.
+   `--messages-per-day=500`, a rough stand-in for one member sending ~100 real messages a day,
+   with the old streak folded in. The simulators now model growth rings and default to 200
+   (heat and passive income only), so rerun before trusting an older figure here.
    Treat the shape of the curve as sound and the exact days as indicative.
 3. **The jackpot** is the fourth untouched system and has no coral upgrade proposed yet.
    Coral appears nowhere in `/leaderboard` either, which stays a shells ranking by decision

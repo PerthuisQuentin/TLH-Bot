@@ -14,15 +14,15 @@ A Discord bot in TypeScript for the _The Local Host_ server, combining a Gemini-
 
 ## Documentation
 
-| Document                                   | Covers                                                                  |
-| ------------------------------------------ | ----------------------------------------------------------------------- |
-| [Architecture](./docs/architecture.md)     | The two runtimes, the layering, the main flows.                         |
-| [Commands](./docs/commands.md)             | Every slash command and its options.                                    |
-| [Shells](./docs/shells.md)                 | The game: earn pipeline, heat, streak, passive income, upgrades, roles. |
-| [Storage](./docs/storage.md)               | The file store and the format of every data file.                       |
-| [Configuration](./docs/configuration.md)   | Environment, deployment, per-guild config, REST API.                    |
-| [Scripts](./docs/scripts.md)               | Migration, analysis and simulation tools.                               |
-| [Shells backlog](./docs/shells-backlog.md) | Ideas for the game. Intent only, not current behaviour.                 |
+| Document                                   | Covers                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| [Architecture](./docs/architecture.md)     | The two runtimes, the layering, the main flows.                               |
+| [Commands](./docs/commands.md)             | Every slash command and its options.                                          |
+| [Shells](./docs/shells.md)                 | The game: earn pipeline, heat, growth rings, passive income, upgrades, roles. |
+| [Storage](./docs/storage.md)               | The file store and the format of every data file.                             |
+| [Configuration](./docs/configuration.md)   | Environment, deployment, per-guild config, REST API.                          |
+| [Scripts](./docs/scripts.md)               | Analysis and simulation tools.                                                |
+| [Shells backlog](./docs/shells-backlog.md) | Ideas for the game. Intent only, not current behaviour.                       |
 
 [`.claude/CLAUDE.md`](./.claude/CLAUDE.md) holds the working conventions for the codebase.
 

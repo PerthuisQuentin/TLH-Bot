@@ -72,9 +72,9 @@ Automatically unlocked milestones: first shell earned, 10 000 cumulative shells,
 
 Objectives renewed every week (e.g. "post 50 messages in #general", "reach ×1.8 heat"). Award bonus shells on completion.
 
-### Growth rings rework 🚧
+### Growth rings ✅
 
-The daily streak is being reworked into growth rings (_Stries de croissance_): additive, never reset, capped at ×2 until a coral upgrade lifts the cap. Design and progress: [streak-rework.md](./streak-rework.md).
+Growth rings (_Stries de croissance_): +1 % per active day, never reset, capped at ×2 from day 100, lifted by the 🌀 Coquille millénaire (16 🪸, from 100 days).
 
 ---
 
@@ -136,7 +136,7 @@ The longer a user has been silent, the higher the multiplier on their next earn 
 
 ### First-message-of-the-day bonus 💡
 
-The very first message of the calendar day (Europe/Paris timezone, consistent with the growth rings logic) earns a fixed shell bonus, regardless of volume. Even posting once a day is worth it. Could be displayed as a streak milestone.
+The very first message of the calendar day (Europe/Paris timezone, consistent with the growth rings logic) earns a fixed shell bonus, regardless of volume. Even posting once a day is worth it. Could be displayed as a growth rings milestone.
 
 ### Reaction income ✅
 
@@ -158,4 +158,4 @@ When a channel has high heat, a fraction of the bonus shells generated is distri
 
 Every message carries a 1-in-1000 chance of paying ×1000 the base income, on top of the normal gain. Announced publicly.
 
-Neither heat nor growth rings apply, on purpose: at equal income a jackpot is worth the same to everyone, so hitting one in a dead channel on day one pays exactly like hitting one mid-rush on a 7-day series. The odds are per message and independent of frequency, so the lottery is the one mechanic a low-volume member competes on evenly.
+Neither heat nor growth rings apply, on purpose: at equal income a jackpot is worth the same to everyone, so hitting one in a dead channel on day one pays exactly like hitting one mid-rush at the growth rings cap. The odds are per message and independent of frequency, so the lottery is the one mechanic a low-volume member competes on evenly.

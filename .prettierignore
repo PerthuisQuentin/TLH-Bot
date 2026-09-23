@@ -8,8 +8,5 @@ node_modules
 package.json
 package-lock.json
 
-# Per-guild game data. `files/` is written by the bot at runtime, and the two
-# JSON files at the root are real data checked in, not configuration.
+# Per-guild game data, written by the bot at runtime.
 files
-shells.json
-config.json

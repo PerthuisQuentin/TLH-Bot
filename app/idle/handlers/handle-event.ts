@@ -61,7 +61,7 @@ export async function handleDiscordEvent(event: DiscordEvent): Promise<DiscordEv
 
         // No activityType guard on purpose: a single reaction is enough to add the day's ring.
         gameInstance.addGrowthRing();
-        const growthRingsMultiplier = gameInstance.growthRings.getMultiplier();
+        const growthRingsMultiplier = gameInstance.growthRingsMultiplier;
         const activityTypeMultiplier = GAIN_FRACTIONS[event.activityType];
         const finalMultiplier = heatMultiplier * growthRingsMultiplier * activityTypeMultiplier;
         const shellsGained = gameInstance.applyShellsGain(finalMultiplier);

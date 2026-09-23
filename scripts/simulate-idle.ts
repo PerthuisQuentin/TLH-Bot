@@ -1,14 +1,14 @@
 /**
  * Idle progression simulation.
  *
- *   tsx scripts/simulate-idle.ts [--days=365] [--messages-per-day=500]
+ *   tsx scripts/simulate-idle.ts [--days=365] [--messages-per-day=200]
  *                               [--start-shells=0] [--strategy=cheapest]
  *                               [--delay=0] [--every=0]
  *
- * The time unit is a day, and the only input is an effective message count per day.
- * Heat, growth rings, passive income and the jackpot are deliberately absent: they are
- * folded into that number. The working assumption is ~100 real messages a day which,
- * once the multipliers are applied, earns about what 500 plain messages would.
+ * The time unit is a day, and the only input is an effective message count per day. Growth
+ * rings are modelled, the player being active every simulated day. Heat, passive income and
+ * the jackpot are folded into the message count: ~100 real messages a day earn about what
+ * 200 plain messages would once heat is applied.
  *
  * Earnings go through GameInstance.applyShellsGain, so the ±10 % roll is real — it is
  * applied once per simulated day, which is noise on a long run and visible on a short one.
@@ -27,7 +27,14 @@ import {
     formatBigNum,
     type BigNum,
 } from '../app/idle/core/big-number.ts';
-import { numberArg, projectedIncome, table, tryBuy, type PurchaseStrategy } from './sim-common.ts';
+import {
+    numberArg,
+    playMessages,
+    projectedIncome,
+    table,
+    tryBuy,
+    type PurchaseStrategy,
+} from './sim-common.ts';
 
 type SimulationConfig = {
     days: number;
@@ -40,7 +47,7 @@ type SimulationConfig = {
 
 const DEFAULT_CONFIG: SimulationConfig = {
     days: 365,
-    messagesPerDay: 500,
+    messagesPerDay: 200,
     startingShells: 0,
     strategy: 'cheapest',
     delayMs: 0,
@@ -144,7 +151,7 @@ async function run(
     let purchases = 0;
 
     for (let day = 1; day <= config.days; day += 1) {
-        instance.applyShellsGain(config.messagesPerDay);
+        playMessages(instance, day, config.messagesPerDay);
 
         while (tryBuy(instance, config.strategy) !== null) purchases += 1;
 
@@ -237,7 +244,9 @@ async function main(): Promise<void> {
                 ? ` · start ${formatBigNum(bn(config.startingShells))} 🐚`
                 : ''),
     );
-    console.log('Heat, growth rings, passive income and jackpot are folded into msg/day.\n');
+    console.log(
+        'Growth rings modelled, one active day per simulated day. Heat, passive income and jackpot are folded into msg/day.\n',
+    );
 
     printProgression(samples);
 

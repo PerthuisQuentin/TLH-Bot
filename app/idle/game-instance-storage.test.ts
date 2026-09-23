@@ -104,6 +104,6 @@ describe('updateGameInstance', () => {
 
         const [instance] = await getAllGameInstances(guildId);
         expect(instance.userId).toBe('newcomer');
-        expect(instance.growthRings.currentDays).toBe(1);
+        expect(instance.growthRings.days).toBe(1);
     });
 });

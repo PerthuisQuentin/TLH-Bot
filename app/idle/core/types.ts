@@ -22,6 +22,7 @@ export enum UpgradeId {
     CORAL_SEEDLING = 'coralSeedling',
     NOURISHING_REEF = 'nourishingReef',
     BUILDING_POLYPS = 'buildingPolyps',
+    MILLENNIAL_SHELL = 'millennialShell',
 }
 
 /**

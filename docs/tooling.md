@@ -72,7 +72,7 @@ ESLint already catches relative imports leaving `core/`. What only the emitted J
 
 Prettier owns formatting, Markdown included. `eslint-config-prettier` is loaded last in `eslint.config.js` so no ESLint rule fights it.
 
-`.prettierignore` keeps it away from `package.json` (npm reindents it back) and from the game data checked in at the root (`shells.json`, `config.json`, `files/`).
+`.prettierignore` keeps it away from `package.json` (npm reindents it back) and from the per-guild data under `files/`.
 
 ---
 

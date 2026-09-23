@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export const FULL_BONUS_DAYS = 7;
+/** What each active day adds to the multiplier. */
+export const BONUS_PER_DAY = 0.01;
+export const MAX_MULTIPLIER = 2;
+/** Active days at which the bonus reaches the cap. */
+export const CAP_DAYS = Math.round((MAX_MULTIPLIER - 1) / BONUS_PER_DAY);
 
 export type GrowthRingsJson = {
     days: number;
@@ -21,30 +25,27 @@ export class GrowthRings {
         this._lastDate = data.lastDate;
     }
 
-    /**
-     * Series length as of now, without mutating. `_days` is only refreshed on a gain,
-     * so a reader that trusts it keeps showing a series a missed day already broke.
-     */
-    get currentDays(): number {
-        const today = GrowthRings.today();
-        if (this._lastDate === today) return this._days;
-        // Still alive: earning today extends it. Two days missed and it is gone.
-        if (this._lastDate === GrowthRings.getPreviousDate(today)) return this._days;
-        return 0;
+    /** Active days so far. Never goes down: a missed day only pauses the count. */
+    get days(): number {
+        return this._days;
     }
 
-    getMultiplier(): number {
-        const days = this.currentDays;
-        return 1 + Math.min(Math.max(days - 1, 0), FULL_BONUS_DAYS - 1) / (FULL_BONUS_DAYS - 1);
+    /** At the cap. Days keep counting past it, so lifting it pays the banked ones at once. */
+    isCapped(capLifted: boolean): boolean {
+        return !capLifted && this._days >= CAP_DAYS;
     }
 
-    /** Idempotent: several calls the same Paris day leave the rings untouched. */
-    addRing(): void {
-        const today = GrowthRings.today();
+    /** `capLifted` is the Coquille millénaire, owned by `GameInstance`, not by the rings. */
+    getMultiplier(capLifted: boolean): number {
+        const multiplier = 1 + this._days * BONUS_PER_DAY;
+        return capLifted ? multiplier : Math.min(multiplier, MAX_MULTIPLIER);
+    }
+
+    /** Idempotent: several calls the same day add a single ring. */
+    addRing(today: string): void {
         if (this._lastDate === today) return;
 
-        const yesterday = GrowthRings.getPreviousDate(today);
-        this._days = this._lastDate === yesterday ? this._days + 1 : 1;
+        this._days += 1;
         this._lastDate = today;
     }
 
@@ -58,12 +59,6 @@ export class GrowthRings {
 
     static today(): string {
         return new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
-    }
-
-    private static getPreviousDate(dateStr: string): string {
-        const d = new Date(`${dateStr}T12:00:00Z`);
-        d.setUTCDate(d.getUTCDate() - 1);
-        return d.toISOString().slice(0, 10);
     }
 }
 
