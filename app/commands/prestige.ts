@@ -17,20 +17,22 @@ import { SHOP_PAGE_NAMES } from '../idle/core/shop-pages.ts';
 import { ResourceId, UpgradeId } from '../idle/core/types.ts';
 import { formatResource } from '../idle/core/resources.ts';
 import { bnGt, formatBigNum } from '../idle/core/big-number.ts';
-import type { ReadonlyUpgrade } from '../idle/core/upgrades/base-upgrade.ts';
+import type { ReadonlyGameInstance } from '../idle/core/game-instance.ts';
 import type { BigNum } from '../idle/core/big-number.ts';
 
 const PARAM_CONFIRM = 'confirmer';
 
 const EMBED_COLOR = 0xf4776a;
 
-/** Split by `resetOnPrestige`, so a new upgrade lands in the right column on its own. */
-function upgradeLines(
-    upgrades: Readonly<Record<UpgradeId, ReadonlyUpgrade>>,
-    reset: boolean,
-): string[] {
-    return ALL_UPGRADE_IDS.filter((id) => upgrades[id].resetOnPrestige === reset).map((id) => {
-        const upgrade = upgrades[id];
+/**
+ * Split by `resetOnPrestige`, so a new upgrade lands in the right column on its own. Locked
+ * ones are left out: a "niveau 0" line would announce an upgrade the player cannot see yet.
+ */
+function upgradeLines(instance: ReadonlyGameInstance, reset: boolean): string[] {
+    return ALL_UPGRADE_IDS.filter(
+        (id) => instance.isUpgradeUnlocked(id) && instance.upgrades[id].resetOnPrestige === reset,
+    ).map((id) => {
+        const upgrade = instance.upgrades[id];
         return `${upgrade.emoji} ${upgrade.name} — niveau **${upgrade.level}**`;
     });
 }
@@ -80,7 +82,7 @@ async function handlePreview(res: Response, guildId: string, userId: string): Pr
         return;
     }
 
-    const kept = upgradeLines(instance.upgrades, false);
+    const kept = upgradeLines(instance, false);
     const runPeak = formatResource(instance.stats.runMaxShells, ResourceId.SHELLS);
 
     replyEmbed(
@@ -98,7 +100,7 @@ async function handlePreview(res: Response, guildId: string, userId: string): Pr
                     name: 'Ce que vous perdez',
                     value: [
                         `Solde : ${formatResource(instance.resources[ResourceId.SHELLS], ResourceId.SHELLS)}`,
-                        ...upgradeLines(instance.upgrades, true),
+                        ...upgradeLines(instance, true),
                         `*Le récif se nourrit du record du cycle, pas de ce solde : dépenser en boutique ne réduit pas votre corail.*`,
                     ].join('\n'),
                     inline: false,
@@ -106,7 +108,7 @@ async function handlePreview(res: Response, guildId: string, userId: string): Pr
                 {
                     name: 'Ce que vous gardez',
                     value: [
-                        `Record historique, rôles et série`,
+                        `Record historique, rôles et stries de croissance`,
                         `Corail : ${formatResource(instance.resources[ResourceId.CORAL], ResourceId.CORAL)}`,
                         ...kept,
                     ].join('\n'),

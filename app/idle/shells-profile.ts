@@ -57,7 +57,7 @@ export async function getShellsProfile(
     const currentShells = instance.resources[ResourceId.SHELLS];
     const { maxShells, runMaxShells, prestigeCount } = instance.stats;
     const shellsPerMessage = instance.income[ResourceId.SHELLS];
-    const { growthRings, upgrades } = instance;
+    const { upgrades } = instance;
     const leaderboard = new Leaderboard(instances);
     const entry = leaderboard.getUserEntry(userId);
 
@@ -113,11 +113,11 @@ export async function getShellsProfile(
         ? `<@&${nextRole.roleId}> — encore **${formatBigNum(bnSub(bnFromJSON(nextRole.threshold), maxShells))} 🐚**`
         : '✨ Rang maximum atteint';
 
-    const ringDays = growthRings.currentDays;
+    const ringDays = instance.growthRings.days;
     const growthRingsText =
         ringDays === 0
-            ? 'Stries de croissance : aucune'
-            : `Stries de croissance : ${ringDays} jour${ringDays > 1 ? 's' : ''} — ×${growthRings.getMultiplier().toFixed(2)}`;
+            ? '🌀 Stries de croissance : aucune'
+            : `🌀 Stries de croissance : ${ringDays} jour${ringDays > 1 ? 's' : ''} — ×${instance.growthRingsMultiplier.toFixed(2)}${instance.growthRingsCapped ? ' (plafond atteint)' : ''}`;
 
     const prestigePreview = instance.previewPrestige();
     const prestigeText = coralUnlocked

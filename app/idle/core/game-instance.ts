@@ -120,6 +120,18 @@ export class GameInstance {
         return this._growthRings;
     }
 
+    get growthRingsCapLifted(): boolean {
+        return this._upgrades[UpgradeId.MILLENNIAL_SHELL].level > 0;
+    }
+
+    get growthRingsMultiplier(): number {
+        return this._growthRings.getMultiplier(this.growthRingsCapLifted);
+    }
+
+    get growthRingsCapped(): boolean {
+        return this._growthRings.isCapped(this.growthRingsCapLifted);
+    }
+
     get upgrades(): Readonly<Record<UpgradeId, ReadonlyUpgrade>> {
         return { ...this._upgrades };
     }
@@ -188,6 +200,7 @@ export class GameInstance {
             upgradeLevels: Object.fromEntries(
                 Object.values(UpgradeId).map((id) => [id, this._upgrades[id].level]),
             ) as Record<UpgradeId, number>,
+            growthRingDays: this._growthRings.days,
         };
     }
 
@@ -300,8 +313,9 @@ export class GameInstance {
         });
     }
 
-    addGrowthRing(): void {
-        this._growthRings.addRing();
+    /** `today` is injectable so the simulations can run on a virtual calendar. */
+    addGrowthRing(today: string = GrowthRings.today()): void {
+        this._growthRings.addRing(today);
     }
 
     buyUpgrade(

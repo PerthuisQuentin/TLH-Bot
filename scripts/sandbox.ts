@@ -2,7 +2,7 @@
  * Interactive idle sandbox: the shells game alone, on a compressed clock, with no Discord and
  * no storage.
  *
- *   tsx scripts/sandbox.ts [--messages-per-day=500] [--speed=0.25] [--auto] [--frames=N]
+ *   tsx scripts/sandbox.ts [--messages-per-day=200] [--speed=0.25] [--auto] [--frames=N]
  *
  * Where `simulate-idle.ts` and `simulate-prestige.ts` answer "what do these curves produce
  * over a year", this one answers "what does it feel like to play them". Time runs on a virtual
@@ -11,9 +11,9 @@
  * Everything the game decides is read from `app/idle/core/`: incomes, prices, the coral
  * formula, what a prestige resets. The script owns the clock and the keyboard, nothing else.
  *
- * **Messages only.** Heat, the growth rings and passive income are folded into the message rate, the
- * same convention `simulate-idle.ts` uses: they key off wall-clock dates that a virtual clock
- * cannot drive honestly, so the sandbox does not pretend to model them.
+ * Growth rings run on the virtual calendar, one ring per virtual day, as in the simulations.
+ * Heat and passive income are folded into the message rate: they key off wall-clock times
+ * that a virtual clock cannot drive honestly, so the sandbox does not pretend to model them.
  */
 
 import { GameInstance } from '../app/idle/core/game-instance.ts';
@@ -21,7 +21,7 @@ import { ALL_UPGRADE_IDS } from '../app/idle/core/upgrades/upgrade-registry.ts';
 import { ResourceId, UpgradeId } from '../app/idle/core/types.ts';
 import { RESOURCE_META, formatResource } from '../app/idle/core/resources.ts';
 import { bnCeil, bnGte, bnMul, formatBigNum } from '../app/idle/core/big-number.ts';
-import { numberArg, spendCoral, tryBuy } from './sim-common.ts';
+import { numberArg, playMessages, spendCoral, tryBuy } from './sim-common.ts';
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ type Config = {
 
 function parseArgs(argv: string[]): Config {
     const config: Config = {
-        messagesPerDay: 500,
+        messagesPerDay: 200,
         speedIndex: SPEEDS.indexOf(0.25),
         auto: false,
         frames: null,
@@ -121,7 +121,7 @@ function tick(): void {
     const messages = Math.floor(messageCarry);
     if (messages > 0) {
         messageCarry -= messages;
-        instance.applyShellsGain(messages);
+        playMessages(instance, day, messages);
     }
 
     if (config.auto) {
@@ -297,7 +297,7 @@ function upgradeLines(): string[] {
 
 function header(): string[] {
     const income = instance.income[ResourceId.SHELLS];
-    const perDay = bnMul(income, config.messagesPerDay);
+    const perDay = bnMul(income, config.messagesPerDay * instance.growthRingsMultiplier);
     const coral = instance.resources[ResourceId.CORAL];
     const multiplier = instance.coralMultiplier;
 
@@ -310,6 +310,8 @@ function header(): string[] {
             `income ${formatBigNum(income)}/msg   ${formatBigNum(perDay)}/day`,
         `  ${pad(RESOURCE_META[ResourceId.CORAL].displayName, 14)}${pad(formatResource(coral, ResourceId.CORAL), 16)}` +
             `prestiges ${instance.stats.prestigeCount}   coral x${formatBigNum(multiplier)}`,
+        `  ${pad('Stries', 14)}${pad(`${instance.growthRings.days} jour${instance.growthRings.days > 1 ? 's' : ''}`, 16)}` +
+            `x${instance.growthRingsMultiplier.toFixed(2)}${instance.growthRingsCapped ? ' (plafond)' : ''}`,
     ];
 }
 

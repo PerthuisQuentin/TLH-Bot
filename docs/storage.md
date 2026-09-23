@@ -64,7 +64,7 @@ Neither the staleness re-read nor the eviction ever happens while the copy is di
 
 The `.tmp` sibling is removed in `writeAtomically`'s `catch`, which only runs when an exception is thrown. A process killed outright between the write and the `rename` — SIGKILL, OOM killer, a container hard-stop — runs no `catch`, so its temp file stays on disk. The pid in the name means a restarted process writes a different one rather than reusing it, so they accumulate.
 
-**No data is at risk.** A `.tmp` is never addressable: `getFilePath` only ever builds `{guildId}-{fileType}.{txt|json}`, and the one other place that scans the directory matches on an exact suffix — `endsWith('-shells.json')` in `scripts/migrate-game-instances.ts` — which a name ending in `.tmp` does not satisfy. The only visible consequence is `GET /api/files`, which returns a raw `readdir` and lists them alongside real files.
+**No data is at risk.** A `.tmp` is never addressable: `getFilePath` only ever builds `{guildId}-{fileType}.{txt|json}`, and nothing else scans the directory for data files. The only visible consequence is `GET /api/files`, which returns a raw `readdir` and lists them alongside real files.
 
 This is accepted rather than fixed: a hard kill is rare and the leak is slow. If it ever needs cleaning up, filter the route, and purge **by age** rather than by mere presence — during a deployment where the old container is still running, it may be mid-write on its own temp file, and deleting it would make its `rename` fail.
 
@@ -90,9 +90,7 @@ files/
 ├── {guildId}-config.json           server configuration
 ├── {guildId}-system.txt            system prompt (AI personality)
 ├── {guildId}-memory.txt            AI accumulated memory
-├── {guildId}-game-instances.json   shells game state
-├── {guildId}-shells.json           legacy, superseded by game-instances
-└── {guildId}-upgrades.json         legacy, superseded by game-instances
+└── {guildId}-game-instances.json   shells game state
 ```
 
 ### `{guildId}-game-instances.json`
@@ -132,9 +130,8 @@ The whole shells game state, one entry per player. See [shells.md](./shells.md) 
 | `upgrades`             | object | Level per `UpgradeId`. A missing key reads as 0.                                                                                                                              |
 
 The prestige fields land in the file the first time a player is written after the upgrade, and
-an older file is accepted as-is until then. `scripts/migrate-game-instances.ts` leaves them out
-on purpose for the same reason: the constructor's defaults are exactly right for a player who
-has never prestiged. What the mechanic does with them: [shells.md](./shells.md#prestige).
+an older file is accepted as-is until then: the constructor's defaults are exactly right for a
+player who has never prestiged. What the mechanic does with them: [shells.md](./shells.md#prestige).
 
 **Shell amounts are JSON strings.** Balances reach 10^30 and beyond, so a native `number` would silently lose precision. They are parsed through `app/idle/core/big-number.ts` (a decimal.js wrapper) and rendered with `formatBigNum`.
 
@@ -189,23 +186,6 @@ Entries are keyed by Discord ID rather than display name, because two members ca
 ```
 Alice [ID:333] aime les jeux vidéo.
 ```
-
-### Legacy: `shells.json` and `upgrades.json`
-
-Superseded by `game-instances.json`. The `ShellsUser` / `UserUpgrades` types survive in `app/commons/types.ts` because the REST API still exposes both files and the migration script reads them. Don't build new features on them.
-
----
-
-## Migration
-
-`game-instances.json` is built once per environment from the legacy pair:
-
-```bash
-tsx scripts/migrate-game-instances.ts            # dry run, writes nothing
-tsx scripts/migrate-game-instances.ts --apply
-```
-
-This must run **before** the refactored bot starts. A missing `game-instances.json` reads back as `[]`, and every player would restart from zero. See [scripts.md](./scripts.md) for the flags.
 
 ---
 

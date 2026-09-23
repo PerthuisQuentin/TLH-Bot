@@ -119,6 +119,15 @@ describe('prestigeCommand', () => {
         expect(stored.resources).toEqual({ shells: '1e12' });
     });
 
+    it('lists the Coquille millénaire among what is kept only once it is unlocked', async () => {
+        await seed('g1', fixture('1e12'));
+        expect(JSON.stringify((await call('g1')).embeds)).not.toContain('Coquille millénaire');
+
+        // Another guild: the store keeps g1 in RAM, so rewriting its file would be ignored.
+        await seed('g2', { ...fixture('1e12'), growthRings: { days: 100, lastDate: '' } });
+        expect(JSON.stringify((await call('g2')).embeds)).toContain('Coquille millénaire');
+    });
+
     it('previews the trade without touching anything', async () => {
         await seed('g1', fixture('1e12', { divingOtters: 40, nourishingReef: 2 }));
 

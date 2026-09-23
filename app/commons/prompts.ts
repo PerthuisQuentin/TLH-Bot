@@ -105,11 +105,11 @@ Canal : #${channelName}
 
 🐚 SYSTÈME DE COQUILLAGES :
 Les coquillages (🐚) sont la monnaie passive du serveur. Les membres en gagnent automatiquement de deux façons :
-- **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente) et les stries de croissance (×1.0 à ×2.0 selon les jours consécutifs actifs). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
+- **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente) et les stries de croissance (+1 % par jour actif, jusqu'à ×2.0). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
 - **Revenu passif** : quand un membre revient après une absence, il reçoit les coquillages accumulés pendant son inactivité. Le taux est plein (1 message-équivalent/heure) pendant les 24 premières heures d'absence, puis dégressif : environ ×0.5 à 48h, ×0.2 à 72h, quasi nul après une semaine. Le revenu passif est basé sur le gain par message du membre (upgrades inclus), sans multiplicateur de chaleur ni de stries.
 - **Réaction** : quand quelqu'un pose une réaction sur un message, la personne qui réagit ET l'auteur du message reçoivent chacun 10 % du gain habituel par message.
 
-Les **stries de croissance** : une strie s'ajoute chaque jour où le membre gagne des coquillages, en postant un message **ou** en réagissant à un message : une seule réaction dans la journée suffit à entretenir la série. Elles donnent un bonus progressif de ×1.0 (1er jour) jusqu'à ×2.0 (7 jours consécutifs ou plus). Une journée entière sans aucune activité fait repartir la série à 1. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 chaleur × ×2 stries).
+Les **stries de croissance** : une strie s'ajoute chaque jour où le membre gagne des coquillages, en postant un message **ou** en réagissant à un message : une seule réaction dans la journée suffit. Chaque strie ajoute +1 % au gain (×1.01 au 1er jour, ×1.50 à 50 jours), jusqu'à un plafond de ×2.0 atteint à 100 jours. Les jours n'ont pas besoin d'être consécutifs : un jour sans activité ne fait rien perdre, le compteur attend simplement le prochain jour actif, et il continue de compter au-delà de 100 jours même si le bonus reste plafonné. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 chaleur × ×2 stries).
 
 - **Jackpot** : chaque message a 1 chance sur 1 000 de déclencher un jackpot, qui rapporte 1 000 fois le gain de base par message, **en plus** du gain normal du message. Ni la chaleur du salon ni les stries ne s'appliquent au jackpot : il vaut la même chose pour tout le monde à gain par message égal. Le jackpot est annoncé publiquement dans le salon.
 
@@ -133,6 +133,9 @@ Quand la progression ralentit, \`/prestige\` échange le cycle en cours contre d
 Le corail s'achète dans \`/shop page:Corail\` :
 - 🫧 **Récif nourricier** : multiplie définitivement le gain par message, x2 par niveau et davantage tous les 5 niveaux. Coûte 1, 4, 16, 64, 256 🪸.
 - 🪷 **Polypes bâtisseurs** : +10% de corail à chaque prestige, par niveau. Coûte 1, 2, 4, 8, 16 🪸, donc bien moins cher que le récif : c'est l'achat d'appoint entre deux niveaux de récif.
+
+Dans le rayon \`/shop page:Trésors\`, un second achat unique apparaît pour un membre qui a la bouture **et** au moins 100 jours de stries de croissance :
+- 🌀 **Coquille millénaire** : 16 🪸, une seule fois. Elle lève le plafond ×2 des stries de croissance : chaque jour actif ajoute à nouveau +1 %, y compris les jours accumulés au-delà de 100 (un membre à 120 jours passe immédiatement de ×2.00 à ×2.20). Conservée au prestige. Une fois achetée elle disparaît de la boutique. Avant 100 jours, ne la mentionne pas : elle n'existe pas encore pour ce membre.
 
 Ces deux upgrades survivent à tous les prestiges.
 

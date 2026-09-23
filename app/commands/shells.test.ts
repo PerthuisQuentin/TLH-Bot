@@ -32,6 +32,7 @@ function gameInstanceFixture(
         maxShells: string;
         income: string;
         upgrades: Record<string, number>;
+        ringDays: number;
     }> = {},
 ) {
     return {
@@ -39,7 +40,7 @@ function gameInstanceFixture(
         resources: { shells: overrides.shells ?? '0' },
         stats: { maxShells: overrides.maxShells ?? '0' },
         income: { shells: overrides.income ?? '10' },
-        growthRings: { days: 0, lastDate: '' },
+        growthRings: { days: overrides.ringDays ?? 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: overrides.upgrades ?? {},
     };
@@ -98,6 +99,36 @@ describe('shellsCommand', () => {
         expect(fields.map((f) => f.name)).toEqual(['Rôles', 'Coquillages', 'Upgrades']);
         expect(fields[0].value).toContain('Non classé');
         expect(fields[0].value).toContain('Aucun');
+    });
+
+    it('shows the growth rings, the cap, and the bonus past it once lifted', async () => {
+        await writeGameInstances('g1', [
+            gameInstanceFixture('u1', { ringDays: 42 }),
+            gameInstanceFixture('u2', { ringDays: 120 }),
+            gameInstanceFixture('u3', {
+                ringDays: 120,
+                upgrades: { coralSeedling: 1, millennialShell: 1 },
+            }),
+        ]);
+
+        const coquillages = async (userId: string) => {
+            const mock = mockRes();
+            await shellsCommand.handler(
+                mockReq({ guild_id: 'g1', member: { user: { id: userId } } }),
+                mock.res,
+            );
+            const embed = mock.payload?.data.embeds as Array<Record<string, unknown>>;
+            const fields = embed[0].fields as Array<{ name: string; value: string }>;
+            return fields.find((f) => f.name === 'Coquillages')!.value;
+        };
+
+        expect(await coquillages('u1')).toContain('🌀 Stries de croissance : 42 jours — ×1.42');
+        expect(await coquillages('u1')).not.toContain('plafond');
+        expect(await coquillages('u2')).toContain('120 jours — ×2.00 (plafond atteint)');
+
+        const lifted = await coquillages('u3');
+        expect(lifted).toContain('120 jours — ×2.20');
+        expect(lifted).not.toContain('plafond');
     });
 
     it('hides the reef block entirely until the seedling is bought', async () => {

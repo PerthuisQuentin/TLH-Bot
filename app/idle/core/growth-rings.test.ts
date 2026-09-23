@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { GrowthRings, FULL_BONUS_DAYS } from './growth-rings.ts';
+import { GrowthRings, MAX_MULTIPLIER } from './growth-rings.ts';
 
 // Noon UTC stays inside the same Europe/Paris calendar day regardless of DST, and an
 // August reference avoids the two DST-transition weekends where +24h could skip a day.
@@ -15,23 +15,23 @@ afterEach(() => {
 });
 
 describe('GrowthRings.newInstance', () => {
-    it('starts dead: currentValue 0, multiplier x1', () => {
+    it('starts with no ring and no bonus', () => {
         const rings = GrowthRings.newInstance();
-        expect(rings.currentDays).toBe(0);
-        expect(rings.getMultiplier()).toBe(1);
+        expect(rings.days).toBe(0);
+        expect(rings.getMultiplier(false)).toBe(1);
     });
 });
 
 describe('addRing', () => {
-    it('starts the series at 1 on first use, multiplier still x1 on day one', () => {
+    it('adds the first ring, which already counts on day one', () => {
         vi.useFakeTimers();
         setDay(0);
 
         const rings = GrowthRings.newInstance();
-        rings.addRing();
+        rings.addRing(GrowthRings.today());
 
-        expect(rings.currentDays).toBe(1);
-        expect(rings.getMultiplier()).toBe(1);
+        expect(rings.days).toBe(1);
+        expect(rings.getMultiplier(false)).toBeCloseTo(1.01, 10);
     });
 
     it('is idempotent within the same Paris day', () => {
@@ -39,77 +39,78 @@ describe('addRing', () => {
         setDay(0);
 
         const rings = GrowthRings.newInstance();
-        rings.addRing();
-        rings.addRing();
+        rings.addRing(GrowthRings.today());
+        rings.addRing(GrowthRings.today());
 
-        expect(rings.currentDays).toBe(1);
+        expect(rings.days).toBe(1);
     });
 
-    it('increments on a consecutive day', () => {
+    it('adds one ring per active day', () => {
         vi.useFakeTimers();
         setDay(0);
         const rings = GrowthRings.newInstance();
-        rings.addRing();
+        rings.addRing(GrowthRings.today());
 
         setDay(1);
-        rings.addRing();
+        rings.addRing(GrowthRings.today());
 
-        expect(rings.currentDays).toBe(2);
+        expect(rings.days).toBe(2);
     });
 
-    it('resets to 1 rather than continuing after a missed day', () => {
+    it('only pauses over missed days, never losing a ring', () => {
         vi.useFakeTimers();
         setDay(0);
-        const today = GrowthRings.today();
-        const rings = new GrowthRings({ days: 5, lastDate: today });
+        const rings = new GrowthRings({ days: 5, lastDate: GrowthRings.today() });
 
-        setDay(2); // one full day skipped
-        rings.addRing();
+        setDay(30);
+        expect(rings.days).toBe(5);
+        rings.addRing(GrowthRings.today());
 
-        expect(rings.currentDays).toBe(1);
+        expect(rings.days).toBe(6);
     });
 });
 
-describe('currentDays (read-only)', () => {
-    it('stays alive one day after lastDate even without calling update', () => {
-        vi.useFakeTimers();
-        setDay(0);
-        const today = GrowthRings.today();
-        const rings = new GrowthRings({ days: 5, lastDate: today });
+describe('addRing on a given calendar', () => {
+    // The simulations run on a virtual calendar: the date passed in is the only clock.
+    it('counts one ring per distinct date, whatever the wall clock says', () => {
+        const rings = GrowthRings.newInstance();
+        rings.addRing('2030-01-01');
+        rings.addRing('2030-01-01');
+        rings.addRing('2030-01-05');
 
-        setDay(1);
-        expect(rings.currentDays).toBe(5);
-    });
-
-    it('is dead two days after lastDate without an update', () => {
-        vi.useFakeTimers();
-        setDay(0);
-        const today = GrowthRings.today();
-        const rings = new GrowthRings({ days: 5, lastDate: today });
-
-        setDay(2);
-        expect(rings.currentDays).toBe(0);
+        expect(rings.toJson()).toEqual({ days: 2, lastDate: '2030-01-05' });
     });
 });
 
 describe('getMultiplier', () => {
-    it('ramps linearly from x1 (day 1) to x2 (day FULL_BONUS_DAYS)', () => {
-        vi.useFakeTimers();
-        setDay(0);
-        const today = GrowthRings.today();
+    const at = (days: number) => new GrowthRings({ days, lastDate: '' });
 
-        expect(new GrowthRings({ days: 1, lastDate: today }).getMultiplier()).toBe(1);
-        expect(new GrowthRings({ days: 4, lastDate: today }).getMultiplier()).toBeCloseTo(1.5, 10);
-        expect(new GrowthRings({ days: FULL_BONUS_DAYS, lastDate: today }).getMultiplier()).toBe(2);
+    it('adds 1 % per active day', () => {
+        expect(at(7).getMultiplier(false)).toBeCloseTo(1.07, 10);
+        expect(at(42).getMultiplier(false)).toBeCloseTo(1.42, 10);
     });
 
-    it('never exceeds x2 past FULL_BONUS_DAYS', () => {
+    it('reaches the cap at 100 days and stays there', () => {
+        expect(at(99).getMultiplier(false)).toBeCloseTo(1.99, 10);
+        expect(at(99).isCapped(false)).toBe(false);
+        expect(at(100).getMultiplier(false)).toBe(MAX_MULTIPLIER);
+        expect(at(100).isCapped(false)).toBe(true);
+        expect(at(365).getMultiplier(false)).toBe(MAX_MULTIPLIER);
+    });
+
+    it('grows past ×2 once the cap is lifted, banked days included', () => {
+        expect(at(120).getMultiplier(true)).toBeCloseTo(2.2, 10);
+        expect(at(120).isCapped(true)).toBe(false);
+        expect(at(42).getMultiplier(true)).toBeCloseTo(1.42, 10);
+    });
+
+    // The count is what the cap lift reads, so it must not stop at the cap.
+    it('keeps counting days past the cap', () => {
         vi.useFakeTimers();
         setDay(0);
-        const today = GrowthRings.today();
+        const rings = new GrowthRings({ days: 100, lastDate: '' });
+        rings.addRing(GrowthRings.today());
 
-        expect(
-            new GrowthRings({ days: FULL_BONUS_DAYS + 3, lastDate: today }).getMultiplier(),
-        ).toBe(2);
+        expect(rings.days).toBe(101);
     });
 });

@@ -5,6 +5,7 @@ import type { ResourceId, ShopPage, UpgradeId, UpgradeKind } from '../types.ts';
 /** What an unlock condition may read. Built by `GameInstance`, so conditions stay pure. */
 export type UnlockContext = {
     upgradeLevels: Readonly<Record<UpgradeId, number>>;
+    growthRingDays: number;
 };
 
 export interface UpgradeMeta {

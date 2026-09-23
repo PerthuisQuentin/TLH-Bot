@@ -115,6 +115,7 @@ Providers, tools, the bounded tool loop and the log format: `docs/architecture.m
 - **All user-facing strings are French** (embeds, error replies, command descriptions and options). Code, comments and identifiers are English.
 - Money-like values (thresholds in `config.json`, shells in game files) are JSON **strings**, parsed with `bnFromJSON` (which also accepts legacy numbers).
 - Tests sit next to what they cover, `foo.test.ts` beside `foo.ts`, with explicit imports from `'vitest'`.
+- **Commits use gitmoji**: `:emoji: Imperative summary` in English, one commit per branch, never on `main`. PRs are squash-merged and GitHub appends `(#NN)`. Steps: the `workflow` skill.
 
 ## Documentation
 
@@ -128,7 +129,7 @@ Providers, tools, the bounded tool loop and the log format: `docs/architecture.m
 | `docs/storage.md`         | The `app/storage/` layer and the format of every data file.                                                           |
 | `docs/configuration.md`   | Env vars, deployment, per-guild config, REST API.                                                                     |
 | `docs/tooling.md`         | TypeScript, ESLint, Prettier and test setup, the lint-enforced layering rules, the core purity check.                 |
-| `docs/scripts.md`         | The `scripts/` tools, including the migration flags.                                                                  |
+| `docs/scripts.md`         | The `scripts/` tools: analysis, simulations, sandbox, core purity check.                                              |
 | `docs/prestige-design.md` | Why the prestige numbers are what they are: calibration, rejected variants, naming. Not behaviour.                    |
 | `docs/shells-backlog.md`  | Idea list. Intent only, never a source of truth on behaviour.                                                         |
 
@@ -138,4 +139,4 @@ Providers, tools, the bounded tool loop and the log format: `docs/architecture.m
 
 ## Skills
 
-Recipes for recurring tasks live in `.claude/skills/` and load when the task matches: `add-llm-provider`, `add-llm-tool`, `add-upgrade`, `add-slash-command`, `rebalance-shells`. They hold the steps; the invariants above apply whether or not a skill is loaded.
+Recipes for recurring tasks live in `.claude/skills/` and load when the task matches: `workflow` (discuss, plan, execute step by step, commit and push), `add-llm-provider`, `add-llm-tool`, `add-upgrade`, `add-slash-command`, `rebalance-shells`. They hold the steps; the invariants above apply whether or not a skill is loaded.

@@ -1,7 +1,7 @@
 /**
  * Prestige loop simulation, on top of the shell tree simulated by `simulate-idle.ts`.
  *
- *   tsx scripts/simulate-prestige.ts [--days=365] [--messages-per-day=500]
+ *   tsx scripts/simulate-prestige.ts [--days=365] [--messages-per-day=200]
  *                                    [--strategy=cheapest] [--prestige-ratio=2]
  *
  * Everything the game has an opinion on is read from `app/idle/core/`: the coral formula,
@@ -13,7 +13,14 @@
 import { GameInstance, DEFAULT_SHELLS_PER_MESSAGE } from '../app/idle/core/game-instance.ts';
 import { ResourceId, UpgradeId } from '../app/idle/core/types.ts';
 import { bn, bnAdd, bnGte, bnMul, formatBigNum, type BigNum } from '../app/idle/core/big-number.ts';
-import { numberArg, spendCoral, table, tryBuy, type PurchaseStrategy } from './sim-common.ts';
+import {
+    numberArg,
+    playMessages,
+    spendCoral,
+    table,
+    tryBuy,
+    type PurchaseStrategy,
+} from './sim-common.ts';
 
 type SimulationConfig = {
     days: number;
@@ -25,7 +32,7 @@ type SimulationConfig = {
 
 const DEFAULT_CONFIG: SimulationConfig = {
     days: 365,
-    messagesPerDay: 500,
+    messagesPerDay: 200,
     strategy: 'cheapest',
     prestigeRatio: 2,
 };
@@ -91,15 +98,21 @@ type Prestige = {
     coralMultiplier: BigNum;
 };
 
-function run(config: SimulationConfig): { prestiges: Prestige[]; instance: GameInstance } {
+function run(config: SimulationConfig): {
+    prestiges: Prestige[];
+    instance: GameInstance;
+    capLiftedDay: number | null;
+} {
     const instance = newPlayer();
     let coralEarned = bn(0);
     let runStart = 1;
     const prestiges: Prestige[] = [];
+    let capLiftedDay: number | null = null;
 
     for (let day = 1; day <= config.days; day += 1) {
-        instance.applyShellsGain(config.messagesPerDay);
+        playMessages(instance, day, config.messagesPerDay);
         while (tryBuy(instance, config.strategy) !== null);
+        capLiftedDay ??= instance.growthRingsCapLifted ? day : null;
 
         const runPeak = instance.stats.runMaxShells;
         const preview = instance.previewPrestige();
@@ -114,6 +127,7 @@ function run(config: SimulationConfig): { prestiges: Prestige[]; instance: GameI
         // After the reset, so a level bought now only pays from the next run on. That is
         // what the player gets: prestige first, then walk into the shop.
         spendCoral(instance);
+        capLiftedDay ??= instance.growthRingsCapLifted ? day : null;
 
         const reef = instance.upgrades[UpgradeId.NOURISHING_REEF];
         prestiges.push({
@@ -132,14 +146,14 @@ function run(config: SimulationConfig): { prestiges: Prestige[]; instance: GameI
         runStart = day + 1;
     }
 
-    return { prestiges, instance };
+    return { prestiges, instance, capLiftedDay };
 }
 
 // ─── Rendering ───────────────────────────────────────────────────────────────
 
 function main(): void {
     const config = parseArgs(process.argv.slice(2));
-    const { prestiges, instance } = run(config);
+    const { prestiges, instance, capLiftedDay } = run(config);
 
     console.log('══ Prestige loop ══');
     console.log(
@@ -190,6 +204,9 @@ function main(): void {
     );
     console.log(
         `First prestige day ${prestiges[0].day} · run length ${lengths[0]} → ${lengths[lengths.length - 1]} days · income now ${formatBigNum(instance.income[ResourceId.SHELLS])} 🐚/msg`,
+    );
+    console.log(
+        `Growth rings ${instance.growthRings.days} days (x${instance.growthRingsMultiplier.toFixed(2)}) · cap lifted ${capLiftedDay === null ? 'never' : `day ${capLiftedDay}`}`,
     );
 }
 

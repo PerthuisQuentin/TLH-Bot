@@ -17,11 +17,11 @@ Read [docs/shells.md](../../../docs/shells.md) first: the earn pipeline, every m
 
 1. **Measure before**: run the relevant simulation on the current rules and keep the output.
     ```bash
-    tsx scripts/simulate-idle.ts --days=365 --messages-per-day=500
+    tsx scripts/simulate-idle.ts --days=365 --messages-per-day=200
     tsx scripts/analyze-upgrade.ts <upgradeId> 1 40
     tsx scripts/simulate-heat.ts
     ```
-    Pick what the change touches. Flags and how to read the output: [docs/scripts.md](../../../docs/scripts.md). `--messages-per-day` is an effective count that already absorbs heat, growth rings and passive income.
+    Pick what the change touches. Flags and how to read the output: [docs/scripts.md](../../../docs/scripts.md). `--messages-per-day` is an effective count that already absorbs heat and passive income; growth rings are simulated on top of it.
 2. **Change** the constants or curves in `app/idle/core/`.
 3. **Measure after** with the same commands, and show the user a before/after comparison: time to each role threshold, upgrade payback, whatever the change was meant to move.
 4. **Tests**: update the expectations in the affected `app/idle/core/**/*.test.ts`. A changed number in a test should match a change the user asked for, not paper over an unintended one.

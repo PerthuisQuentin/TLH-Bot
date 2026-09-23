@@ -32,7 +32,7 @@ Slash commands never reach the gateway client, and gateway events never reach Ex
 | `app/routes/`         | Express REST handlers (`/api/files`, `/api/guilds`, `/api/messages`).                                                                                      |
 | `app/storage/`        | The file store: RAM cache, atomic writes, zod schemas, file-type registry.                                                                                 |
 | `files/`              | Per-guild persistent data (configurable via `FILES_DIR`).                                                                                                  |
-| `scripts/`            | Dev, analysis and migration scripts. Excluded from the build.                                                                                              |
+| `scripts/`            | Dev and analysis scripts. Excluded from the build.                                                                                                         |
 
 ---
 
