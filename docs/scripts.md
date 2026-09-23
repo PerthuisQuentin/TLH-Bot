@@ -6,12 +6,16 @@ They are typechecked all the same: `tsconfig.json` includes them, `tsconfig.buil
 
 Everything here reads the game rules from `app/idle/core/`, so a new upgrade or a rebalanced curve shows up in these tools with no edit.
 
+`sim-common.ts` is not a tool: it holds what the simulations and the sandbox share, the CLI number parsing, the table renderer and the auto-buy strategies. It is there so the purchase logic exists once.
+
 | Script                      | Purpose                                                               | State                                    |
 | --------------------------- | --------------------------------------------------------------------- | ---------------------------------------- |
 | `migrate-game-instances.ts` | Builds `game-instances.json` from the legacy files.                   | Ready. Run once per environment.         |
 | `analyze-upgrade.ts`        | Level-by-level cost / gain / payback table for one upgrade.           | Ready.                                   |
 | `simulate-heat.ts`          | Replays heat scenarios against the real decay constants.              | Ready.                                   |
 | `simulate-idle.ts`          | Simulates the progression curve over days.                            | Ready.                                   |
+| `simulate-prestige.ts`      | Simulates the prestige loop: coral, run lengths, coral upgrades.      | Ready. Drives the shipped curves.        |
+| `sandbox.ts`                | Plays the idle game interactively on a compressed clock.              | Ready. `npm run sandbox`.                |
 | `check-core-purity.ts`      | Fails if `app/idle/core/` depends on a package outside its allowlist. | Ready. Run through `npm run check:core`. |
 
 ---
@@ -130,6 +134,87 @@ The progression table gives shells, income and the level of each upgrade at samp
 Purchases are evaluated once per simulated day, after that day's earnings land. A continuous buyer would compound slightly faster.
 
 ---
+
+## `simulate-prestige.ts`
+
+Simulates the prestige loop designed in [prestige-design.md](./prestige-design.md): the player runs the shell tree up, converts the run into coral, spends it, and starts over.
+
+```bash
+tsx scripts/simulate-prestige.ts                          # one year, default player
+tsx scripts/simulate-prestige.ts --prestige-ratio=1       # prestiges as soon as it pays anything
+tsx scripts/simulate-prestige.ts --days=120 --messages-per-day=2000
+```
+
+| Option                   | Default    | Description                                                                                |
+| ------------------------ | ---------- | ------------------------------------------------------------------------------------------ |
+| `--days=<n>`             | 365        | Days to simulate.                                                                          |
+| `--messages-per-day=<n>` | 500        | Effective message count per day, same meaning as in `simulate-idle.ts`.                    |
+| `--strategy=<mode>`      | `cheapest` | How the shell tree is bought, `cheapest` or `best-payback`.                                |
+| `--prestige-ratio=<n>`   | 2          | How many times the lifetime coral a run must be worth before the player pulls the trigger. |
+
+There are no curve options. The coral formula, both coral upgrades and what a reset does are read from `app/idle/core/`, and the script drives a real `GameInstance` through `applyShellsGain`, `buyUpgrade` and `prestige`. Rebalancing means editing the core and re-running this, exactly as with `simulate-idle.ts`.
+
+What the script still owns is the part the game has no opinion on: **when a player chooses to prestige**, which is `--prestige-ratio`, and the naive cheapest-first buying that stands in for a player.
+
+One ordering the simulation inherits from the real code: coral is spent **after** the reset, so a level bought now only pays from the next run on. That is what a player gets, since they prestige first and walk into the shop after.
+
+### Reading the output
+
+One row per prestige: the day it happened, how long the run lasted, the peak it reached, coral gained and total, and the level of each coral upgrade afterwards. The summary line gives the first prestige day and how run lengths evolved, which is the number that matters. A calibration is healthy when runs get **gradually longer** without freezing: the layer is meant to run out of steam slowly, leaving room for the next one. Runs that shorten from one prestige to the next mean an upgrade is over the runaway line, see [prestige-design.md](./prestige-design.md).
+
+Two failure modes to watch for:
+
+- **Runaway.** If the reef's gain per level reaches the ×2 of its cost, run lengths crash to a handful of days and the numbers leave any useful range.
+- **Grind.** Too high a `CORAL_EXPONENT` freezes run lengths at a constant and the loop stops being a progression.
+
+---
+
+---
+
+## `sandbox.ts`
+
+Plays the shells game on its own, with no Discord, no storage and no AI. Where the two
+simulations answer _what do these curves produce over a year_, this one answers _what does it
+feel like to play them_.
+
+```bash
+npm run sandbox                                  # 500 msg/day, a quarter day per second
+npm run sandbox -- --messages-per-day=150        # a quieter member
+npm run sandbox -- --speed=2 --auto              # fast, with the naive buyer driving
+tsx scripts/sandbox.ts --frames=40               # render without a terminal, for a check
+```
+
+| Option                 | Default | Meaning                                                      |
+| ---------------------- | ------- | ------------------------------------------------------------ |
+| `--messages-per-day=N` | 500     | Effective messages a day, the same unit the simulations use. |
+| `--speed=N`            | 0.25    | Virtual days per real second. Snaps to the nearest step.     |
+| `--auto`               | off     | Start with the cheapest-first auto-buyer on.                 |
+| `--frames=N`           | —       | Headless: render N ticks and exit, no raw mode.              |
+
+| Key     | Action                                               |
+| ------- | ---------------------------------------------------- |
+| `1`-`9` | Buy the current quantity of that upgrade.            |
+| `x`     | Cycle the purchase size: 1, 10, max affordable.      |
+| `a`     | Toggle the auto-buyer.                               |
+| `p`     | Prestige, or say what the run peak is still missing. |
+| `+` `-` | Walk the speed steps, 0.05 to 10 days per second.    |
+| `space` | Pause the clock.                                     |
+| `r`     | Start over at day 0.                                 |
+| `q`     | Quit, restoring the terminal.                        |
+
+**The clock is virtual.** A tick advances the day counter by `speed × 0.1`, and the messages
+that many days are worth are handed to `applyShellsGain`. At the default speed a first prestige
+lands in about two and a half minutes of wall time.
+
+**Messages only.** Heat, the streak and passive income are folded into the message rate, the
+same convention `simulate-idle.ts` uses: all three key off wall-clock dates, which a virtual
+clock cannot drive honestly, so the sandbox does not pretend to model them. Everything else —
+prices, incomes, the coral formula, what a prestige resets — is read from `app/idle/core/`, so
+a rebalanced curve shows up here with no edit.
+
+**It never prestiges for you**, even with `--auto` on: when to reset is the decision the whole
+layer is built around, and automating it would answer the question the sandbox exists to ask.
+For a hands-off run over a year, that is what `simulate-prestige.ts` is.
 
 ## `check-core-purity.ts`
 

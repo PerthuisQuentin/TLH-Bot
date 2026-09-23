@@ -27,7 +27,12 @@ async function writeConfig(guildId: string, config: unknown): Promise<void> {
 
 function gameInstanceFixture(
     userId: string,
-    overrides: Partial<{ shells: string; maxShells: string; income: string }> = {},
+    overrides: Partial<{
+        shells: string;
+        maxShells: string;
+        income: string;
+        upgrades: Record<string, number>;
+    }> = {},
 ) {
     return {
         userId,
@@ -36,7 +41,7 @@ function gameInstanceFixture(
         income: { shells: overrides.income ?? '10' },
         streak: { value: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
-        upgrades: {},
+        upgrades: overrides.upgrades ?? {},
     };
 }
 
@@ -88,9 +93,115 @@ describe('shellsCommand', () => {
         expect(embed[0].footer).toBeUndefined();
 
         const fields = embed[0].fields as Array<{ name: string; value: string }>;
+        // No Récif: a fresh player has not bought the seedling, so the layer does not exist
+        // for them yet. The unlocked layout is covered further down.
         expect(fields.map((f) => f.name)).toEqual(['Rôles', 'Coquillages', 'Upgrades']);
         expect(fields[0].value).toContain('Non classé');
         expect(fields[0].value).toContain('Aucun');
+    });
+
+    it('hides the reef block entirely until the seedling is bought', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', { shells: '40000' })]);
+
+        const mock = mockRes();
+        await shellsCommand.handler(
+            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        const fields = embed.fields as Array<{ name: string; value: string }>;
+
+        expect(fields.map((f) => f.name)).not.toContain('Récif');
+        // Not just the block: the coral upgrades must not surface in the upgrade list either.
+        const rendered = JSON.stringify(embed);
+        expect(rendered).not.toContain('Récif nourricier');
+        expect(rendered).not.toContain('Polypes');
+        expect(rendered).not.toContain('🪸');
+    });
+
+    it('tells a player with no coral what the run peak still misses', async () => {
+        await writeGameInstances('g1', [
+            gameInstanceFixture('u1', {
+                shells: '40000',
+                maxShells: '40000',
+                upgrades: { coralSeedling: 1 },
+            }),
+        ]);
+
+        const mock = mockRes();
+        await shellsCommand.handler(
+            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        const reef = (embed.fields as Array<{ name: string; value: string }>).find(
+            (f) => f.name === 'Récif',
+        );
+
+        expect(reef?.value).toContain('Corail : 0 🪸');
+        expect(reef?.value).toContain('Aucun prestige');
+        // runMaxShells defaults to maxShells, so the gap is measured from 40K, not from 0.
+        expect(reef?.value).toContain('Encore 960K 🐚');
+    });
+
+    it('shows the coral a prestige would pay once the run peak covers it', async () => {
+        await writeGameInstances('g1', [
+            {
+                userId: 'u1',
+                resources: { shells: '4.1e11', coral: '7' },
+                stats: { maxShells: '9.2e12', runMaxShells: '2.5e12', prestigeCount: 3 },
+                income: { shells: '52000000' },
+                streak: { value: 0, lastDate: '' },
+                lastActiveAt: new Date(0).toISOString(),
+                upgrades: { coralSeedling: 1 },
+            },
+        ]);
+
+        const mock = mockRes();
+        await shellsCommand.handler(
+            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        const reef = (embed.fields as Array<{ name: string; value: string }>).find(
+            (f) => f.name === 'Récif',
+        );
+
+        expect(reef?.value).toContain('Corail : 7 🪸');
+        expect(reef?.value).toContain('Prestige 3');
+        // Computed from runMaxShells (2.5e12), not from the all-time 9.2e12.
+        expect(reef?.value).toContain('46 🪸');
+    });
+
+    it('keeps the one-shot seedling out of the upgrade list, bought or not', async () => {
+        const cases: Array<Record<string, number>> = [{}, { coralSeedling: 1 }];
+
+        for (const upgrades of cases) {
+            await writeGameInstances('g1', [
+                gameInstanceFixture('u1', { shells: '40000', maxShells: '40000', upgrades }),
+            ]);
+
+            const mock = mockRes();
+            await shellsCommand.handler(
+                mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+                mock.res,
+            );
+
+            const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+            const upgradeField = (embed.fields as Array<{ name: string; value: string }>).find(
+                (f) => f.name === 'Upgrades',
+            );
+
+            expect(upgradeField?.value).not.toContain('Bouture');
+            // The levelled ones are still all there: the filter is on one-shots, not on
+            // everything the player happens to own.
+            expect(upgradeField?.value).toContain('Loutres plongeuses');
+            expect(upgradeField?.value).toContain('Nageoires hydrodynamiques');
+            expect(upgradeField?.value).toContain('Sacs de récolte XXL');
+        }
     });
 
     it('shows the "Max historique" footer once maxShells differs from the current balance', async () => {

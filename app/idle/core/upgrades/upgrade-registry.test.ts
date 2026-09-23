@@ -9,6 +9,12 @@ describe('UPGRADE_REGISTRY', () => {
         }
     });
 
+    it('has every upgrade state whether a prestige resets it', () => {
+        for (const cls of ALL_UPGRADE_CLASSES) {
+            expect(typeof cls.resetOnPrestige).toBe('boolean');
+        }
+    });
+
     it('keeps ALL_UPGRADE_IDS and ALL_UPGRADE_CLASSES in sync with the UpgradeId enum', () => {
         expect(ALL_UPGRADE_IDS).toEqual(Object.values(UpgradeId));
         expect(ALL_UPGRADE_CLASSES).toHaveLength(ALL_UPGRADE_IDS.length);

@@ -69,3 +69,13 @@ describe('BaseUpgrade.getMaxBuyable', () => {
         expect(totalCost.toString()).toBe(bn(1000 * MAX_LEVELS_PER_PURCHASE).toString());
     });
 });
+
+describe('BaseUpgrade.reset', () => {
+    it('takes the level back to 0, whatever it was', () => {
+        const upgrade = new DivingOttersUpgrade(17);
+
+        upgrade.reset();
+
+        expect(upgrade.level).toBe(0);
+    });
+});

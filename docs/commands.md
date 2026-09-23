@@ -4,14 +4,15 @@ Discord slash commands. Definitions live in `app/commands/<name>.ts` and are pus
 
 Every user-facing string is French. The option names below are the literal ones Discord shows.
 
-| Command        | Options                  | Scope        | Default visibility |
-| -------------- | ------------------------ | ------------ | ------------------ |
-| `/ping`        | —                        | Guilds + DMs | public             |
-| `/ask`         | `question`               | Guilds + DMs | public             |
-| `/leaderboard` | `page`, `sort`, `public` | Guilds + DMs | ephemeral          |
-| `/shells`      | `user`, `public`         | Guilds + DMs | ephemeral          |
-| `/shop`        | `upgrade`, `quantity`    | Guilds only  | always ephemeral   |
-| `/heat`        | `public`                 | Guilds only  | ephemeral          |
+| Command        | Options                       | Scope        | Default visibility |
+| -------------- | ----------------------------- | ------------ | ------------------ |
+| `/ping`        | —                             | Guilds + DMs | public             |
+| `/ask`         | `question`                    | Guilds + DMs | public             |
+| `/leaderboard` | `page`, `sort`, `public`      | Guilds + DMs | ephemeral          |
+| `/shells`      | `user`, `public`              | Guilds + DMs | ephemeral          |
+| `/shop`        | `upgrade`, `page`, `quantity` | Guilds only  | always ephemeral   |
+| `/heat`        | `public`                      | Guilds only  | ephemeral          |
+| `/prestige`    | `confirmer`                   | Guilds only  | always ephemeral   |
 
 The three shells commands that accept `public` default to an ephemeral reply, so checking your own profile doesn't spam the channel. Pass `public:true` to show it to everyone.
 
@@ -76,7 +77,8 @@ Three fields:
 
 - **Rôles** — leaderboard rank, current role, next role and the shells still missing.
 - **Coquillages** — balance, gain per message (±10 %), gain per reaction, current streak and its multiplier.
-- **Upgrades** — one line per upgrade with its level and current effect.
+- **Récif** — coral balance, prestige count and what `/prestige` would pay. **Absent entirely** until 🌱 Bouture de corail is bought: an empty heading would announce the mechanic as loudly as its contents.
+- **Upgrades** — one line per upgrade with its level and current effect. The coral ones are omitted while the layer is locked, and **one-shot unlocks never appear at all**, bought or not: their level is a yes/no, and a "Niv. 0" among levelled upgrades reads as one the player is behind on. `/shop` is where they are sold, and the assistant still prices them from `upgradeShopLines`.
 
 The all-time maximum appears in the footer only when it differs from the balance.
 
@@ -88,12 +90,21 @@ Roles are read from `maxShells`, so the "current role" never regresses after a s
 
 Browses the upgrade shop, or buys levels. Always ephemeral.
 
-| Option     | Type        | Required | Description                           |
-| ---------- | ----------- | -------- | ------------------------------------- |
-| `upgrade`  | Choice      | No       | Which upgrade to buy. Omit to browse. |
-| `quantity` | Integer ≥ 1 | No       | How many levels. Default 1.           |
+| Option     | Type        | Required | Description                                   |
+| ---------- | ----------- | -------- | --------------------------------------------- |
+| `upgrade`  | Choice      | No       | Which upgrade to buy. Omit to browse.         |
+| `page`     | Choice      | No       | Which aisle to browse. Default `Coquillages`. |
+| `quantity` | Integer ≥ 1 | No       | How many levels. Default 1.                   |
 
-**Browsing** lists every upgrade with its level, current effect, next-level price, and how many levels the balance covers and for how much.
+**Browsing** lists the upgrades of one page with their level, current effect, next-level price, and how many levels the balance covers and for how much.
+
+**Pages** are one per currency something is priced in, derived from the registry: `Coquillages` holds the three otter upgrades plus 🌱 Bouture de corail, `Corail` the two permanent ones.
+
+**The `Corail` page is sealed** until that seedling is bought. It replies with a door — no fields, no balance, no 🪸 anywhere — naming the upgrade that opens it. The page choice stays in the command definition either way, since choices are registered globally and cannot vary per player. While sealed, the shells page also stops listing `Corail` under "Autres rayons", and buying a coral-priced upgrade by name is refused without quoting its price.
+
+A maxed upgrade shows _Déjà acquis._ instead of a next level, and buying it again is refused rather than reported as no funds. **A one-shot the player already owns leaves the aisle entirely**, rather than sitting there with a description, a level and a price `buyUpgrade` would refuse: there is nothing left to sell them. It stays listed while unbought, since the shop is the only place it is sold. The page sets the header balance and the list, nothing else, and an unknown value falls back to the default rather than erroring. `page` does not restrict `upgrade`: any upgrade can be bought by name from anywhere. A currency nothing is sold for never opens a page, and a new upgrade lands on the page of its `costResourceId` with no edit to the command.
+
+Pages are an option rather than buttons because `app/discord/interactions.ts` routes only `APPLICATION_COMMAND`; there is no component handling in the project yet.
 
 **Buying** runs the affordability check and the debit inside a single synchronous mutator, so a shell gain landing mid-purchase cannot let the check pass and the debit fail. Four outcomes:
 
@@ -127,3 +138,36 @@ Renders a 12-block progress bar, the raw heat value, the resulting multiplier an
 The bar saturates at heat 7, while the ×2.0 bucket only starts at 12 — so a full bar does not mean a maxed multiplier. The number next to it is the one that matters.
 
 Heat is in-memory only, so a fresh restart shows a cold channel.
+
+---
+
+## `/prestige`
+
+Trades the current run for coral. Always ephemeral.
+
+| Option      | Type    | Required | Description                                                   |
+| ----------- | ------- | -------- | ------------------------------------------------------------- |
+| `confirmer` | Boolean | No       | Performs the reset. Without it, the command only previews it. |
+
+Every reply is an embed, refusals included, so the command looks the same whatever it answers. The locked refusal is the one exception to the 🪸 title: it carries the seedling's 🌱 instead, since naming the currency is exactly what it is avoiding.
+
+**Two calls on purpose.** Without `confirmer`, the command shows what the trade would be and changes nothing; with `confirmer:true` it performs it. Nobody wipes a run by typing the command out of curiosity. It is two interactions rather than a confirmation button because `app/discord/interactions.ts` routes only `APPLICATION_COMMAND` and the project has no component handling.
+
+**The preview** states the run's peak harvest and the coral it converts to, what is lost (the shells balance and every upgrade whose `resetOnPrestige` is true) and what is kept (the all-time record, roles, streak, coral and the coral upgrades). The two upgrade lists are split on `resetOnPrestige`, so a new upgrade lands in the right column with no edit here.
+
+The copy leads with the conversion on purpose: the harvest feeds the reef, and the payout is read from the **peak** of the cycle rather than the balance, so spending in the shop never costs coral. Said explicitly, because the opposite assumption would make players hoard.
+
+The coral multiplier from the polyps is quoted on its own line, and only once it is above 1, so a player who has never bought one sees no dead line. Both branches read `GameInstance.previewPrestige()`, which applies it: quoting the bare formula would under-promise a payout the confirmation then beats.
+
+**Both branches refuse** in two cases. Without 🌱 Bouture de corail the reply names that upgrade and says nothing about coral at all, because the player has not met the currency yet. With it, below one coral, the reply names what the run peak still misses. Beyond those two, the layer is open to everyone: prestiging too early costs power rather than breaking anything.
+
+| Outcome           | Reply                                                                  |
+| ----------------- | ---------------------------------------------------------------------- |
+| Layer locked      | Points at 🌱 Bouture de corail in `/shop`, for either branch.          |
+| Run pays no coral | The shells the run peak still needs, for either branch.                |
+| No `confirmer`    | The preview above.                                                     |
+| `confirmer:true`  | Coral gained, new coral balance, starting otter level, and new income. |
+
+The reset runs inside a single synchronous mutator, so a shell gain landing mid-prestige cannot slip between reading the run peak and wiping it, and it is flushed to disk before the confirmation is sent.
+
+**No role synchronisation is involved.** Roles are computed from `maxShells`, which a prestige never touches, and only `app/discord/handlers.ts` applies them anyway — the webhook runtime this command lives in has no gateway client.

@@ -11,15 +11,28 @@ export enum ChannelActivityType {
 /** Value equals the JSON field name used in `GameInstanceJson.resources`. */
 export enum ResourceId {
     SHELLS = 'shells',
+    /** Earned by prestiging, never by activity, so nothing ever seeds an income for it. */
+    CORAL = 'coral',
 }
 
 export enum UpgradeId {
     DIVING_OTTERS = 'divingOtters',
     HYDRODYNAMIC_FLIPPERS = 'hydrodynamicFlippers',
     HARVEST_BAGS = 'harvestBags',
+    CORAL_SEEDLING = 'coralSeedling',
+    NOURISHING_REEF = 'nourishingReef',
+    BUILDING_POLYPS = 'buildingPolyps',
 }
 
+/** How an upgrade's gain enters `computeIncome`: summed, multiplied, or not at all. */
 export enum UpgradeKind {
     ADDITIVE = 'additive',
     MULTIPLICATIVE = 'multiplicative',
+    /**
+     * Neither: the upgrade changes something other than an income, and `computeIncome`
+     * skips it because it matches neither of the two filters. What it does instead is the
+     * class's own business, read by whoever cares — the way `coralSeedling` is read by
+     * `GameInstance.coralUnlocked`.
+     */
+    CUSTOM = 'custom',
 }

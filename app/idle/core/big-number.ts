@@ -115,8 +115,12 @@ export function formatBigNum(n: BigNum): string {
 
     const e = n.e; // floor(log10(|n|))
 
-    // Nombre < 1 000 : afficher avec 2 décimales (3 chiffres significatifs)
+    // Nombre < 1 000 : 3 chiffres significatifs, sauf pour un entier. Les soldes et les
+    // compteurs sont entiers par construction, et « 15.0 🐚 » se lit comme une mesure ratée
+    // là où « 15 🐚 » se lit comme un nombre. Les revenus fractionnaires gardent leurs
+    // décimales : 13.8 reste 13.8.
     if (e < 3) {
+        if (n.isInteger()) return n.toFixed(0);
         const decimals = Math.max(0, 2 - Math.max(0, e));
         return n.toFixed(decimals);
     }

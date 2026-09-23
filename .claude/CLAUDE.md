@@ -36,6 +36,7 @@ npx tsc --noEmit       # typecheck only
 npm run lint           # eslint, type-aware (lint:fix applies the safe fixes)
 npm run format         # prettier --write (format:check is read-only)
 npm test               # vitest, single pass (test:watch, coverage)
+npm run sandbox        # interactive idle sandbox on a compressed clock, no Discord
 npm run check:core     # build, then verify app/idle/core/ imports only allowed packages
 ```
 
@@ -119,18 +120,19 @@ Providers, tools, the bounded tool loop and the log format: `docs/architecture.m
 
 `docs/` is written in English:
 
-| File                     | Owns                                                                                                     |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `docs/architecture.md`   | The two runtimes and the REST surface, folder roles, layering, main flows, the AI layer, error handling. |
-| `docs/commands.md`       | Slash commands and their literal option names.                                                           |
-| `docs/shells.md`         | Game reference: earn pipeline, heat, streak, passive income, jackpot, upgrades + modifier DSL, roles.    |
-| `docs/storage.md`        | The `app/storage/` layer and the format of every data file.                                              |
-| `docs/configuration.md`  | Env vars, deployment, per-guild config, REST API.                                                        |
-| `docs/tooling.md`        | TypeScript, ESLint, Prettier and test setup, the lint-enforced layering rules, the core purity check.    |
-| `docs/scripts.md`        | The `scripts/` tools, including the migration flags.                                                     |
-| `docs/shells-backlog.md` | Idea list. Intent only, never a source of truth on behaviour.                                            |
+| File                      | Owns                                                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `docs/architecture.md`    | The two runtimes and the REST surface, folder roles, layering, main flows, the AI layer, error handling.        |
+| `docs/commands.md`        | Slash commands and their literal option names.                                                                  |
+| `docs/shells.md`          | Game reference: earn pipeline, heat, streak, passive income, jackpot, upgrades + modifier DSL, prestige, roles. |
+| `docs/storage.md`         | The `app/storage/` layer and the format of every data file.                                                     |
+| `docs/configuration.md`   | Env vars, deployment, per-guild config, REST API.                                                               |
+| `docs/tooling.md`         | TypeScript, ESLint, Prettier and test setup, the lint-enforced layering rules, the core purity check.           |
+| `docs/scripts.md`         | The `scripts/` tools, including the migration flags.                                                            |
+| `docs/prestige-design.md` | Why the prestige numbers are what they are: calibration, rejected variants, naming. Not behaviour.              |
+| `docs/shells-backlog.md`  | Idea list. Intent only, never a source of truth on behaviour.                                                   |
 
-**Before touching an area you don't know**, read its doc first: `docs/storage.md` before changing how data is persisted, `docs/commands.md` before adding a command, `docs/shells.md` before rebalancing.
+**Before touching an area you don't know**, read its doc first: `docs/storage.md` before changing how data is persisted, `docs/commands.md` before adding a command, `docs/shells.md` before rebalancing, `docs/prestige-design.md` before touching a prestige constant or a coral curve.
 
 **After changing a public behaviour, data format, config option or command parameter**, update the matching doc. Keep it functional: explain _what_ and _why_, not how the code reads line by line. Balancing changes land in `docs/shells.md` **and** in the `SYSTÈME DE COQUILLAGES` block of `app/commons/prompts.ts`.
 

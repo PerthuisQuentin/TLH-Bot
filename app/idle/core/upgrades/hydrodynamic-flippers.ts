@@ -13,6 +13,7 @@ export class HydrodynamicFlippersUpgrade extends BaseUpgrade {
     static readonly emoji = '🐟';
     static readonly description =
         "Des nageoires perfectionnées décuplent l'efficacité de vos loutres. Chaque amélioration amplifie la récolte de toute la troupe.";
+    static readonly resetOnPrestige = true;
 
     computeCost(level: number): BigNum {
         return computeValue(level, [

@@ -20,7 +20,11 @@ afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
 });
 
-function gameInstanceFixture(userId: string, shells: string) {
+function gameInstanceFixture(
+    userId: string,
+    shells: string,
+    upgrades: Record<string, number> = {},
+) {
     return {
         userId,
         resources: { shells },
@@ -28,9 +32,12 @@ function gameInstanceFixture(userId: string, shells: string) {
         income: { shells: '10' },
         streak: { value: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
-        upgrades: {},
+        upgrades,
     };
 }
+
+/** Coral exists for this player: the seedling is what opens the aisle. */
+const UNLOCKED = { coralSeedling: 1 };
 
 async function writeGameInstances(guildId: string, instances: unknown[]): Promise<void> {
     await writeFile(
@@ -70,7 +77,7 @@ describe('shopCommand', () => {
         expect(mock.payload?.data.content).toContain('serveur');
     });
 
-    it('lists one field per upgrade when no upgrade option is given', async () => {
+    it('defaults to the shells page, listing only what shells can buy', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
 
         const mock = mockRes();
@@ -80,8 +87,140 @@ describe('shopCommand', () => {
         );
 
         const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.title).toBe('🏪 Boutique');
-        expect((embed.fields as unknown[]).length).toBe(3);
+        expect(embed.title).toBe('🏪 Boutique — Coquillages');
+        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
+            '🦦 Loutres plongeuses',
+            '🐟 Nageoires hydrodynamiques',
+            '🎒 Sacs de récolte XXL',
+            '🌱 Bouture de corail',
+        ]);
+        // The coral aisle is not advertised to someone who cannot open it.
+        expect(embed.description).not.toContain('/shop page:Corail');
+    });
+
+    it('points at the coral aisle once the seedling is bought', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        expect(embed.description).toContain('/shop page:Corail');
+    });
+
+    it('drops the seedling from the aisle entirely once it is owned', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
+            '🦦 Loutres plongeuses',
+            '🐟 Nageoires hydrodynamiques',
+            '🎒 Sacs de récolte XXL',
+        ]);
+        // Not just out of the fields: nothing is left of it anywhere on the page.
+        expect(JSON.stringify(embed)).not.toContain('Bouture');
+    });
+
+    it('seals the coral page until the seedling is bought, naming the way in', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({
+                guild_id: 'g1',
+                member: { user: { id: 'u1' } },
+                data: { options: [{ name: 'page', value: 'coral' }] },
+            }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        expect(embed.fields).toBeUndefined();
+        expect(embed.description).toContain('Bouture de corail');
+        // The prices and the currency itself stay behind the door.
+        expect(JSON.stringify(embed)).not.toContain('🪸');
+    });
+
+    it('refuses to sell a coral upgrade by name while the layer is locked', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({
+                guild_id: 'g1',
+                member: { user: { id: 'u1' } },
+                data: { options: [{ name: 'upgrade', value: 'nourishingReef' }] },
+            }),
+            mock.res,
+        );
+
+        const content = mock.payload?.data.content as string;
+        expect(content).toContain('Bouture de corail');
+        expect(content).not.toContain('🪸');
+    });
+
+    it('refuses a second seedling, since it is a one-shot purchase', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '1e9', UNLOCKED)]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({
+                guild_id: 'g1',
+                member: { user: { id: 'u1' } },
+                data: { options: [{ name: 'upgrade', value: 'coralSeedling' }] },
+            }),
+            mock.res,
+        );
+
+        expect(mock.payload?.data.content).toContain('niveau maximum');
+    });
+
+    it('shows the coral upgrades and the coral balance on the coral page', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({
+                guild_id: 'g1',
+                member: { user: { id: 'u1' } },
+                data: { options: [{ name: 'page', value: 'coral' }] },
+            }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        expect(embed.title).toBe('🏪 Boutique — Corail');
+        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
+            '🫧 Récif nourricier',
+            '🪷 Polypes bâtisseurs',
+        ]);
+        expect(embed.description).toContain('🪸');
+    });
+
+    it('falls back to the default page when the value is not a page', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({
+                guild_id: 'g1',
+                member: { user: { id: 'u1' } },
+                data: { options: [{ name: 'page', value: 'bogus' }] },
+            }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        expect(embed.title).toBe('🏪 Boutique — Coquillages');
     });
 
     it('rejects an unknown upgrade id', async () => {

@@ -52,6 +52,17 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
                 value: `${profile.balanceText}\nPar message : ${profile.incomePerMessageText}\nPar réaction : ${profile.incomePerReactionText}\n${profile.streakText}`,
                 inline: false,
             },
+            // Dropped entirely rather than left empty while the layer is locked: an empty
+            // "Récif" heading announces the mechanic just as loudly as its contents would.
+            ...(profile.coralUnlocked
+                ? [
+                      {
+                          name: 'Récif',
+                          value: `Corail : ${profile.coralText}\n${profile.prestigeText}\n${profile.nextPrestigeText}`,
+                          inline: false,
+                      },
+                  ]
+                : []),
             { name: 'Upgrades', value: profile.upgradeLines.join('\n'), inline: false },
         ];
 

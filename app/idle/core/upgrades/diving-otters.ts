@@ -13,6 +13,7 @@ export class DivingOttersUpgrade extends BaseUpgrade {
     static readonly emoji = '🦦';
     static readonly description =
         'Envoyez des loutres plonger pour ramasser des coquillages à votre place. Chaque loutre supplémentaire gonfle votre récolte.';
+    static readonly resetOnPrestige = true;
 
     computeCost(level: number): BigNum {
         return computeValue(level, [
