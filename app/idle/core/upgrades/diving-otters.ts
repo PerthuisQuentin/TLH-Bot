@@ -1,4 +1,4 @@
-import { UpgradeKind, UpgradeId, ResourceId } from '../types.ts';
+import { UpgradeKind, UpgradeId, ResourceId, ShopPage } from '../types.ts';
 import { BaseUpgrade } from './base-upgrade.ts';
 import { formatBigNum } from '../big-number.ts';
 import { computeValue, ModifierTrigger, ModifierOperation } from '../maths.ts';
@@ -14,6 +14,7 @@ export class DivingOttersUpgrade extends BaseUpgrade {
     static readonly description =
         'Envoyez des loutres plonger pour ramasser des coquillages à votre place. Chaque loutre supplémentaire gonfle votre récolte.';
     static readonly resetOnPrestige = true;
+    static readonly shopPage = ShopPage.SHELLS;
 
     computeCost(level: number): BigNum {
         return computeValue(level, [

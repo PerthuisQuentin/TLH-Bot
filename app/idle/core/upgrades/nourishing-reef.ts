@@ -1,5 +1,6 @@
-import { UpgradeKind, UpgradeId, ResourceId } from '../types.ts';
+import { UpgradeKind, UpgradeId, ResourceId, ShopPage } from '../types.ts';
 import { BaseUpgrade } from './base-upgrade.ts';
+import { CORAL_UNLOCK_HINT, isCoralUnlocked } from './coral-seedling.ts';
 import { formatBigNum } from '../big-number.ts';
 import { computeValue, ModifierTrigger, ModifierOperation } from '../maths.ts';
 import type { BigNum } from '../big-number.ts';
@@ -14,6 +15,9 @@ export class NourishingReefUpgrade extends BaseUpgrade {
     static readonly description =
         'Votre récif abrite toujours plus de coquillages. Chaque amélioration multiplie votre récolte, définitivement : un prestige ne la reprend pas.';
     static readonly resetOnPrestige = false;
+    static readonly shopPage = ShopPage.CORAL;
+    static readonly unlockCondition = isCoralUnlocked;
+    static readonly unlockHint = CORAL_UNLOCK_HINT;
 
     // Same shape as the shells upgrades: a per-level factor plus a step every 5 levels, on
     // both sides. The step has to be on the cost too, or that one level would multiply the

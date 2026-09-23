@@ -76,7 +76,7 @@ A member's shells profile.
 Three fields:
 
 - **Rôles** — leaderboard rank, current role, next role and the shells still missing.
-- **Coquillages** — balance, gain per message (±10 %), gain per reaction, current streak and its multiplier.
+- **Coquillages** — balance, gain per message (±10 %), gain per reaction, current growth rings (_Stries de croissance_) and their multiplier.
 - **Récif** — coral balance, prestige count and what `/prestige` would pay. **Absent entirely** until 🌱 Bouture de corail is bought: an empty heading would announce the mechanic as loudly as its contents.
 - **Upgrades** — one line per upgrade with its level and current effect. The coral ones are omitted while the layer is locked, and **one-shot unlocks never appear at all**, bought or not: their level is a yes/no, and a "Niv. 0" among levelled upgrades reads as one the player is behind on. `/shop` is where they are sold, and the assistant still prices them from `upgradeShopLines`.
 
@@ -98,11 +98,11 @@ Browses the upgrade shop, or buys levels. Always ephemeral.
 
 **Browsing** lists the upgrades of one page with their level, current effect, next-level price, and how many levels the balance covers and for how much.
 
-**Pages** are one per currency something is priced in, derived from the registry: `Coquillages` holds the three otter upgrades plus 🌱 Bouture de corail, `Corail` the two permanent ones.
+**Pages** are declared by each upgrade (`shopPage`) and derived from the registry, so a page can mix currencies and one nothing is sold on never opens: `Coquillages` holds the three otter upgrades, `Trésors` the one-shot unlocks whatever they cost (🌱 Bouture de corail, priced in shells), `Corail` the two permanent ones. The page names live in `app/idle/core/shop-pages.ts`, so `/prestige` can point at the right one.
 
-**The `Corail` page is sealed** until that seedling is bought. It replies with a door — no fields, no balance, no 🪸 anywhere — naming the upgrade that opens it. The page choice stays in the command definition either way, since choices are registered globally and cannot vary per player. While sealed, the shells page also stops listing `Corail` under "Autres rayons", and buying a coral-priced upgrade by name is refused without quoting its price.
+**The `Corail` page is sealed** until that seedling is bought. It replies with a door — no fields, no balance, no 🪸 anywhere — naming the upgrade that opens it. The page choice stays in the command definition either way, since choices are registered globally and cannot vary per player. While sealed, the shells page also stops listing `Corail` under "Autres rayons", and buying a coral upgrade by name is refused without quoting its price.
 
-A maxed upgrade shows _Déjà acquis._ instead of a next level, and buying it again is refused rather than reported as no funds. **A one-shot the player already owns leaves the aisle entirely**, rather than sitting there with a description, a level and a price `buyUpgrade` would refuse: there is nothing left to sell them. It stays listed while unbought, since the shop is the only place it is sold. The page sets the header balance and the list, nothing else, and an unknown value falls back to the default rather than erroring. `page` does not restrict `upgrade`: any upgrade can be bought by name from anywhere. A currency nothing is sold for never opens a page, and a new upgrade lands on the page of its `costResourceId` with no edit to the command.
+**What is on sale is the upgrade's call, not the shop's.** A page lists the upgrades the player may see: unlocked (its `unlockCondition`, see [shells.md](./shells.md#adding-an-upgrade)) and not maxed. A one-shot the player already owns therefore leaves the aisle entirely, rather than sitting there with a price `buyUpgrade` would refuse. "Autres rayons" lists only pages with something on sale. Buying a locked upgrade by name is refused before any price is quoted, with the upgrade's own `unlockHint`; buying a maxed one again is refused rather than reported as no funds. The page sets the list and the header, which shows the balance of every currency priced on it, nothing else, and an unknown value falls back to the default rather than erroring. `page` does not restrict `upgrade`: any upgrade can be bought by name from anywhere. A new upgrade lands on the page it declares with no edit to the command; a new page needs a display name in `shop-pages.ts` and a re-register, since the choices change. A page whose upgrades are all bought, like `Trésors` after the seedling, stays a valid choice and says there is nothing to sell.
 
 Pages are an option rather than buttons because `app/discord/interactions.ts` routes only `APPLICATION_COMMAND`; there is no component handling in the project yet.
 
@@ -153,7 +153,7 @@ Every reply is an embed, refusals included, so the command looks the same whatev
 
 **Two calls on purpose.** Without `confirmer`, the command shows what the trade would be and changes nothing; with `confirmer:true` it performs it. Nobody wipes a run by typing the command out of curiosity. It is two interactions rather than a confirmation button because `app/discord/interactions.ts` routes only `APPLICATION_COMMAND` and the project has no component handling.
 
-**The preview** states the run's peak harvest and the coral it converts to, what is lost (the shells balance and every upgrade whose `resetOnPrestige` is true) and what is kept (the all-time record, roles, streak, coral and the coral upgrades). The two upgrade lists are split on `resetOnPrestige`, so a new upgrade lands in the right column with no edit here.
+**The preview** states the run's peak harvest and the coral it converts to, what is lost (the shells balance and every upgrade whose `resetOnPrestige` is true) and what is kept (the all-time record, roles, growth rings, coral and the coral upgrades). The two upgrade lists are split on `resetOnPrestige`, so a new upgrade lands in the right column with no edit here.
 
 The copy leads with the conversion on purpose: the harvest feeds the reef, and the payout is read from the **peak** of the cycle rather than the balance, so spending in the shop never costs coral. Said explicitly, because the opposite assumption would make players hoard.
 
@@ -161,12 +161,12 @@ The coral multiplier from the polyps is quoted on its own line, and only once it
 
 **Both branches refuse** in two cases. Without 🌱 Bouture de corail the reply names that upgrade and says nothing about coral at all, because the player has not met the currency yet. With it, below one coral, the reply names what the run peak still misses. Beyond those two, the layer is open to everyone: prestiging too early costs power rather than breaking anything.
 
-| Outcome           | Reply                                                                  |
-| ----------------- | ---------------------------------------------------------------------- |
-| Layer locked      | Points at 🌱 Bouture de corail in `/shop`, for either branch.          |
-| Run pays no coral | The shells the run peak still needs, for either branch.                |
-| No `confirmer`    | The preview above.                                                     |
-| `confirmer:true`  | Coral gained, new coral balance, starting otter level, and new income. |
+| Outcome           | Reply                                                                      |
+| ----------------- | -------------------------------------------------------------------------- |
+| Layer locked      | Points at 🌱 Bouture de corail in `/shop page:Trésors`, for either branch. |
+| Run pays no coral | The shells the run peak still needs, for either branch.                    |
+| No `confirmer`    | The preview above.                                                         |
+| `confirmer:true`  | Coral gained, new coral balance, starting otter level, and new income.     |
 
 The reset runs inside a single synchronous mutator, so a shell gain landing mid-prestige cannot slip between reading the run peak and wiping it, and it is flushed to disk before the confirmation is sent.
 

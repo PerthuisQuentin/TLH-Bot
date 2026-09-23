@@ -14,7 +14,7 @@ function makeInstance(
         resources: { [ResourceId.SHELLS]: shells },
         stats: { maxShells },
         income: { [ResourceId.SHELLS]: income },
-        streak: { value: 0, lastDate: '' },
+        growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         upgrades: {},
     });

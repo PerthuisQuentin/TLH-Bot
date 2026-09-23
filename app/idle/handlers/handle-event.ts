@@ -20,7 +20,7 @@ const GAIN_FRACTIONS: Record<ChannelActivityType, number> = {
 };
 
 // Gain only: being reacted to is not an activity of the author's, so no cooldown,
-// streak, heat or passive income — leaving lastActiveAt untouched on purpose.
+// growth rings, heat or passive income — leaving lastActiveAt untouched on purpose.
 async function creditMessageAuthor(guildId: string, userId: string): Promise<void> {
     const amount = await updateGameInstance(guildId, userId, (instance) =>
         instance.applyShellsGain(GAIN_FRACTIONS[ChannelActivityType.Reaction]),
@@ -59,11 +59,11 @@ export async function handleDiscordEvent(event: DiscordEvent): Promise<DiscordEv
     const outcome = await updateGameInstance(event.guildId, event.userId, (gameInstance) => {
         const passiveIncomeEarned = gameInstance.applyPassiveIncome();
 
-        // No activityType guard on purpose: a single reaction keeps the streak alive.
-        gameInstance.updateStreak();
-        const streakMultiplier = gameInstance.streak.getMultiplier();
+        // No activityType guard on purpose: a single reaction is enough to add the day's ring.
+        gameInstance.addGrowthRing();
+        const growthRingsMultiplier = gameInstance.growthRings.getMultiplier();
         const activityTypeMultiplier = GAIN_FRACTIONS[event.activityType];
-        const finalMultiplier = heatMultiplier * streakMultiplier * activityTypeMultiplier;
+        const finalMultiplier = heatMultiplier * growthRingsMultiplier * activityTypeMultiplier;
         const shellsGained = gameInstance.applyShellsGain(finalMultiplier);
 
         // Jackpot — independent from other multipliers, messages only

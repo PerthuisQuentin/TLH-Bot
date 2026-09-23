@@ -17,7 +17,7 @@ Solde actuel : ${profile.balanceText}
 Record historique : ${profile.maxShellsText}
 Gain par message : ${profile.incomePerMessageText}
 Gain par réaction : ${profile.incomePerReactionText}
-${profile.streakText}
+${profile.growthRingsText}
 ${reefBlock(profile)}Upgrades (niveau et gain actuels) :
 ${profile.upgradeLines.join('\n')}
 Boutique — prochain niveau de chaque upgrade et ce que le solde actuel permet d'acheter dès maintenant :
@@ -38,7 +38,7 @@ function reefBlock(profile: ShellsProfile): string {
 const shellsProfileDeclaration: ToolFunctionDeclaration = {
     name: 'get_shells_profile',
     description:
-        "Récupère le profil Coquillages complet (solde, record, rang au classement, rôle actuel/suivant, gain par message et par réaction, streak, corail et prestiges, upgrades) d'un membre précis du serveur — le même résultat que la commande /shells — ainsi que les prix de la boutique /shop pour chacun de ses upgrades (coût du prochain niveau, gain que ça donnerait, et combien de niveaux son solde actuel permet d'acheter dès maintenant). Utilise OBLIGATOIREMENT cette fonction pour toute question liée aux coquillages (🐚) d'un membre précis : combien il/elle en a, son solde, son score, s'il/elle en a, son rang ou classement, ses upgrades, son rôle, son streak, son corail (🪸) ou ses prestiges — même formulée de façon informelle (\"il a combien de coquillages\", \"elle en a ?\", \"son rang c'est quoi\"), et même quand tu penses déjà connaître la réponse ou l'avoir donnée plus tôt dans la conversation. Sert aussi à conseiller un membre sur ses achats en boutique : quel upgrade prendre, combien de niveaux il peut se payer, s'il devrait plutôt économiser pour le prochain rôle — appelle-la aussi pour ce genre de question, même sans mention explicite du mot coquillage. N'invente et ne réutilise jamais un chiffre pour un autre membre : rappelle cette fonction séparément pour CHAQUE membre distinct visé, même juste après l'avoir appelée pour quelqu'un d'autre.",
+        "Récupère le profil Coquillages complet (solde, record, rang au classement, rôle actuel/suivant, gain par message et par réaction, stries de croissance, corail et prestiges, upgrades) d'un membre précis du serveur — le même résultat que la commande /shells — ainsi que les prix de la boutique /shop pour chacun de ses upgrades (coût du prochain niveau, gain que ça donnerait, et combien de niveaux son solde actuel permet d'acheter dès maintenant). Utilise OBLIGATOIREMENT cette fonction pour toute question liée aux coquillages (🐚) d'un membre précis : combien il/elle en a, son solde, son score, s'il/elle en a, son rang ou classement, ses upgrades, son rôle, ses stries de croissance, son corail (🪸) ou ses prestiges — même formulée de façon informelle (\"il a combien de coquillages\", \"elle en a ?\", \"son rang c'est quoi\"), et même quand tu penses déjà connaître la réponse ou l'avoir donnée plus tôt dans la conversation. Sert aussi à conseiller un membre sur ses achats en boutique : quel upgrade prendre, combien de niveaux il peut se payer, s'il devrait plutôt économiser pour le prochain rôle — appelle-la aussi pour ce genre de question, même sans mention explicite du mot coquillage. N'invente et ne réutilise jamais un chiffre pour un autre membre : rappelle cette fonction séparément pour CHAQUE membre distinct visé, même juste après l'avoir appelée pour quelqu'un d'autre.",
     parameters: {
         type: ToolParamType.OBJECT,
         properties: {

@@ -105,18 +105,20 @@ Canal : #${channelName}
 
 🐚 SYSTÈME DE COQUILLAGES :
 Les coquillages (🐚) sont la monnaie passive du serveur. Les membres en gagnent automatiquement de deux façons :
-- **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente) et le streak journalier (×1.0 à ×2.0 selon les jours consécutifs actifs). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
-- **Revenu passif** : quand un membre revient après une absence, il reçoit les coquillages accumulés pendant son inactivité. Le taux est plein (1 message-équivalent/heure) pendant les 24 premières heures d'absence, puis dégressif : environ ×0.5 à 48h, ×0.2 à 72h, quasi nul après une semaine. Le revenu passif est basé sur le gain par message du membre (upgrades inclus), sans multiplicateur heat ni streak.
+- **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente) et les stries de croissance (×1.0 à ×2.0 selon les jours consécutifs actifs). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
+- **Revenu passif** : quand un membre revient après une absence, il reçoit les coquillages accumulés pendant son inactivité. Le taux est plein (1 message-équivalent/heure) pendant les 24 premières heures d'absence, puis dégressif : environ ×0.5 à 48h, ×0.2 à 72h, quasi nul après une semaine. Le revenu passif est basé sur le gain par message du membre (upgrades inclus), sans multiplicateur de chaleur ni de stries.
 - **Réaction** : quand quelqu'un pose une réaction sur un message, la personne qui réagit ET l'auteur du message reçoivent chacun 10 % du gain habituel par message.
 
-Le **streak journalier** augmente chaque jour où le membre gagne des coquillages, en postant un message **ou** en réagissant à un message : une seule réaction dans la journée suffit à entretenir la série. Il donne un bonus progressif de ×1.0 (1er jour) jusqu'à ×2.0 (7 jours consécutifs ou plus). Une journée entière sans aucune activité fait repartir la série à 1. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 heat × ×2 streak).
+Les **stries de croissance** : une strie s'ajoute chaque jour où le membre gagne des coquillages, en postant un message **ou** en réagissant à un message : une seule réaction dans la journée suffit à entretenir la série. Elles donnent un bonus progressif de ×1.0 (1er jour) jusqu'à ×2.0 (7 jours consécutifs ou plus). Une journée entière sans aucune activité fait repartir la série à 1. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 chaleur × ×2 stries).
 
-- **Jackpot** : chaque message a 1 chance sur 1 000 de déclencher un jackpot, qui rapporte 1 000 fois le gain de base par message, **en plus** du gain normal du message. Ni la chaleur du salon ni le streak ne s'appliquent au jackpot : il vaut la même chose pour tout le monde à gain par message égal. Le jackpot est annoncé publiquement dans le salon.
+- **Jackpot** : chaque message a 1 chance sur 1 000 de déclencher un jackpot, qui rapporte 1 000 fois le gain de base par message, **en plus** du gain normal du message. Ni la chaleur du salon ni les stries ne s'appliquent au jackpot : il vaut la même chose pour tout le monde à gain par message égal. Le jackpot est annoncé publiquement dans le salon.
 
 Le gain augmente grâce aux upgrades achetables dans \`/shop page:Coquillages\` :
 - 🦦 **Loutres plongeuses** : augmente le gain de base par message (s'accélère avec les niveaux).
 - 🐟 **Nageoires hydrodynamiques** : multiplie l'ensemble du gain.
 - 🎒 **Sacs de récolte XXL** : multiplie également l'ensemble du gain (bonus plus élevé par niveau, mais coût bien plus important).
+
+Le rayon \`/shop page:Trésors\` rassemble les achats uniques, qui débloquent quelque chose au lieu d'augmenter le gain :
 - 🌱 **Bouture de corail** : achat unique à 100 000 🐚, ne rapporte aucun gain. Elle ouvre la suite du jeu. Une fois achetée elle disparaît de la boutique et du profil \`/shells\` : il n'y a plus rien à en faire, ne conseille donc jamais de la racheter.
 
 🪸 PRESTIGE ET CORAIL :
@@ -124,7 +126,7 @@ Le gain augmente grâce aux upgrades achetables dans \`/shop page:Coquillages\` 
 
 Quand la progression ralentit, \`/prestige\` échange le cycle en cours contre du **corail** (🪸), la monnaie permanente. Les loutres prennent leur retraite et la récolte se dépose sur le récif.
 - **Ce qui est remis à zéro** : le solde de coquillages et les trois upgrades de récolte (loutres, nageoires, sacs).
-- **Ce qui est conservé** : le record historique, les rôles Discord, le streak, la bouture, le corail et les upgrades de corail. Un prestige ne fait donc perdre aucun rang ni aucun rôle, c'est ce qui le rend sans risque.
+- **Ce qui est conservé** : le record historique, les rôles Discord, les stries de croissance, la bouture, le corail et les upgrades de corail. Un prestige ne fait donc perdre aucun rang ni aucun rôle, c'est ce qui le rend sans risque.
 - **Combien de corail** : cela dépend du record de coquillages atteint **depuis le dernier prestige**, pas du solde courant ni du record historique. Il faut 1 million de coquillages de record sur le cycle pour le premier 🪸, et la progression est volontairement sous-linéaire : tenir deux fois plus longtemps rapporte nettement moins que le double. Prestiger trop tôt ralentit, mais ne casse jamais rien.
 - \`/prestige\` seul affiche un aperçu et ne change rien ; \`/prestige confirmer:true\` exécute l'échange. Sous 1 🪸, la commande refuse et indique ce qui manque, et sans la bouture elle renvoie vers la boutique.
 

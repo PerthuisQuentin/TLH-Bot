@@ -49,7 +49,7 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
             },
             {
                 name: 'Coquillages',
-                value: `${profile.balanceText}\nPar message : ${profile.incomePerMessageText}\nPar réaction : ${profile.incomePerReactionText}\n${profile.streakText}`,
+                value: `${profile.balanceText}\nPar message : ${profile.incomePerMessageText}\nPar réaction : ${profile.incomePerReactionText}\n${profile.growthRingsText}`,
                 inline: false,
             },
             // Dropped entirely rather than left empty while the layer is locked: an empty

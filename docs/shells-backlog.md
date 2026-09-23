@@ -12,13 +12,13 @@ Legend: ✅ implemented — 💡 idea — 🔜 good next step
 
 ### Prestige ✅
 
-`/prestige` trades the current run, the shell balance and the three otter upgrades, for coral (🪸), spent on permanent upgrades in `/shop page:Corail`. The all-time record, roles and streak are untouched, so a reset costs no rank.
+`/prestige` trades the current run, the shell balance and the three otter upgrades, for coral (🪸), spent on permanent upgrades in `/shop page:Corail`. The all-time record, roles and growth rings are untouched, so a reset costs no rank.
 
 Reference: [shells.md](./shells.md#prestige). How it was calibrated and why the currency is coral: [prestige-design.md](./prestige-design.md).
 
 ### Passive income ✅
 
-Shells accumulate while the user is absent. Full rate (1 msg-equivalent/h) for the first 24 h, then Lorentzian decay: ×0.5 at 48 h, ×0.2 at 72 h, quasi-zero after a week. Credited on the user's next message. Uses only the user's shells income (`income.shells`, upgrades included), no heat/streak multiplier.
+Shells accumulate while the user is absent. Full rate (1 msg-equivalent/h) for the first 24 h, then Lorentzian decay: ×0.5 at 48 h, ×0.2 at 72 h, quasi-zero after a week. Credited on the user's next message. Uses only the user's shells income (`income.shells`, upgrades included), no heat/growth-rings multiplier.
 
 ### Passive income boost (upgrade) 💡
 
@@ -66,18 +66,15 @@ Periodic (or manually triggered) event where members can pool shells together to
 
 ### Achievements 💡
 
-Automatically unlocked milestones: first shell earned, 10 000 cumulative shells, role reached, 7-day streak, etc. Displayable on the profile, no mechanical reward required.
+Automatically unlocked milestones: first shell earned, 10 000 cumulative shells, role reached, 100 growth rings, etc. Displayable on the profile, no mechanical reward required.
 
 ### Weekly challenges 💡
 
 Objectives renewed every week (e.g. "post 50 messages in #general", "reach ×1.8 heat"). Award bonus shells on completion.
 
-### Enhanced streak ✅ / 💡
+### Growth rings rework 🚧
 
-The streak system is implemented and visible on `/shells`. Potential future improvements:
-
-- Optional notification when the streak is about to expire.
-- Progressive streak bonus beyond 7 days (milestones at 14, 30 days).
+The daily streak is being reworked into growth rings (_Stries de croissance_): additive, never reset, capped at ×2 until a coral upgrade lifts the cap. Design and progress: [streak-rework.md](./streak-rework.md).
 
 ---
 
@@ -139,11 +136,11 @@ The longer a user has been silent, the higher the multiplier on their next earn 
 
 ### First-message-of-the-day bonus 💡
 
-The very first message of the calendar day (Europe/Paris timezone, consistent with the streak logic) earns a fixed shell bonus, regardless of volume. Even posting once a day is worth it. Could be displayed as a streak milestone.
+The very first message of the calendar day (Europe/Paris timezone, consistent with the growth rings logic) earns a fixed shell bonus, regardless of volume. Even posting once a day is worth it. Could be displayed as a streak milestone.
 
 ### Reaction income ✅
 
-Reacting earns the reactor 10 % of a normal message gain (heat and streak included), and the reacted message's author 10 % of _their own_ income, flat — no heat, no streak, no passive income, and their `lastActiveAt` is left alone.
+Reacting earns the reactor 10 % of a normal message gain (heat and growth rings included), and the reacted message's author 10 % of _their own_ income, flat — no heat, no growth rings, no passive income, and their `lastActiveAt` is left alone.
 
 Farming is bounded by the reactor's own 5-second cooldown rather than by a per-message cap, so spamming reactions cannot inflate someone else's balance. Self-reactions pay the author nothing.
 
@@ -161,4 +158,4 @@ When a channel has high heat, a fraction of the bonus shells generated is distri
 
 Every message carries a 1-in-1000 chance of paying ×1000 the base income, on top of the normal gain. Announced publicly.
 
-Neither heat nor streak applies, on purpose: at equal income a jackpot is worth the same to everyone, so hitting one in a dead channel on day one pays exactly like hitting one mid-rush on a 7-day streak. The odds are per message and independent of frequency, so the lottery is the one mechanic a low-volume member competes on evenly.
+Neither heat nor growth rings apply, on purpose: at equal income a jackpot is worth the same to everyone, so hitting one in a dead channel on day one pays exactly like hitting one mid-rush on a 7-day series. The odds are per message and independent of frequency, so the lottery is the one mechanic a low-volume member competes on evenly.

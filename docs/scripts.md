@@ -8,15 +8,16 @@ Everything here reads the game rules from `app/idle/core/`, so a new upgrade or 
 
 `sim-common.ts` is not a tool: it holds what the simulations and the sandbox share, the CLI number parsing, the table renderer and the auto-buy strategies. It is there so the purchase logic exists once.
 
-| Script                      | Purpose                                                               | State                                    |
-| --------------------------- | --------------------------------------------------------------------- | ---------------------------------------- |
-| `migrate-game-instances.ts` | Builds `game-instances.json` from the legacy files.                   | Ready. Run once per environment.         |
-| `analyze-upgrade.ts`        | Level-by-level cost / gain / payback table for one upgrade.           | Ready.                                   |
-| `simulate-heat.ts`          | Replays heat scenarios against the real decay constants.              | Ready.                                   |
-| `simulate-idle.ts`          | Simulates the progression curve over days.                            | Ready.                                   |
-| `simulate-prestige.ts`      | Simulates the prestige loop: coral, run lengths, coral upgrades.      | Ready. Drives the shipped curves.        |
-| `sandbox.ts`                | Plays the idle game interactively on a compressed clock.              | Ready. `npm run sandbox`.                |
-| `check-core-purity.ts`      | Fails if `app/idle/core/` depends on a package outside its allowlist. | Ready. Run through `npm run check:core`. |
+| Script                      | Purpose                                                                   | State                                         |
+| --------------------------- | ------------------------------------------------------------------------- | --------------------------------------------- |
+| `migrate-game-instances.ts` | Builds `game-instances.json` from the legacy files.                       | Ready. Run once per environment.              |
+| `migrate-growth-rings.ts`   | Renames each player's `streak` to `growthRings` in `game-instances.json`. | Ready. Run once per environment, bot stopped. |
+| `analyze-upgrade.ts`        | Level-by-level cost / gain / payback table for one upgrade.               | Ready.                                        |
+| `simulate-heat.ts`          | Replays heat scenarios against the real decay constants.                  | Ready.                                        |
+| `simulate-idle.ts`          | Simulates the progression curve over days.                                | Ready.                                        |
+| `simulate-prestige.ts`      | Simulates the prestige loop: coral, run lengths, coral upgrades.          | Ready. Drives the shipped curves.             |
+| `sandbox.ts`                | Plays the idle game interactively on a compressed clock.                  | Ready. `npm run sandbox`.                     |
+| `check-core-purity.ts`      | Fails if `app/idle/core/` depends on a package outside its allowlist.     | Ready. Run through `npm run check:core`.      |
 
 ---
 
@@ -48,6 +49,27 @@ Watch for `income mismatch` warnings. By default the script copies each player's
 The script refuses to overwrite an existing `game-instances.json` without `--force`: once the bot has started, that file is authoritative and the legacy pair is stale. Output is validated against the zod schema and written atomically.
 
 `shells.json` and `upgrades.json` are left in place — the REST API still exposes them.
+
+---
+
+## `migrate-growth-rings.ts`
+
+Renames each player's `streak: { value, lastDate }` to `growthRings: { days, lastDate }` in every `{guildId}-game-instances.json`. The code reads `growthRings` only, so **this must run before the renamed bot starts**, and with the bot stopped: the bot holds the file in RAM and would write its own copy back over the migrated one.
+
+```bash
+tsx scripts/migrate-growth-rings.ts            # dry run — reads, reports, writes nothing
+tsx scripts/migrate-growth-rings.ts --apply
+```
+
+| Flag           | Effect                                                             |
+| -------------- | ------------------------------------------------------------------ |
+| `--apply`      | Actually writes. Without it the script only reports.               |
+| `--guild=<id>` | Restrict to one guild. Default: every `game-instances.json` found. |
+| `--dir=<path>` | Data directory. Defaults to `FILES_DIR`, then `files`.             |
+
+`days` takes the stored series length as it is, broken or not: it never exceeds the days the player actually earned on. An entry that already has `growthRings` is left alone, so a second run writes nothing. Every file is validated against the schema before it is written, atomically; an entry with neither field fails validation instead of reaching the bot.
+
+There is no way back: the previous code cannot read `growthRings`. Rolling back the code means restoring the data from before the run.
 
 ---
 
@@ -121,9 +143,9 @@ tsx scripts/simulate-idle.ts --days=30 --delay=200              # live screen
 
 ### The one input that matters
 
-Heat, streak, passive income and the jackpot are **not** modelled. They are folded into `--messages-per-day`, which counts message-_equivalents_, not messages.
+Heat, growth rings, passive income and the jackpot are **not** modelled. They are folded into `--messages-per-day`, which counts message-_equivalents_, not messages.
 
-The default of 500 comes from a member sending roughly 100 real messages a day: once heat (×1–2), streak (×1–2) and passive income are applied, that earns about what 500 plain messages would. It is a rough figure, and it is the knob to turn when you want a different player profile — a quiet member is nearer 50, a very active one during a busy week nearer 2000.
+The default of 500 comes from a member sending roughly 100 real messages a day: once heat (×1–2), growth rings (×1–2) and passive income are applied, that earns about what 500 plain messages would. It is a rough figure, and it is the knob to turn when you want a different player profile — a quiet member is nearer 50, a very active one during a busy week nearer 2000.
 
 Two consequences worth knowing. The simulation is only as good as that number, so treat the output as the _shape_ of the curve rather than a forecast. And a day's earnings go through the real `GameInstance.applyShellsGain`, so the ±10 % roll is applied once per simulated day: negligible over a year, visible over a week.
 
@@ -206,7 +228,7 @@ tsx scripts/sandbox.ts --frames=40               # render without a terminal, fo
 that many days are worth are handed to `applyShellsGain`. At the default speed a first prestige
 lands in about two and a half minutes of wall time.
 
-**Messages only.** Heat, the streak and passive income are folded into the message rate, the
+**Messages only.** Heat, the growth rings and passive income are folded into the message rate, the
 same convention `simulate-idle.ts` uses: all three key off wall-clock dates, which a virtual
 clock cannot drive honestly, so the sandbox does not pretend to model them. Everything else —
 prices, incomes, the coral formula, what a prestige resets — is read from `app/idle/core/`, so

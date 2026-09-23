@@ -20,7 +20,7 @@ export type ShellsProfile = {
     hasSpentBelowMax: boolean;
     incomePerMessageText: string;
     incomePerReactionText: string;
-    streakText: string;
+    growthRingsText: string;
     coralText: string;
     /**
      * Whether the player has opened the prestige layer. False means the three fields below
@@ -57,17 +57,16 @@ export async function getShellsProfile(
     const currentShells = instance.resources[ResourceId.SHELLS];
     const { maxShells, runMaxShells, prestigeCount } = instance.stats;
     const shellsPerMessage = instance.income[ResourceId.SHELLS];
-    const { streak, upgrades } = instance;
+    const { growthRings, upgrades } = instance;
     const leaderboard = new Leaderboard(instances);
     const entry = leaderboard.getUserEntry(userId);
 
     const rankText = entry ? `#${entry.rank}` : 'Non classé';
 
     const coralUnlocked = instance.coralUnlocked;
-    // The seedling stays listed while locked: it is the visible door, priced in shells.
-    const visibleUpgradeIds = ALL_UPGRADE_IDS.filter(
-        (id) => coralUnlocked || upgrades[id].costResourceId !== ResourceId.CORAL,
-    );
+    // Unlocked rather than visible: a bought one-shot stays, so the assistant can still tell
+    // a member they own it.
+    const visibleUpgradeIds = ALL_UPGRADE_IDS.filter((id) => instance.isUpgradeUnlocked(id));
 
     // A one-shot unlock is left out: its level is a yes/no, and a "Niv. 0 · Récif scellé"
     // line in a list whose column is levels reads as an upgrade the player is behind on.
@@ -114,11 +113,11 @@ export async function getShellsProfile(
         ? `<@&${nextRole.roleId}> — encore **${formatBigNum(bnSub(bnFromJSON(nextRole.threshold), maxShells))} 🐚**`
         : '✨ Rang maximum atteint';
 
-    const streakDays = streak.currentValue;
-    const streakText =
-        streakDays === 0
-            ? 'Streak : aucun 🔥'
-            : `Streak : ${streakDays} jour${streakDays > 1 ? 's' : ''} 🔥 — ×${streak.getMultiplier().toFixed(2)}`;
+    const ringDays = growthRings.currentDays;
+    const growthRingsText =
+        ringDays === 0
+            ? 'Stries de croissance : aucune'
+            : `Stries de croissance : ${ringDays} jour${ringDays > 1 ? 's' : ''} — ×${growthRings.getMultiplier().toFixed(2)}`;
 
     const prestigePreview = instance.previewPrestige();
     const prestigeText = coralUnlocked
@@ -139,7 +138,7 @@ export async function getShellsProfile(
         hasSpentBelowMax: !maxShells.eq(currentShells),
         incomePerMessageText: `${formatBigNum(shellsPerMessage)} 🐚 (±10%)`,
         incomePerReactionText: `${formatBigNum(bnMul(shellsPerMessage, 0.1))} 🐚`,
-        streakText,
+        growthRingsText,
         coralUnlocked,
         coralText: coralUnlocked
             ? formatResource(instance.resources[ResourceId.CORAL], ResourceId.CORAL)

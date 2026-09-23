@@ -1,6 +1,6 @@
 ---
 name: rebalance-shells
-description: Recipe for rebalancing the TLH Bot shells economy (rates, multipliers, heat, streak, passive income, jackpot, upgrade curves). Use when asked to tweak, buff, nerf or rebalance any number of the idle game.
+description: Recipe for rebalancing the TLH Bot shells economy (rates, multipliers, heat, growth rings, passive income, jackpot, upgrade curves). Use when asked to tweak, buff, nerf or rebalance any number of the idle game.
 ---
 
 # Rebalance the shells game
@@ -21,7 +21,7 @@ Read [docs/shells.md](../../../docs/shells.md) first: the earn pipeline, every m
     tsx scripts/analyze-upgrade.ts <upgradeId> 1 40
     tsx scripts/simulate-heat.ts
     ```
-    Pick what the change touches. Flags and how to read the output: [docs/scripts.md](../../../docs/scripts.md). `--messages-per-day` is an effective count that already absorbs heat, streak and passive income.
+    Pick what the change touches. Flags and how to read the output: [docs/scripts.md](../../../docs/scripts.md). `--messages-per-day` is an effective count that already absorbs heat, growth rings and passive income.
 2. **Change** the constants or curves in `app/idle/core/`.
 3. **Measure after** with the same commands, and show the user a before/after comparison: time to each role threshold, upgrade payback, whatever the change was meant to move.
 4. **Tests**: update the expectations in the affected `app/idle/core/**/*.test.ts`. A changed number in a test should match a change the user asked for, not paper over an unintended one.
