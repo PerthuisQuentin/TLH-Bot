@@ -2,7 +2,10 @@ import { Leaderboard, LeaderboardSort, type LeaderboardEntry } from './leaderboa
 import { getAllGameInstances } from './game-instance-storage.ts';
 import { formatBigNum } from './core/big-number.ts';
 
-function formatLeaderboardEntry(entry: LeaderboardEntry): string {
+function formatLeaderboardEntry(entry: LeaderboardEntry, sort: LeaderboardSort): string {
+    if (sort === LeaderboardSort.RINGS) {
+        return `#${entry.rank} <@${entry.userId}> — 🌀 ${entry.growthRingDays} j (×${entry.growthRingsMultiplier.toFixed(2)}) · ${formatBigNum(entry.maxShells)} 🐚`;
+    }
     return `#${entry.rank} <@${entry.userId}> — ${formatBigNum(entry.maxShells)} 🐚 *(${formatBigNum(entry.shells)} · +${formatBigNum(entry.shellsPerMessage)}/msg)*`;
 }
 
@@ -63,7 +66,7 @@ export async function getLeaderboardView(
 
     const leaderboardText = paginated.entries
         .map((entry) => {
-            const line = formatLeaderboardEntry(entry);
+            const line = formatLeaderboardEntry(entry, sort);
             return pinnedUserId && entry.userId === pinnedUserId ? `**${line}**` : line;
         })
         .join('\n');
@@ -76,7 +79,7 @@ export async function getLeaderboardView(
     let description = leaderboardText;
     if (pinnedUserId && !pinnedIsOnPage) {
         description = pinnedEntry
-            ? `${leaderboardText}\n—\n**${formatLeaderboardEntry(pinnedEntry)}**`
+            ? `${leaderboardText}\n—\n**${formatLeaderboardEntry(pinnedEntry, sort)}**`
             : `${leaderboardText}\n\n—\n**Non classé • <@${pinnedUserId}>**`;
     }
 

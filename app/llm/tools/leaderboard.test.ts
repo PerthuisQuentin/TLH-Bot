@@ -20,13 +20,13 @@ afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
 });
 
-function gameInstanceFixture(userId: string, maxShells: string) {
+function gameInstanceFixture(userId: string, maxShells: string, ringDays = 0) {
     return {
         userId,
         resources: { shells: maxShells },
         stats: { maxShells },
         income: { shells: '10' },
-        growthRings: { days: 0, lastDate: '' },
+        growthRings: { days: ringDays, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: {},
     };
@@ -88,5 +88,26 @@ describe('leaderboardTool.execute', () => {
 
         expect(response).toContain('tri : max');
         expect(response).toContain('page 1/');
+    });
+
+    it('ranks by growth rings and leads each line with them under sort rings', async () => {
+        await writeGameInstances('g1', [
+            gameInstanceFixture('p0', '1000', 5),
+            gameInstanceFixture('p1', '10', 42),
+        ]);
+
+        const response = await leaderboardTool.execute({ sort: 'rings' }, { guildId: 'g1' });
+
+        expect(response).toContain('tri : rings');
+        expect(response).toContain('#1 <@p1> — 🌀 42 j (×1.42) · 10 🐚');
+        expect(response).toContain('#2 <@p0> — 🌀 5 j (×1.05)');
+    });
+
+    it('keeps the record-first line for the other sorts', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('p0', '100', 5)]);
+
+        const response = await leaderboardTool.execute({}, { guildId: 'g1' });
+
+        expect(response).not.toContain('🌀');
     });
 });

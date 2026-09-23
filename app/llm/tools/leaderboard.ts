@@ -34,7 +34,7 @@ const leaderboardDeclaration: ToolFunctionDeclaration = {
             sort: {
                 type: ToolParamType.STRING,
                 description:
-                    'Critère de tri : "max" (record historique, défaut), "current" (solde actuel), ou "income" (gain par message). Omets pour le défaut.',
+                    'Critère de tri : "max" (record historique, défaut), "current" (solde actuel), "income" (gain par message), ou "rings" (stries de croissance, en jours). Omets pour le défaut.',
             },
             page: {
                 type: ToolParamType.STRING,

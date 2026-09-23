@@ -108,6 +108,7 @@ export const leaderboardCommand: Command = {
                     { name: 'Record historique', value: LeaderboardSort.MAX },
                     { name: 'Solde actuel', value: LeaderboardSort.CURRENT },
                     { name: 'Revenu par message', value: LeaderboardSort.INCOME },
+                    { name: 'Stries de croissance', value: LeaderboardSort.RINGS },
                 ],
             },
             {

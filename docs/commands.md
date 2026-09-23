@@ -52,13 +52,13 @@ Names come from the gateway's member cache, so the history shows server nickname
 
 The guild's shells ranking, 10 per page.
 
-| Option   | Type        | Required | Description                                                                    |
-| -------- | ----------- | -------- | ------------------------------------------------------------------------------ |
-| `page`   | Integer ≥ 1 | No       | Page number. Default 1, clamped to the last page.                              |
-| `sort`   | Choice      | No       | `max` (all-time record, default), `current` (balance), `income` (per message). |
-| `public` | Boolean     | No       | Show to everyone. Default false.                                               |
+| Option   | Type        | Required | Description                                                                                                |
+| -------- | ----------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `page`   | Integer ≥ 1 | No       | Page number. Default 1, clamped to the last page.                                                          |
+| `sort`   | Choice      | No       | `max` (all-time record, default), `current` (balance), `income` (per message), `rings` (growth ring days). |
+| `public` | Boolean     | No       | Show to everyone. Default false.                                                                           |
 
-Each line shows the rank, the member, their record, and their balance and income in parentheses. The requester's own line is bold; if they are not on the displayed page, it is appended below a separator, or "Non classé" if they have never earned.
+Each line shows the rank, the member, their record, and their balance and income in parentheses. Under `rings` the line leads with what is ranked instead: the growth ring days, the effective multiplier (above ×2 with the Coquille millénaire), then the record. Ring ties are frequent, so they are broken by record. The requester's own line is bold; if they are not on the displayed page, it is appended below a separator, or "Non classé" if they have never earned.
 
 The footer carries the page, the participant count and the active sort. Mentions are suppressed, so nobody gets pinged by the ranking.
 

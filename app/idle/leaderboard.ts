@@ -6,6 +6,7 @@ export enum LeaderboardSort {
     MAX = 'max',
     CURRENT = 'current',
     INCOME = 'income',
+    RINGS = 'rings',
 }
 
 export type LeaderboardEntry = {
@@ -14,6 +15,8 @@ export type LeaderboardEntry = {
     shells: BigNum;
     maxShells: BigNum;
     shellsPerMessage: BigNum;
+    growthRingDays: number;
+    growthRingsMultiplier: number;
 };
 
 type PaginatedLeaderboard = {
@@ -34,14 +37,24 @@ export class Leaderboard {
         this._entries = Leaderboard._buildRanked(instances, sort);
     }
 
-    private static _sortKey(instance: ReadonlyGameInstance, sort: LeaderboardSort): BigNum {
+    /** Descending. Growth ring ties are frequent, so they fall back to the record. */
+    private static _compare(
+        a: ReadonlyGameInstance,
+        b: ReadonlyGameInstance,
+        sort: LeaderboardSort,
+    ): number {
         switch (sort) {
             case LeaderboardSort.CURRENT:
-                return instance.resources[ResourceId.SHELLS];
+                return bnCompare(b.resources[ResourceId.SHELLS], a.resources[ResourceId.SHELLS]);
             case LeaderboardSort.INCOME:
-                return instance.income[ResourceId.SHELLS];
+                return bnCompare(b.income[ResourceId.SHELLS], a.income[ResourceId.SHELLS]);
+            case LeaderboardSort.RINGS:
+                return (
+                    b.growthRings.days - a.growthRings.days ||
+                    bnCompare(b.stats.maxShells, a.stats.maxShells)
+                );
             case LeaderboardSort.MAX:
-                return instance.stats.maxShells;
+                return bnCompare(b.stats.maxShells, a.stats.maxShells);
         }
     }
 
@@ -50,13 +63,15 @@ export class Leaderboard {
         sort: LeaderboardSort,
     ): LeaderboardEntry[] {
         return [...instances]
-            .sort((a, b) => bnCompare(Leaderboard._sortKey(b, sort), Leaderboard._sortKey(a, sort)))
+            .sort((a, b) => Leaderboard._compare(a, b, sort))
             .map((instance, index) => ({
                 rank: index + 1,
                 userId: instance.userId,
                 shells: instance.resources[ResourceId.SHELLS],
                 maxShells: instance.stats.maxShells,
                 shellsPerMessage: instance.income[ResourceId.SHELLS],
+                growthRingDays: instance.growthRings.days,
+                growthRingsMultiplier: instance.growthRingsMultiplier,
             }));
     }
 
