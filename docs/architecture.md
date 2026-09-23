@@ -17,22 +17,22 @@ Slash commands never reach the gateway client, and gateway events never reach Ex
 
 ## Folder structure
 
-| Folder                | Role                                                                                                                                                 |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app/commands/`       | One file per slash command: `{ definition, handler }`. Orchestrates and formats the Discord response.                                                |
-| `app/commons/`        | Shared helpers: prompt building, response parsing, Discord REST helpers, the in-memory cooldown cache.                                               |
-| `app/discord/`        | Gateway client, interaction dispatch, event handlers, message parsing, role application, discord.js-free shared types.                               |
-| `app/llm/`            | The backend-agnostic AI engine: prompt loop, tool rounds, memory protocol, provider selection.                                                       |
-| `app/llm/openrouter/` | OpenRouter adapter, same contract, via `@openrouter/sdk`.                                                                                            |
-| `app/llm/gemini/`     | Gemini adapter: client, schema mapping, error classification.                                                                                        |
-| `app/llm/tools/`      | AI-callable tools and their registry: weather.                                                                                                       |
-| `app/idle/core/`      | Pure game logic: `GameInstance`, upgrades, heat, streak, passive income, jackpot, prestige, resources, big-number, modifier DSL. No I/O, no Discord. |
-| `app/idle/handlers/`  | Turns a `DiscordEvent` into game rules and returns a plain result.                                                                                   |
-| `app/idle/`           | Game persistence (`game-instance-storage.ts`), leaderboard, role thresholds.                                                                         |
-| `app/routes/`         | Express REST handlers (`/api/files`, `/api/guilds`, `/api/messages`).                                                                                |
-| `app/storage/`        | The file store: RAM cache, atomic writes, zod schemas, file-type registry.                                                                           |
-| `files/`              | Per-guild persistent data (configurable via `FILES_DIR`).                                                                                            |
-| `scripts/`            | Dev, analysis and migration scripts. Excluded from the build.                                                                                        |
+| Folder                | Role                                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/commands/`       | One file per slash command: `{ definition, handler }`. Orchestrates and formats the Discord response.                                                      |
+| `app/commons/`        | Shared helpers: prompt building, response parsing, Discord REST helpers, the in-memory cooldown cache.                                                     |
+| `app/discord/`        | Gateway client, interaction dispatch, event handlers, message parsing, role application, discord.js-free shared types.                                     |
+| `app/llm/`            | The backend-agnostic AI engine: prompt loop, tool rounds, memory protocol, provider selection.                                                             |
+| `app/llm/openrouter/` | OpenRouter adapter, same contract, via `@openrouter/sdk`.                                                                                                  |
+| `app/llm/gemini/`     | Gemini adapter: client, schema mapping, error classification.                                                                                              |
+| `app/llm/tools/`      | AI-callable tools and their registry: weather.                                                                                                             |
+| `app/idle/core/`      | Pure game logic: `GameInstance`, upgrades, heat, growth rings, passive income, jackpot, prestige, resources, big-number, modifier DSL. No I/O, no Discord. |
+| `app/idle/handlers/`  | Turns a `DiscordEvent` into game rules and returns a plain result.                                                                                         |
+| `app/idle/`           | Game persistence (`game-instance-storage.ts`), leaderboard, role thresholds.                                                                               |
+| `app/routes/`         | Express REST handlers (`/api/files`, `/api/guilds`, `/api/messages`).                                                                                      |
+| `app/storage/`        | The file store: RAM cache, atomic writes, zod schemas, file-type registry.                                                                                 |
+| `files/`              | Per-guild persistent data (configurable via `FILES_DIR`).                                                                                                  |
+| `scripts/`            | Dev, analysis and migration scripts. Excluded from the build.                                                                                              |
 
 ---
 
@@ -111,7 +111,7 @@ app/idle/handlers/handle-event.ts
     ├── updateChannelHeat            (always, even on cooldown)
     ├── 5 s per-user cooldown        → stop
     ├── one synchronous mutator:
-    │     passive income → streak → heat × streak × activity fraction → jackpot roll
+    │     passive income → growth rings → heat × growth rings × activity fraction → jackpot roll
     ├── credit the reacted message's author  (reactions only)
     └── getShellsRolesConfig() → computeRoleChanges(roles, maxShells, currentRoleIds)
     ↓

@@ -11,7 +11,7 @@
  * Everything the game decides is read from `app/idle/core/`: incomes, prices, the coral
  * formula, what a prestige resets. The script owns the clock and the keyboard, nothing else.
  *
- * **Messages only.** Heat, the streak and passive income are folded into the message rate, the
+ * **Messages only.** Heat, the growth rings and passive income are folded into the message rate, the
  * same convention `simulate-idle.ts` uses: they key off wall-clock dates that a virtual clock
  * cannot drive honestly, so the sandbox does not pretend to model them.
  */
@@ -176,6 +176,10 @@ function buy(index: number): void {
     const upgrade = instance.upgrades[id];
     const { levels } = plannedPurchase(index);
 
+    if (!instance.isUpgradeUnlocked(id)) {
+        note(`${upgrade.name}: locked`);
+        return;
+    }
     if (levels === 0) {
         note(`${upgrade.name}: cannot afford one level`);
         return;

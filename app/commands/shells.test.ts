@@ -39,7 +39,7 @@ function gameInstanceFixture(
         resources: { shells: overrides.shells ?? '0' },
         stats: { maxShells: overrides.maxShells ?? '0' },
         income: { shells: overrides.income ?? '10' },
-        streak: { value: 0, lastDate: '' },
+        growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: overrides.upgrades ?? {},
     };
@@ -153,7 +153,7 @@ describe('shellsCommand', () => {
                 resources: { shells: '4.1e11', coral: '7' },
                 stats: { maxShells: '9.2e12', runMaxShells: '2.5e12', prestigeCount: 3 },
                 income: { shells: '52000000' },
-                streak: { value: 0, lastDate: '' },
+                growthRings: { days: 0, lastDate: '' },
                 lastActiveAt: new Date(0).toISOString(),
                 upgrades: { coralSeedling: 1 },
             },

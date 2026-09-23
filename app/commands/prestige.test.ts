@@ -27,7 +27,7 @@ function fixture(runMaxShells: string, upgrades: Record<string, number> = {}) {
         resources: { shells: runMaxShells },
         stats: { maxShells: runMaxShells, runMaxShells, prestigeCount: 0 },
         income: { shells: '10' },
-        streak: { value: 4, lastDate: '2026-09-15' },
+        growthRings: { days: 4, lastDate: '2026-09-15' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: { coralSeedling: 1, ...upgrades },
     };
@@ -163,7 +163,7 @@ describe('prestigeCommand', () => {
             prestigeCount: 1,
         });
         expect(stored.upgrades).toMatchObject({ divingOtters: 0 });
-        expect(stored.streak).toEqual({ value: 4, lastDate: '2026-09-15' });
+        expect(stored.growthRings).toEqual({ days: 4, lastDate: '2026-09-15' });
     });
 
     it('refuses a confirmation that cannot pay, debiting nothing', async () => {

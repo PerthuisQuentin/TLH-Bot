@@ -24,6 +24,17 @@ export enum UpgradeId {
     BUILDING_POLYPS = 'buildingPolyps',
 }
 
+/**
+ * The `/shop` aisle an upgrade is sold in. Declared on the upgrade rather than derived from
+ * its currency, so an aisle can mix currencies. Values double as the `page` option's values.
+ */
+export enum ShopPage {
+    SHELLS = 'shells',
+    /** One-shot unlocks, whatever they cost: bought once, gone from the shop after. */
+    TREASURES = 'treasures',
+    CORAL = 'coral',
+}
+
 /** How an upgrade's gain enters `computeIncome`: summed, multiplied, or not at all. */
 export enum UpgradeKind {
     ADDITIVE = 'additive',

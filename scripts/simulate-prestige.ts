@@ -69,7 +69,7 @@ function newPlayer(): GameInstance {
         resources: { [ResourceId.SHELLS]: '0' },
         stats: { maxShells: '0' },
         income: { [ResourceId.SHELLS]: String(DEFAULT_SHELLS_PER_MESSAGE) },
-        streak: { value: 0, lastDate: '' },
+        growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         upgrades: {},
     });

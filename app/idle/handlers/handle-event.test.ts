@@ -50,7 +50,7 @@ function gameInstanceFixture(
         resources: { shells: overrides.shells ?? '0' },
         stats: { maxShells: overrides.maxShells ?? '0' },
         income: { shells: overrides.income ?? '10' },
-        streak: { value: 0, lastDate: '' },
+        growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: {},
     };

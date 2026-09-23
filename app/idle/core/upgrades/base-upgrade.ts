@@ -1,6 +1,11 @@
 import { bn, bnAdd, bnLte } from '../big-number.ts';
 import type { BigNum } from '../big-number.ts';
-import type { ResourceId, UpgradeId, UpgradeKind } from '../types.ts';
+import type { ResourceId, ShopPage, UpgradeId, UpgradeKind } from '../types.ts';
+
+/** What an unlock condition may read. Built by `GameInstance`, so conditions stay pure. */
+export type UnlockContext = {
+    upgradeLevels: Readonly<Record<UpgradeId, number>>;
+};
 
 export interface UpgradeMeta {
     id: UpgradeId;
@@ -17,6 +22,11 @@ export interface UpgradeMeta {
      * Required, so a new upgrade cannot be added without answering the question.
      */
     resetOnPrestige: boolean;
+    shopPage: ShopPage;
+    /** Whether the player may see and buy it. Omitted means always on sale. */
+    unlockCondition?: (ctx: UnlockContext) => boolean;
+    /** French, shown when a locked upgrade is asked for by name: what opens it. */
+    unlockHint?: string;
     /**
      * Highest level this upgrade can reach. Omitted means unbounded, which is every curve
      * but the one-shot unlocks. `getMaxBuyable` and `GameInstance.buyUpgrade` both enforce
@@ -60,12 +70,27 @@ export abstract class BaseUpgrade {
     get resetOnPrestige(): boolean {
         return (this.constructor as unknown as UpgradeMeta).resetOnPrestige;
     }
+    get shopPage(): ShopPage {
+        return (this.constructor as unknown as UpgradeMeta).shopPage;
+    }
+    get unlockHint(): string | undefined {
+        return (this.constructor as unknown as UpgradeMeta).unlockHint;
+    }
     get maxLevel(): number {
         return (this.constructor as unknown as UpgradeMeta).maxLevel ?? Infinity;
     }
 
     get isMaxed(): boolean {
         return this.level >= this.maxLevel;
+    }
+
+    isUnlocked(ctx: UnlockContext): boolean {
+        return (this.constructor as unknown as UpgradeMeta).unlockCondition?.(ctx) ?? true;
+    }
+
+    /** On sale: unlocked with a level left to buy, so a bought one-shot leaves the shop. */
+    isVisible(ctx: UnlockContext): boolean {
+        return this.isUnlocked(ctx) && !this.isMaxed;
     }
 
     constructor(level: number) {

@@ -8,7 +8,7 @@ All of it lives in `app/idle/`. The pure rules are in `app/idle/core/` — no I/
 
 ## `GameInstance`
 
-`app/idle/core/game-instance.ts` holds one player's entire state: resources (currently just `shells`), stats (currently just `maxShells`), income (currently just `shells`), streak, lastActiveAt and upgrade levels.
+`app/idle/core/game-instance.ts` holds one player's entire state: resources (currently just `shells`), stats (currently just `maxShells`), income (currently just `shells`), growth rings, lastActiveAt and upgrade levels.
 
 Its persistence boundary is exactly three methods — `toJson()`, `new GameInstance(json)` and `GameInstance.newInstance(userId)`. Load and save go through `app/idle/game-instance-storage.ts`; the file is `{guildId}-game-instances.json`.
 
@@ -25,8 +25,8 @@ Its persistence boundary is exactly three methods — `toJson()`, `new GameInsta
 2. updateChannelHeat                    → always, even if step 3 stops the event
 3. 5 s per-user cooldown                → stop
 4. credit passive income since lastActiveAt
-5. update the streak
-6. apply heat × streak × activity fraction
+5. add the day's growth ring
+6. apply heat × growth rings × activity fraction
 7. roll the jackpot                     → messages only
 8. save
 9. compute role changes from maxShells
@@ -43,7 +43,7 @@ The cooldown key is `{guildId}:{userId}:{activityType}`, so messages and reactio
 ## Per-event gain
 
 ```
-amount = floor(rolled × heat × streak × activityFraction)
+amount = floor(rolled × heat × growthRings × activityFraction)
 ```
 
 where `rolled` is a uniform integer in `[base − v, base + v]`, `base` = the player's shells income (`income.shells`) and `v = floor(base × 0.1)` — a ±10 % variance.
@@ -53,7 +53,7 @@ where `rolled` is a uniform integer in `[base − v, base + v]`, `base` = the pl
 | Message  | ×1.0     | The author.                                        |
 | Reaction | ×0.1     | The reactor, **and** the reacted message's author. |
 
-The author's share is a flat 10 % of their own shells income: no heat, no streak, no passive income, and `lastActiveAt` is left untouched. Being reacted to is not an activity of theirs. It also rides behind the _reactor's_ cooldown, so reaction spam cannot farm someone else's balance, and it never triggers a role evaluation — only the reactor's roles are checked.
+The author's share is a flat 10 % of their own shells income: no heat, no growth rings, no passive income, and `lastActiveAt` is left untouched. Being reacted to is not an activity of theirs. It also rides behind the _reactor's_ cooldown, so reaction spam cannot farm someone else's balance, and it never triggers a role evaluation — only the reactor's roles are checked.
 
 Self-reactions earn the author nothing.
 
@@ -94,23 +94,23 @@ That is the sum over unordered pairs of members. A conversation between several 
 
 ---
 
-## Daily streak
+## Growth rings
 
-`app/idle/core/streak.ts` counts consecutive Europe/Paris calendar days on which the member earned at least once. A missed day sends the series back to 1 on the next earning event.
+_Stries de croissance_ for players, `growthRings` in code. `app/idle/core/growth-rings.ts` counts consecutive Europe/Paris calendar days on which the member earned at least once. A missed day sends the series back to 1 on the next earning event.
 
-**A reaction counts.** The streak update carries no `activityType` guard: one emoji in the day is enough to keep the series alive, even though a reaction only pays a tenth of a message. That is deliberate — the series measures showing up, and reacting still requires being on the server that day.
+**A reaction counts.** Adding the day's ring carries no `activityType` guard: one emoji in the day is enough to keep the series alive, even though a reaction only pays a tenth of a message. That is deliberate — the series measures showing up, and reacting still requires being on the server that day.
 
 ```
-multiplier = 1 + min(max(streak − 1, 0), 6) / 6
+multiplier = 1 + min(max(days − 1, 0), 6) / 6
 ```
 
-| Streak     | 1     | 2     | 3     | 4     | 5     | 6     | 7+        |
+| Days       | 1     | 2     | 3     | 4     | 5     | 6     | 7+        |
 | ---------- | ----- | ----- | ----- | ----- | ----- | ----- | --------- |
 | Multiplier | ×1.00 | ×1.17 | ×1.33 | ×1.50 | ×1.67 | ×1.83 | **×2.00** |
 
 The update is idempotent — calling it several times the same day changes nothing.
 
-Heat and streak combine multiplicatively, so the ceiling on a normal message is **×4.0**.
+Heat and growth rings combine multiplicatively, so the ceiling on a normal message is **×4.0**.
 
 ---
 
@@ -141,7 +141,7 @@ Past the plateau the clock still jumps to now. Time and shells stop being interc
 
 The cap is `income.shells × (24 + 12π) ≈ 61.7 × income.shells`. The rate never actually reaches zero, so an absence always pays something — but coming back after a month is barely better than coming back after a week.
 
-Passive income uses `income.shells` alone, upgrades included, with no heat and no streak.
+Passive income uses `income.shells` alone, upgrades included, with no heat and no growth rings.
 
 ---
 
@@ -149,7 +149,7 @@ Passive income uses `income.shells` alone, upgrades included, with no heat and n
 
 `app/idle/core/jackpot.ts`: every **message** has a 1-in-1000 chance of paying `income.shells × 1000` **on top of** the normal gain. Reactions never roll.
 
-Neither heat nor streak applies. That is deliberate: at equal income, a jackpot is worth the same to everyone, whether they hit it in a dead channel on day one or in a packed channel on a 7-day streak.
+Neither heat nor growth rings apply. That is deliberate: at equal income, a jackpot is worth the same to everyone, whether they hit it in a dead channel on day one or in a packed channel on a 7-day series.
 
 The bot announces it publicly in the channel, with a message generated by the AI model, opening and closing on 🎉 — see [Announcement markers](#announcement-markers).
 
@@ -218,7 +218,7 @@ Buying `k` levels sums `cost(n) … cost(n+k−1)` in a loop. There is no closed
 | cost     | `CORAL_DIVISOR / 10`, today 100K 🐚 |
 | maxLevel | 1                                   |
 
-A one-shot purchase, sold on the shells page, that opens the whole coral half of the game. Until it is bought, `GameInstance.coralUnlocked` is false and **coral does not exist as far as the player can see**: `/shop page:Corail` shows a sealed door instead of its upgrades, `/shells` drops its Récif field and omits the coral upgrades from both upgrade lists, `/prestige` declines pointing at the shop, and the AI is told not to mention any of it.
+A one-shot purchase, sold for shells on the `Trésors` page, that opens the whole coral half of the game. Until it is bought, `GameInstance.coralUnlocked` is false and **coral does not exist as far as the player can see**: `/shop page:Corail` shows a sealed door instead of its upgrades, `/shells` drops its Récif field and omits the coral upgrades from both upgrade lists, `/prestige` declines pointing at the shop, and the AI is told not to mention any of it.
 
 Its price is derived from `CORAL_DIVISOR`, not written down: the door is always a tenth of the way to the room, so rebalancing the prestige threshold moves both together. Both land on round figures — 100K to open it, 1M of run peak for the first coral — because these are the two numbers a player quotes back at you.
 
@@ -260,11 +260,14 @@ The walk stops at `MAX_LEVELS_PER_PURCHASE` (1000), which also bounds a single p
 
 ### Adding an upgrade
 
-1. Subclass `BaseUpgrade` in `core/upgrades/`, declaring `static readonly id / kind / costResourceId / gainResourceId / displayName / emoji / description / resetOnPrestige` (the base class reads metadata off the constructor) and implementing `computeCost`, `computeGain`, `computeFormatGain`. `resetOnPrestige` is required rather than defaulted, so the question cannot be skipped; the typecheck refuses the registry entry until it is answered.
+1. Subclass `BaseUpgrade` in `core/upgrades/`, declaring `static readonly id / kind / costResourceId / gainResourceId / displayName / emoji / description / resetOnPrestige / shopPage` (the base class reads metadata off the constructor) and implementing `computeCost`, `computeGain`, `computeFormatGain`. `resetOnPrestige` is required rather than defaulted, so the question cannot be skipped; the typecheck refuses the registry entry until it is answered.
 2. Add the `UpgradeId` enum member in `core/types.ts` (and a `ResourceId` member too, if the upgrade costs or boosts a resource that doesn't exist yet).
 3. Register the class in `core/upgrades/upgrade-registry.ts`.
+4. Optionally, `static readonly unlockCondition` (a pure function of an `UnlockContext`, the player's upgrade levels) and `unlockHint` (French, what opens it). Without a condition the upgrade is always on sale.
 
-`/shop`, `/shells`, `GameInstance` and `scripts/analyze-upgrade.ts` all iterate the registry, so nothing else needs editing. `/shop` puts the upgrade on the page of its `costResourceId`, creating one if that currency had none.
+`/shop`, `/shells`, `GameInstance` and `scripts/analyze-upgrade.ts` all iterate the registry, so nothing else needs editing. `/shop` puts the upgrade on the page its `shopPage` declares, which is independent of the currency it costs.
+
+**Whether an upgrade can be seen and bought is decided by the upgrade.** `isUnlocked` reads its `unlockCondition`, and `isVisible` adds "not maxed". `GameInstance.isUpgradeUnlocked` / `isUpgradeVisible` hand it the player's state, and `buyUpgrade` refuses a locked upgrade, so no caller (the shop, the sandbox, the simulations) can buy what the player cannot see. The shop only renders the answer. The reef and the polyps are locked on `isCoralUnlocked`, which `coral-seedling.ts` owns, as does `GameInstance.coralUnlocked`.
 
 **Write every price and balance with `formatResource(amount, resourceId)`** from `core/resources.ts`, never `formatBigNum` plus a literal 🐚. The literal reads fine and is wrong the moment the value is not shells: that is how `/shop`, `analyze-upgrade.ts` and the shop pricing lines the AI reads each ended up quoting coral prices in shells.
 
@@ -286,11 +289,11 @@ The exponent is the pace knob. It is sub-linear on purpose — a run held twice 
 
 The multiplier sits **inside** the floor. Multiplying a floored payout would throw away exactly the fraction the polyps are bought for. It also lowers the first threshold, since it takes less run peak to reach one coral.
 
-| Reset by a prestige                        | Untouched                                   |
-| ------------------------------------------ | ------------------------------------------- |
-| `resources.shells`                         | `stats.maxShells`                           |
-| Every upgrade with `resetOnPrestige: true` | Every upgrade with `resetOnPrestige: false` |
-| `stats.runMaxShells`                       | `streak`, `lastActiveAt`, `resources.coral` |
+| Reset by a prestige                        | Untouched                                        |
+| ------------------------------------------ | ------------------------------------------------ |
+| `resources.shells`                         | `stats.maxShells`                                |
+| Every upgrade with `resetOnPrestige: true` | Every upgrade with `resetOnPrestige: false`      |
+| `stats.runMaxShells`                       | `growthRings`, `lastActiveAt`, `resources.coral` |
 
 **The payout reads `runMaxShells`, not the balance and not `maxShells`.** A peak rather than the balance, so spending on upgrades — the whole game — does not reduce what the run is worth. A per-run peak rather than the all-time one, because `maxShells` never decreases: paying on it would let a player prestige again immediately for the same run, and it cannot be reset since the roles and the leaderboard read it.
 

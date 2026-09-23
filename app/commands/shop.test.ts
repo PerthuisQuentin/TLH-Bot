@@ -30,7 +30,7 @@ function gameInstanceFixture(
         resources: { shells },
         stats: { maxShells: shells },
         income: { shells: '10' },
-        streak: { value: 0, lastDate: '' },
+        growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades,
     };
@@ -92,10 +92,32 @@ describe('shopCommand', () => {
             '🦦 Loutres plongeuses',
             '🐟 Nageoires hydrodynamiques',
             '🎒 Sacs de récolte XXL',
+        ]);
+        // The seedling's aisle is the way in; the coral one is not advertised until it is open.
+        expect(embed.description).toContain('/shop page:Trésors');
+        expect(embed.description).not.toContain('/shop page:Corail');
+    });
+
+    it('sells the seedling on the treasures page, against the shells balance', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '42')]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({
+                guild_id: 'g1',
+                member: { user: { id: 'u1' } },
+                data: { options: [{ name: 'page', value: 'treasures' }] },
+            }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        expect(embed.title).toBe('🏪 Boutique — Trésors');
+        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
             '🌱 Bouture de corail',
         ]);
-        // The coral aisle is not advertised to someone who cannot open it.
-        expect(embed.description).not.toContain('/shop page:Corail');
+        expect(embed.description).toContain('42 🐚');
+        expect(JSON.stringify(embed)).not.toContain('🪸');
     });
 
     it('points at the coral aisle once the seedling is bought', async () => {
@@ -111,7 +133,27 @@ describe('shopCommand', () => {
         expect(embed.description).toContain('/shop page:Corail');
     });
 
-    it('drops the seedling from the aisle entirely once it is owned', async () => {
+    it('drops the seedling from the shop entirely once it is owned', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({
+                guild_id: 'g1',
+                member: { user: { id: 'u1' } },
+                data: { options: [{ name: 'page', value: 'treasures' }] },
+            }),
+            mock.res,
+        );
+
+        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
+        expect(embed.fields).toEqual([]);
+        expect(embed.description).toContain('Rien à vendre');
+        // Not just out of the fields: nothing is left of it anywhere on the page.
+        expect(JSON.stringify(embed)).not.toContain('Bouture');
+    });
+
+    it('stops advertising the treasures page once nothing is left on it', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
 
         const mock = mockRes();
@@ -121,13 +163,7 @@ describe('shopCommand', () => {
         );
 
         const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
-            '🦦 Loutres plongeuses',
-            '🐟 Nageoires hydrodynamiques',
-            '🎒 Sacs de récolte XXL',
-        ]);
-        // Not just out of the fields: nothing is left of it anywhere on the page.
-        expect(JSON.stringify(embed)).not.toContain('Bouture');
+        expect(embed.description).not.toContain('Trésors');
     });
 
     it('seals the coral page until the seedling is bought, naming the way in', async () => {
@@ -146,6 +182,7 @@ describe('shopCommand', () => {
         const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
         expect(embed.fields).toBeUndefined();
         expect(embed.description).toContain('Bouture de corail');
+        expect(embed.description).toContain('/shop page:Trésors');
         // The prices and the currency itself stay behind the door.
         expect(JSON.stringify(embed)).not.toContain('🪸');
     });

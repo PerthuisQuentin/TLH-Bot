@@ -31,7 +31,7 @@ function gameInstanceFixture(userId: string, shells: string) {
         resources: { shells },
         stats: { maxShells: shells },
         income: { shells: '10' },
-        streak: { value: 3, lastDate: '2020-01-01' },
+        growthRings: { days: 3, lastDate: '2020-01-01' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: {},
     };
@@ -52,12 +52,12 @@ describe('getGameInstance', () => {
         const instance = await getGameInstance('g-detached', 'u1');
 
         expectTypeOf(instance).not.toHaveProperty('buyUpgrade');
-        expectTypeOf(instance).not.toHaveProperty('updateStreak');
+        expectTypeOf(instance).not.toHaveProperty('addGrowthRing');
         expectTypeOf(instance).not.toHaveProperty('applyShellsGain');
         expectTypeOf(instance).not.toHaveProperty('applyPassiveIncome');
         expectTypeOf(instance).not.toHaveProperty('computeIncome');
-        // The Streak behind the getter is a live object: Readonly stops at the property.
-        expectTypeOf(instance.streak).not.toHaveProperty('update');
+        // The GrowthRings behind the getter is a live object: Readonly stops at the property.
+        expectTypeOf(instance.growthRings).not.toHaveProperty('addRing');
     });
 
     it('reads a player back without touching the stored values', async () => {
@@ -69,7 +69,7 @@ describe('getGameInstance', () => {
         expect(instance.userId).toBe('u1');
         expect(instance.resources[ResourceId.SHELLS].toString()).toBe('5000');
         expect(instance.upgrades[UpgradeId.DIVING_OTTERS].level).toBe(0);
-        expect(instance.streak.toJson()).toEqual({ value: 3, lastDate: '2020-01-01' });
+        expect(instance.growthRings.toJson()).toEqual({ days: 3, lastDate: '2020-01-01' });
     });
 
     it('falls back to a fresh player when the guild has no file', async () => {
@@ -99,11 +99,11 @@ describe('updateGameInstance', () => {
     it('creates the player on first write rather than failing', async () => {
         const guildId = 'g-newcomer';
 
-        await updateGameInstance(guildId, 'newcomer', (instance) => instance.updateStreak());
+        await updateGameInstance(guildId, 'newcomer', (instance) => instance.addGrowthRing());
         await flushGameInstances(guildId);
 
         const [instance] = await getAllGameInstances(guildId);
         expect(instance.userId).toBe('newcomer');
-        expect(instance.streak.currentValue).toBe(1);
+        expect(instance.growthRings.currentDays).toBe(1);
     });
 });

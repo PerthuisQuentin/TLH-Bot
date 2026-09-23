@@ -9,7 +9,7 @@ Background, and the source of truth for the steps: [docs/shells.md, Upgrades](..
 
 ## Steps
 
-1. **Class**: subclass `BaseUpgrade` in `app/idle/core/upgrades/<kebab-name>.ts`. Declare `static readonly id / kind / costResourceId / gainResourceId / displayName / emoji / description` and implement `computeCost`, `computeGain`, `computeFormatGain`. Express curves with the modifier DSL in `app/idle/core/maths.ts`. `displayName` and `description` are French.
+1. **Class**: subclass `BaseUpgrade` in `app/idle/core/upgrades/<kebab-name>.ts`. Declare `static readonly id / kind / costResourceId / gainResourceId / displayName / emoji / description / resetOnPrestige / shopPage` (the `/shop` page it is sold on, a `ShopPage`, not necessarily its currency's) and implement `computeCost`, `computeGain`, `computeFormatGain`. Express curves with the modifier DSL in `app/idle/core/maths.ts`. `displayName` and `description` are French. If it must stay hidden until something happens, add `static readonly unlockCondition` (pure function of an `UnlockContext`) and a French `unlockHint`; the shop, `buyUpgrade` and the profile all follow it, never gate it in `/shop`.
 2. **Ids**: add the `UpgradeId` member in `app/idle/core/types.ts`, plus a `ResourceId` member if the upgrade costs or boosts a resource that does not exist yet.
 3. **Register** it in `app/idle/core/upgrades/upgrade-registry.ts`. `/shop`, `/shells`, `GameInstance` and the analysis script pick it up from there.
 4. **Stay pure**: `core/` imports nothing outside itself. All shell arithmetic goes through `app/idle/core/big-number.ts`, never a native `number`.

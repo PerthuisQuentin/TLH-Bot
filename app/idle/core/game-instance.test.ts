@@ -19,7 +19,7 @@ function makeJson(overrides: Partial<GameInstanceJson> = {}): GameInstanceJson {
         resources: { [ResourceId.SHELLS]: '0' },
         stats: { maxShells: '0' },
         income: { [ResourceId.SHELLS]: String(DEFAULT_SHELLS_PER_MESSAGE) },
-        streak: { value: 0, lastDate: '' },
+        growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         upgrades: {},
         ...overrides,
@@ -222,7 +222,7 @@ describe('prestige', () => {
             makeJson({
                 resources: { [ResourceId.SHELLS]: '1e12' },
                 stats: { maxShells: '1e12', runMaxShells: '1e12' },
-                streak: { value: 7, lastDate: '2026-09-15' },
+                growthRings: { days: 7, lastDate: '2026-09-15' },
                 upgrades: {
                     [UpgradeId.DIVING_OTTERS]: 40,
                     [UpgradeId.HYDRODYNAMIC_FLIPPERS]: 10,
@@ -314,7 +314,7 @@ describe('prestige', () => {
         expect(instance.prestige()?.coral.toString()).toBe(quoted.toString());
     });
 
-    it('leaves maxShells, the streak and lastActiveAt alone, so roles and passive income never see it', () => {
+    it('leaves maxShells, the growth rings and lastActiveAt alone, so roles and passive income never see it', () => {
         const instance = readyToPrestige();
         const before = instance.toJson();
 
@@ -324,7 +324,7 @@ describe('prestige', () => {
         expect(after.stats.maxShells).toBe(before.stats.maxShells);
         // Compared as stored rather than read through `currentValue`, which answers relative
         // to today and would make this test depend on the day it runs.
-        expect(after.streak).toEqual(before.streak);
+        expect(after.growthRings).toEqual(before.growthRings);
         expect(after.lastActiveAt).toBe(before.lastActiveAt);
     });
 
@@ -370,6 +370,38 @@ describe('prestige', () => {
     });
 });
 
+describe('unlock conditions', () => {
+    const withCoral = (upgrades: GameInstanceJson['upgrades'] = {}) =>
+        new GameInstance(makeJson({ resources: { [ResourceId.CORAL]: '1000' }, upgrades }));
+
+    it('keeps the coral upgrades locked until the seedling is bought', () => {
+        const locked = withCoral();
+        expect(locked.isUpgradeUnlocked(UpgradeId.NOURISHING_REEF)).toBe(false);
+        expect(locked.isUpgradeUnlocked(UpgradeId.BUILDING_POLYPS)).toBe(false);
+        expect(locked.isUpgradeUnlocked(UpgradeId.DIVING_OTTERS)).toBe(true);
+
+        const unlocked = withCoral({ [UpgradeId.CORAL_SEEDLING]: 1 });
+        expect(unlocked.isUpgradeUnlocked(UpgradeId.NOURISHING_REEF)).toBe(true);
+        expect(unlocked.isUpgradeUnlocked(UpgradeId.BUILDING_POLYPS)).toBe(true);
+    });
+
+    // Enforced in the model, not only in `/shop`: the sandbox and the simulations buy
+    // through here too.
+    it('refuses to sell a locked upgrade, whatever the balance', () => {
+        const instance = withCoral();
+        expect(instance.buyUpgrade(UpgradeId.NOURISHING_REEF, 1)).toBeNull();
+        expect(instance.upgrades[UpgradeId.NOURISHING_REEF].level).toBe(0);
+        expect(instance.resources[ResourceId.CORAL].toString()).toBe('1000');
+    });
+
+    it('takes a bought one-shot off sale while leaving it unlocked', () => {
+        const instance = withCoral({ [UpgradeId.CORAL_SEEDLING]: 1 });
+        expect(instance.isUpgradeUnlocked(UpgradeId.CORAL_SEEDLING)).toBe(true);
+        expect(instance.isUpgradeVisible(UpgradeId.CORAL_SEEDLING)).toBe(false);
+        expect(instance.isUpgradeVisible(UpgradeId.NOURISHING_REEF)).toBe(true);
+    });
+});
+
 describe('buyUpgrade with a maxLevel', () => {
     function rich() {
         return new GameInstance(
@@ -410,7 +442,7 @@ describe('toJson / constructor round-trip', () => {
                 resources: { [ResourceId.SHELLS]: '4242' },
                 stats: { maxShells: '9999', runMaxShells: '512', prestigeCount: 2 },
                 income: { [ResourceId.SHELLS]: '73.5' },
-                streak: { value: 3, lastDate: '2026-08-10' },
+                growthRings: { days: 3, lastDate: '2026-08-10' },
                 upgrades: {
                     [UpgradeId.DIVING_OTTERS]: 6,
                     [UpgradeId.HYDRODYNAMIC_FLIPPERS]: 2,

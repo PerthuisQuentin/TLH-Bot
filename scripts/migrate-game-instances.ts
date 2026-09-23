@@ -149,9 +149,9 @@ function migrateGuild(guildId: string): GuildReport {
                     String(DEFAULT_SHELLS_PER_MESSAGE),
                 ),
             },
-            streak: {
-                value: legacy?.streak ?? 0,
-                // An empty lastDate makes the next update start a fresh streak at 1.
+            growthRings: {
+                days: legacy?.streak ?? 0,
+                // An empty lastDate makes the next ring start a fresh series at 1.
                 lastDate: legacy?.lastStreakDate ?? '',
             },
             // Missing lastActiveAt means passive income starts accruing from now,
@@ -262,7 +262,7 @@ for (const guildId of guildIds) {
 
     for (const instance of report.instances.slice(0, 2)) {
         console.log(
-            `    ${instance.userId}: shells=${formatBigNum(bn(instance.resources[ResourceId.SHELLS] ?? '0'))} max=${formatBigNum(bn(instance.stats.maxShells))} spm=${formatBigNum(bn(instance.income[ResourceId.SHELLS] ?? '0'))} streak=${instance.streak.value} upgrades=${Object.values(instance.upgrades).join('/')}`,
+            `    ${instance.userId}: shells=${formatBigNum(bn(instance.resources[ResourceId.SHELLS] ?? '0'))} max=${formatBigNum(bn(instance.stats.maxShells))} spm=${formatBigNum(bn(instance.income[ResourceId.SHELLS] ?? '0'))} rings=${instance.growthRings.days} upgrades=${Object.values(instance.upgrades).join('/')}`,
         );
     }
 

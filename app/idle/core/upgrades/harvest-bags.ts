@@ -1,4 +1,4 @@
-import { UpgradeKind, UpgradeId, ResourceId } from '../types.ts';
+import { UpgradeKind, UpgradeId, ResourceId, ShopPage } from '../types.ts';
 import { BaseUpgrade } from './base-upgrade.ts';
 import { formatBigNum } from '../big-number.ts';
 import { computeValue, ModifierTrigger, ModifierOperation } from '../maths.ts';
@@ -14,6 +14,7 @@ export class HarvestBagsUpgrade extends BaseUpgrade {
     static readonly description =
         'Des sacs plus grands permettent à vos loutres de rapporter bien plus à chaque plongée. Chaque amélioration augmente la récolte de +50%.';
     static readonly resetOnPrestige = true;
+    static readonly shopPage = ShopPage.SHELLS;
 
     computeCost(level: number): BigNum {
         return computeValue(level, [

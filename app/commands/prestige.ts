@@ -13,6 +13,7 @@ import {
     flushGameInstances,
 } from '../idle/game-instance-storage.ts';
 import { ALL_UPGRADE_IDS, UPGRADE_REGISTRY } from '../idle/core/upgrades/upgrade-registry.ts';
+import { SHOP_PAGE_NAMES } from '../idle/core/shop-pages.ts';
 import { ResourceId, UpgradeId } from '../idle/core/types.ts';
 import { formatResource } from '../idle/core/resources.ts';
 import { bnGt, formatBigNum } from '../idle/core/big-number.ts';
@@ -62,7 +63,7 @@ function replyLocked(res: Response): void {
     replyRefusal(
         res,
         `${seedling.emoji} Prestige`,
-        `Vos loutres n'ont rien où déposer leur récolte. Procurez-vous ${seedling.emoji} **${seedling.displayName}** dans \`/shop\` pour ouvrir le récif.`,
+        `Vos loutres n'ont rien où déposer leur récolte. Procurez-vous ${seedling.emoji} **${seedling.displayName}** dans \`/shop page:${SHOP_PAGE_NAMES[seedling.shopPage]}\` pour ouvrir le récif.`,
     );
 }
 

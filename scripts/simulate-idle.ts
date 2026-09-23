@@ -6,7 +6,7 @@
  *                               [--delay=0] [--every=0]
  *
  * The time unit is a day, and the only input is an effective message count per day.
- * Heat, streak, passive income and the jackpot are deliberately absent: they are
+ * Heat, growth rings, passive income and the jackpot are deliberately absent: they are
  * folded into that number. The working assumption is ~100 real messages a day which,
  * once the multipliers are applied, earns about what 500 plain messages would.
  *
@@ -133,7 +133,7 @@ async function run(
         resources: { [ResourceId.SHELLS]: String(config.startingShells) },
         stats: { maxShells: String(config.startingShells) },
         income: { [ResourceId.SHELLS]: String(DEFAULT_SHELLS_PER_MESSAGE) },
-        streak: { value: 0, lastDate: '' },
+        growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         upgrades: {},
     });
@@ -237,7 +237,7 @@ async function main(): Promise<void> {
                 ? ` · start ${formatBigNum(bn(config.startingShells))} 🐚`
                 : ''),
     );
-    console.log('Heat, streak, passive income and jackpot are folded into msg/day.\n');
+    console.log('Heat, growth rings, passive income and jackpot are folded into msg/day.\n');
 
     printProgression(samples);
 

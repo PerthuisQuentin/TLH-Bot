@@ -51,7 +51,7 @@ Two consequences:
 | Resets                   | Survives                                 |
 | ------------------------ | ---------------------------------------- |
 | `resources.shells`       | `stats.maxShells` (roles, leaderboard)   |
-| All three shell upgrades | `streak`                                 |
+| All three shell upgrades | `growthRings`                            |
 | `runMaxShells`           | `lastActiveAt` (passive income)          |
 |                          | `resources.coral` and the coral upgrades |
 
@@ -208,7 +208,7 @@ prestiges too eagerly slows down but never bricks their account.
 ## What coral buys
 
 A multiplicative clone of the shell tree would be a waste. The game has four systems the
-player currently endures without any lever: heat, streak, passive income and the jackpot.
+player currently endures without any lever: heat, growth rings, passive income and the jackpot.
 They are exactly what `simulate-idle.ts` folds into its single `--messages-per-day` input.
 Coral is where they become player-facing.
 

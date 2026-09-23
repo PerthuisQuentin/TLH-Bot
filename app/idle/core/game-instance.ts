@@ -1,10 +1,16 @@
 import { BigNum, bn, bnAdd, bnCeil, bnFloor, bnLt, bnMax, bnMul, bnSub } from './big-number.ts';
 import { z } from 'zod';
 import { MAX_LEVELS_PER_PURCHASE } from './upgrades/base-upgrade.ts';
-import type { BaseUpgrade, ReadonlyUpgrade } from './upgrades/base-upgrade.ts';
+import type { BaseUpgrade, ReadonlyUpgrade, UnlockContext } from './upgrades/base-upgrade.ts';
+import { isCoralUnlocked } from './upgrades/coral-seedling.ts';
 import { ResourceId, UpgradeId, UpgradeKind } from './types.ts';
 import { UPGRADE_REGISTRY } from './upgrades/upgrade-registry.ts';
-import { Streak, type ReadonlyStreak, type StreakJson, StreakJsonSchema } from './streak.ts';
+import {
+    GrowthRings,
+    GrowthRingsJsonSchema,
+    type GrowthRingsJson,
+    type ReadonlyGrowthRings,
+} from './growth-rings.ts';
 import { computePassiveShells, passiveCreditedUntil } from './passive-income.ts';
 import { previewPrestige, type PrestigePreview } from './prestige/prestige-config.ts';
 
@@ -35,7 +41,7 @@ export type GameInstanceJson = {
     resources: ResourcesJson;
     stats: StatsJson;
     income: IncomeJson;
-    streak: StreakJson;
+    growthRings: GrowthRingsJson;
     lastActiveAt: string;
     upgrades: Partial<Record<UpgradeId, number>>;
 };
@@ -45,7 +51,7 @@ export const GameInstanceJsonSchema = z.object({
     resources: ResourcesJsonSchema,
     stats: StatsJsonSchema,
     income: IncomeJsonSchema,
-    streak: StreakJsonSchema,
+    growthRings: GrowthRingsJsonSchema,
     lastActiveAt: z.string(),
     upgrades: z.record(z.enum(UpgradeId), z.number().optional()),
 });
@@ -62,7 +68,7 @@ export class GameInstance {
     private _stats: StatsData;
     private _income: Record<ResourceId, BigNum>;
 
-    private _streak: Streak;
+    private _growthRings: GrowthRings;
 
     private _lastActiveAt: Date;
 
@@ -84,7 +90,7 @@ export class GameInstance {
         this._income = Object.fromEntries(
             Object.values(ResourceId).map((id) => [id, bn(data.income[id] ?? 0)]),
         ) as Record<ResourceId, BigNum>;
-        this._streak = new Streak(data.streak);
+        this._growthRings = new GrowthRings(data.growthRings);
         this._lastActiveAt = new Date(data.lastActiveAt);
         this._upgrades = Object.fromEntries(
             Object.values(UpgradeId).map((id) => [
@@ -110,8 +116,8 @@ export class GameInstance {
         return { ...this._income };
     }
 
-    get streak(): Streak {
-        return this._streak;
+    get growthRings(): GrowthRings {
+        return this._growthRings;
     }
 
     get upgrades(): Readonly<Record<UpgradeId, ReadonlyUpgrade>> {
@@ -165,7 +171,24 @@ export class GameInstance {
      * it, rather than on a peak or a prestige count, so the player opens the door themselves.
      */
     get coralUnlocked(): boolean {
-        return this._upgrades[UpgradeId.CORAL_SEEDLING].level > 0;
+        return isCoralUnlocked(this.unlockContext);
+    }
+
+    /** The upgrade decides; this only hands it the player's state. */
+    isUpgradeUnlocked(id: UpgradeId): boolean {
+        return this._upgrades[id].isUnlocked(this.unlockContext);
+    }
+
+    isUpgradeVisible(id: UpgradeId): boolean {
+        return this._upgrades[id].isVisible(this.unlockContext);
+    }
+
+    private get unlockContext(): UnlockContext {
+        return {
+            upgradeLevels: Object.fromEntries(
+                Object.values(UpgradeId).map((id) => [id, this._upgrades[id].level]),
+            ) as Record<UpgradeId, number>,
+        };
     }
 
     /**
@@ -214,7 +237,7 @@ export class GameInstance {
 
     /**
      * Trades the run for coral. The shells balance, the run peak and every shells-priced
-     * upgrade go back to zero; coral and `prestigeCount` go up. `maxShells`, the streak and
+     * upgrade go back to zero; coral and `prestigeCount` go up. `maxShells`, the growth rings and
      * `lastActiveAt` are deliberately untouched, which is what keeps the roles, the
      * leaderboard and passive income from noticing a reset happened.
      *
@@ -256,7 +279,7 @@ export class GameInstance {
             income: Object.fromEntries(
                 Object.values(ResourceId).map((id) => [id, this._income[id].toString()]),
             ),
-            streak: this._streak.toJson(),
+            growthRings: this._growthRings.toJson(),
             lastActiveAt: this._lastActiveAt.toISOString(),
             upgrades: Object.fromEntries(
                 Object.values(UpgradeId).map((id) => [id, this._upgrades[id].level]),
@@ -271,14 +294,14 @@ export class GameInstance {
             resources: { [ResourceId.SHELLS]: '0' },
             stats: { maxShells: '0', runMaxShells: '0', prestigeCount: 0 },
             income: { [ResourceId.SHELLS]: DEFAULT_SHELLS_PER_MESSAGE.toString() },
-            streak: Streak.newInstance().toJson(),
+            growthRings: GrowthRings.newInstance().toJson(),
             lastActiveAt: now.toISOString(),
             upgrades: {},
         });
     }
 
-    updateStreak(): void {
-        this._streak.update();
+    addGrowthRing(): void {
+        this._growthRings.addRing();
     }
 
     buyUpgrade(
@@ -297,6 +320,9 @@ export class GameInstance {
         }
 
         const upgrade = this._upgrades[upgradeId];
+        // Here and not only in `/shop`, so no caller (the sandbox, the simulations) can buy
+        // what the player is not allowed to see.
+        if (!upgrade.isUnlocked(this.unlockContext)) return null;
         // A one-shot upgrade bought twice would charge twice for nothing, and `getTotalCost`
         // would happily price the levels past the cap.
         if (upgrade.level + quantity > upgrade.maxLevel) return null;
@@ -325,10 +351,10 @@ export type ReadonlyGameInstance = Readonly<
         | 'buyUpgrade'
         | 'applyShellsGain'
         | 'applyPassiveIncome'
-        | 'updateStreak'
+        | 'addGrowthRing'
         | 'computeIncome'
         | 'prestige'
         // Dropped and reinstated below: `Readonly` freezes the property, not the object behind it.
-        | 'streak'
+        | 'growthRings'
     >
-> & { readonly streak: ReadonlyStreak };
+> & { readonly growthRings: ReadonlyGrowthRings };

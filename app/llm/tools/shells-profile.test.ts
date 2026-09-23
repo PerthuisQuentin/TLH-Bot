@@ -26,7 +26,7 @@ function gameInstanceFixture(userId: string, shells: string) {
         resources: { shells },
         stats: { maxShells: shells },
         income: { shells: '10' },
-        streak: { value: 3, lastDate: '2020-01-01' },
+        growthRings: { days: 3, lastDate: '2020-01-01' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: {},
     };
@@ -48,7 +48,7 @@ describe('the tool registry', () => {
 });
 
 describe('shellsProfileTool.execute', () => {
-    it("renders the target user's balance, rank and streak, not the caller's", async () => {
+    it("renders the target user's balance, rank and growth rings, not the caller's", async () => {
         await writeGameInstances('g1', [
             gameInstanceFixture('u1', '100'),
             gameInstanceFixture('u2', '500'),

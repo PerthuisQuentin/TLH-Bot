@@ -81,11 +81,11 @@ type Candidate = {
 function candidates(instance: GameInstance): Candidate[] {
     const current = instance.income[ResourceId.SHELLS];
 
-    // A maxed upgrade keeps quoting a price it will never honour. Left in, the cheapest-first
-    // strategy would pick it, `buyUpgrade` would refuse, and `tryBuy` would report "nothing
-    // affordable" from then on — the auto-buyer stalls with a full balance.
+    // A maxed or locked upgrade keeps quoting a price it will not honour. Left in, the
+    // cheapest-first strategy would pick it, `buyUpgrade` would refuse, and `tryBuy` would
+    // report "nothing affordable" from then on — the auto-buyer stalls with a full balance.
     return shellPricedUpgradeIds(instance)
-        .filter((id) => !instance.upgrades[id].isMaxed)
+        .filter((id) => instance.isUpgradeVisible(id))
         .map((id) => {
             const cost = bnCeil(instance.upgrades[id].getCost());
             const delta = bnSub(projectedIncome(instance, id), current);
@@ -100,8 +100,11 @@ function candidates(instance: GameInstance): Candidate[] {
 export function spendCoral(instance: GameInstance): void {
     for (;;) {
         const balance = instance.resources[ResourceId.CORAL];
+        // Visible only, for the same stall `candidates` avoids.
         const target = ALL_UPGRADE_IDS.filter(
-            (id) => instance.upgrades[id].costResourceId === ResourceId.CORAL,
+            (id) =>
+                instance.upgrades[id].costResourceId === ResourceId.CORAL &&
+                instance.isUpgradeVisible(id),
         )
             .map((id) => ({ id, cost: bnCeil(instance.upgrades[id].getCost()) }))
             .filter((candidate) => bnGte(balance, candidate.cost))
@@ -121,7 +124,7 @@ export function tryBuy(instance: GameInstance, strategy: PurchaseStrategy): Upgr
     const gate = shellPricedUpgradeIds(instance).find(
         (id) =>
             instance.upgrades[id].kind === UpgradeKind.CUSTOM &&
-            !instance.upgrades[id].isMaxed &&
+            instance.isUpgradeVisible(id) &&
             bnGte(instance.resources[ResourceId.SHELLS], bnCeil(instance.upgrades[id].getCost())),
     );
     if (gate) return instance.buyUpgrade(gate, 1) ? gate : null;

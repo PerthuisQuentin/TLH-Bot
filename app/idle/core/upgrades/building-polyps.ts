@@ -1,5 +1,6 @@
-import { UpgradeKind, UpgradeId, ResourceId } from '../types.ts';
+import { UpgradeKind, UpgradeId, ResourceId, ShopPage } from '../types.ts';
 import { BaseUpgrade } from './base-upgrade.ts';
+import { CORAL_UNLOCK_HINT, isCoralUnlocked } from './coral-seedling.ts';
 import { formatBigNum } from '../big-number.ts';
 import { computeValue, ModifierTrigger, ModifierOperation } from '../maths.ts';
 import type { BigNum } from '../big-number.ts';
@@ -19,6 +20,9 @@ export class BuildingPolypsUpgrade extends BaseUpgrade {
     static readonly description =
         'Des polypes plus vigoureux bâtissent le récif plus vite. Chaque amélioration augmente de +10% le corail que rapporte un prestige.';
     static readonly resetOnPrestige = false;
+    static readonly shopPage = ShopPage.CORAL;
+    static readonly unlockCondition = isCoralUnlocked;
+    static readonly unlockHint = CORAL_UNLOCK_HINT;
 
     // Small steps on purpose, and cheap: the reef is the big-ticket buy, this is what the
     // change between two reef levels goes into. Doubling the price per level keeps the pair
