@@ -43,16 +43,15 @@ async function writeConfig(guildId: string, config: unknown): Promise<void> {
 
 function gameInstanceFixture(
     userId: string,
-    overrides: Partial<{ shells: string; maxShells: string; income: string }> = {},
+    overrides: Partial<{ shells: string; maxShells: string; otters: number }> = {},
 ) {
     return {
         userId,
         resources: { shells: overrides.shells ?? '0' },
         stats: { maxShells: overrides.maxShells ?? '0' },
-        income: { shells: overrides.income ?? '10' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
-        upgrades: {},
+        upgrades: { divingOtters: overrides.otters ?? 0 },
     };
 }
 
@@ -109,11 +108,11 @@ describe('handleDiscordEvent — reaction crediting', () => {
         const guildId = 'g-credit';
         const reactorId = 'reactor1';
         const authorId = 'author1';
-        // A high enough income that floor(income * 0.1 * variance roll) can never land
-        // on exactly 0 — the default income of 10 makes that a real ~1/3 chance.
+        // A high enough income (otters 45: 370/msg) that floor(income * 0.1 * variance roll)
+        // can never land on exactly 0 — the default income of 10 makes that a real ~1/3 chance.
         await writeGameInstances(guildId, [
-            gameInstanceFixture(reactorId, { income: '100' }),
-            gameInstanceFixture(authorId, { income: '100' }),
+            gameInstanceFixture(reactorId, { otters: 45 }),
+            gameInstanceFixture(authorId, { otters: 45 }),
         ]);
 
         await handleDiscordEvent(

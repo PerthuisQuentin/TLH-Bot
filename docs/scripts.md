@@ -89,7 +89,7 @@ tsx scripts/simulate-idle.ts --days=30 --delay=200              # live screen
 
 ### The one input that matters
 
-`--messages-per-day` counts message-_equivalents_, not messages. **Growth rings are modelled**: the simulated player is active every day, so each simulated day adds a ring (`playMessages` in `sim-common.ts`, on a virtual calendar) and the day's messages are paid at the rings' multiplier, ×1.01 on day one, ×2 from day 100, uncapped once the Coquille millénaire is bought. Heat, passive income and the jackpot are **not** modelled and stay folded into the count.
+`--messages-per-day` counts message-_equivalents_, not messages. **Growth rings are modelled**: the simulated player is active every day, so each simulated day adds a ring (`playMessages` in `sim-common.ts`, on a virtual calendar) and the day's messages are paid at the income, which carries the rings' multiplier, ×1.01 on day one, ×2 from day 100, uncapped once the Coquille millénaire is bought. Heat, passive income and the jackpot are **not** modelled and stay folded into the count.
 
 The default of 200 comes from a member sending roughly 100 real messages a day: once heat (×1–2) and passive income are applied, that earns about what 200 plain messages would. It is a rough figure, and it is the knob to turn when you want a different player profile — a quiet member is nearer 30, a very active one during a busy week nearer 800.
 
@@ -172,7 +172,7 @@ tsx scripts/sandbox.ts --frames=40               # render without a terminal, fo
 
 **The clock is virtual.** A tick advances the day counter by `speed × 0.1`, and the messages
 that many days are worth are paid through `playMessages`, like the simulations: one growth ring
-per virtual day, messages at the rings' multiplier, shown on their own line. At the default
+per virtual day, messages at an income that carries the rings, shown on their own line. At the default
 speed a first prestige lands around day 63, about four minutes of wall time.
 
 **Heat and passive income are not modelled.** They are folded into the message rate, the same

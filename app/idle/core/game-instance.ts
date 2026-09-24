@@ -32,15 +32,10 @@ const StatsJsonSchema = z.object({
 
 type StatsData = { maxShells: BigNum; runMaxShells: BigNum; prestigeCount: number };
 
-type IncomeJson = Partial<Record<ResourceId, string>>;
-
-const IncomeJsonSchema = z.record(z.enum(ResourceId), z.string().optional());
-
 export type GameInstanceJson = {
     userId: string;
     resources: ResourcesJson;
     stats: StatsJson;
-    income: IncomeJson;
     growthRings: GrowthRingsJson;
     lastActiveAt: string;
     upgrades: Partial<Record<UpgradeId, number>>;
@@ -50,7 +45,6 @@ export const GameInstanceJsonSchema = z.object({
     userId: z.string(),
     resources: ResourcesJsonSchema,
     stats: StatsJsonSchema,
-    income: IncomeJsonSchema,
     growthRings: GrowthRingsJsonSchema,
     lastActiveAt: z.string(),
     upgrades: z.record(z.enum(UpgradeId), z.number().optional()),
@@ -87,9 +81,6 @@ export class GameInstance {
             runMaxShells: bn(data.stats.runMaxShells ?? data.stats.maxShells),
             prestigeCount: data.stats.prestigeCount ?? 0,
         };
-        this._income = Object.fromEntries(
-            Object.values(ResourceId).map((id) => [id, bn(data.income[id] ?? 0)]),
-        ) as Record<ResourceId, BigNum>;
         this._growthRings = new GrowthRings(data.growthRings);
         this._lastActiveAt = new Date(data.lastActiveAt);
         this._upgrades = Object.fromEntries(
@@ -98,6 +89,8 @@ export class GameInstance {
                 new UPGRADE_REGISTRY[id](data.upgrades[id] ?? 0),
             ]),
         ) as Record<UpgradeId, BaseUpgrade>;
+        // Derived, never stored: it follows the upgrades and the rings.
+        this._income = this.computeIncome();
     }
 
     get userId(): string {
@@ -136,7 +129,10 @@ export class GameInstance {
         return { ...this._upgrades };
     }
 
-    /** Groups upgrades by `gainResourceId` first, so each resource gets its own additive/multiplicative stack. */
+    /**
+     * Groups upgrades by `gainResourceId` first, so each resource gets its own additive/multiplicative stack.
+     * Shells also carry the growth rings, so every gain read off the income (passive, jackpot) has them.
+     */
     computeIncome(): Record<ResourceId, BigNum> {
         const result = {} as Record<ResourceId, BigNum>;
 
@@ -157,6 +153,8 @@ export class GameInstance {
 
             result[resourceId] = bnMul(bnAdd(initial, additive), multiplier);
         }
+
+        result[ResourceId.SHELLS] = bnMul(result[ResourceId.SHELLS], this.growthRingsMultiplier);
 
         this._income = result;
         return result;
@@ -289,9 +287,6 @@ export class GameInstance {
                 runMaxShells: this._stats.runMaxShells.toString(),
                 prestigeCount: this._stats.prestigeCount,
             },
-            income: Object.fromEntries(
-                Object.values(ResourceId).map((id) => [id, this._income[id].toString()]),
-            ),
             growthRings: this._growthRings.toJson(),
             lastActiveAt: this._lastActiveAt.toISOString(),
             upgrades: Object.fromEntries(
@@ -306,7 +301,6 @@ export class GameInstance {
             userId,
             resources: { [ResourceId.SHELLS]: '0' },
             stats: { maxShells: '0', runMaxShells: '0', prestigeCount: 0 },
-            income: { [ResourceId.SHELLS]: DEFAULT_SHELLS_PER_MESSAGE.toString() },
             growthRings: GrowthRings.newInstance().toJson(),
             lastActiveAt: now.toISOString(),
             upgrades: {},
@@ -315,7 +309,9 @@ export class GameInstance {
 
     /** `today` is injectable so the simulations can run on a virtual calendar. */
     addGrowthRing(today: string = GrowthRings.today()): void {
+        const days = this._growthRings.days;
         this._growthRings.addRing(today);
+        if (this._growthRings.days !== days) this.computeIncome();
     }
 
     buyUpgrade(

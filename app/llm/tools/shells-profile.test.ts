@@ -25,7 +25,6 @@ function gameInstanceFixture(userId: string, shells: string) {
         userId,
         resources: { shells },
         stats: { maxShells: shells },
-        income: { shells: '10' },
         growthRings: { days: 3, lastDate: '2020-01-01' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: {},
