@@ -103,7 +103,6 @@ The whole shells game state, one entry per player. See [shells.md](./shells.md) 
         "userId": "123456789",
         "resources": { "shells": "531234", "coral": "0" },
         "stats": { "maxShells": "912004", "runMaxShells": "912004", "prestigeCount": 0 },
-        "income": { "shells": "360", "coral": "0" },
         "growthRings": { "days": 4, "lastDate": "2026-08-10" },
         "lastActiveAt": "2026-08-10T18:42:11.003Z",
         "upgrades": { "divingOtters": 45, "hydrodynamicFlippers": 3, "harvestBags": 0 }
@@ -121,13 +120,12 @@ The whole shells game state, one entry per player. See [shells.md](./shells.md) 
 | `stats.maxShells`      | string | All-time peak balance. Role thresholds are evaluated against this, never the current balance, and **nothing ever resets it**.                                                 |
 | `stats.runMaxShells`   | string | Peak balance since the last prestige. Optional; **a file without it reads it back as `maxShells`**, not as 0, because a player with no prestige has run since the beginning.  |
 | `stats.prestigeCount`  | number | Prestiges performed. Optional, defaults to 0.                                                                                                                                 |
-| `income`               | object | Rate per `ResourceId`, earned per message/reaction/passive tick.                                                                                                              |
-| `income.shells`        | string | Recomputed from the upgrade levels after every purchase.                                                                                                                      |
-| `income.coral`         | string | Always `"0"`. Coral is earned by prestiging, not per message, so no upgrade ever seeds an income for it.                                                                      |
-| `growthRings.days`     | number | Consecutive active days.                                                                                                                                                      |
+| `growthRings.days`     | number | Active days, not necessarily consecutive. Never goes down.                                                                                                                    |
 | `growthRings.lastDate` | string | `YYYY-MM-DD`, Europe/Paris.                                                                                                                                                   |
 | `lastActiveAt`         | string | ISO timestamp passive income has been credited up to — the last earning event, minus the fraction of a shell that event did not pay for. Passive income integrates from here. |
 | `upgrades`             | object | Level per `UpgradeId`. A missing key reads as 0.                                                                                                                              |
+
+There is no `income` field. The income is derived on load from `upgrades` and `growthRings` (`GameInstance.computeIncome`), so a rebalance applies to every player with no migration and nothing stored can lag behind.
 
 The prestige fields land in the file the first time a player is written after the upgrade, and
 an older file is accepted as-is until then: the constructor's defaults are exactly right for a

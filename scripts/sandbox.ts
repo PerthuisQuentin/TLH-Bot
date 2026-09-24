@@ -297,7 +297,7 @@ function upgradeLines(): string[] {
 
 function header(): string[] {
     const income = instance.income[ResourceId.SHELLS];
-    const perDay = bnMul(income, config.messagesPerDay * instance.growthRingsMultiplier);
+    const perDay = bnMul(income, config.messagesPerDay);
     const coral = instance.resources[ResourceId.CORAL];
     const multiplier = instance.coralMultiplier;
 

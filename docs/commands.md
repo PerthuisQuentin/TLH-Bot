@@ -52,11 +52,11 @@ Names come from the gateway's member cache, so the history shows server nickname
 
 The guild's shells ranking, 10 per page.
 
-| Option   | Type        | Required | Description                                                                                                |
-| -------- | ----------- | -------- | ---------------------------------------------------------------------------------------------------------- |
-| `page`   | Integer ≥ 1 | No       | Page number. Default 1, clamped to the last page.                                                          |
-| `sort`   | Choice      | No       | `max` (all-time record, default), `current` (balance), `income` (per message), `rings` (growth ring days). |
-| `public` | Boolean     | No       | Show to everyone. Default false.                                                                           |
+| Option   | Type        | Required | Description                                                                                                                       |
+| -------- | ----------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `page`   | Integer ≥ 1 | No       | Page number. Default 1, clamped to the last page.                                                                                 |
+| `sort`   | Choice      | No       | `max` (all-time record, default), `current` (balance), `income` (per message, growth rings included), `rings` (growth ring days). |
+| `public` | Boolean     | No       | Show to everyone. Default false.                                                                                                  |
 
 Each line shows the rank, the member, their record, and their balance and income in parentheses. Under `rings` the line leads with what is ranked instead: the growth ring days, the effective multiplier (above ×2 with the Coquille millénaire), then the record. Ring ties are frequent, so they are broken by record. The requester's own line is bold; if they are not on the displayed page, it is appended below a separator, or "Non classé" if they have never earned.
 
@@ -76,7 +76,7 @@ A member's shells profile.
 Three fields:
 
 - **Rôles** — leaderboard rank, current role, next role and the shells still missing.
-- **Coquillages** — balance, gain per message (±10 %), gain per reaction, current growth rings (_Stries de croissance_) and their multiplier.
+- **Coquillages** — balance, gain per message (±10 %, growth rings included), gain per reaction, current growth rings (_Stries de croissance_) and their multiplier.
 - **Récif** — coral balance, prestige count and what `/prestige` would pay. **Absent entirely** until 🌱 Bouture de corail is bought: an empty heading would announce the mechanic as loudly as its contents.
 - **Upgrades** — one line per upgrade with its level and current effect. The coral ones are omitted while the layer is locked, and **one-shot unlocks never appear at all**, bought or not: their level is a yes/no, and a "Niv. 0" among levelled upgrades reads as one the player is behind on. `/shop` is where they are sold, and the assistant still prices them from `upgradeShopLines`.
 

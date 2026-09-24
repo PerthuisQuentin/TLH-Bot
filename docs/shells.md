@@ -8,7 +8,7 @@ All of it lives in `app/idle/`. The pure rules are in `app/idle/core/` — no I/
 
 ## `GameInstance`
 
-`app/idle/core/game-instance.ts` holds one player's entire state: resources (currently just `shells`), stats (currently just `maxShells`), income (currently just `shells`), growth rings, lastActiveAt and upgrade levels.
+`app/idle/core/game-instance.ts` holds one player's entire state: resources (currently just `shells`), stats (currently just `maxShells`), income (currently just `shells`, derived rather than stored), growth rings, lastActiveAt and upgrade levels.
 
 Its persistence boundary is exactly three methods — `toJson()`, `new GameInstance(json)` and `GameInstance.newInstance(userId)`. Load and save go through `app/idle/game-instance-storage.ts`; the file is `{guildId}-game-instances.json`.
 
@@ -25,8 +25,8 @@ Its persistence boundary is exactly three methods — `toJson()`, `new GameInsta
 2. updateChannelHeat                    → always, even if step 3 stops the event
 3. 5 s per-user cooldown                → stop
 4. credit passive income since lastActiveAt
-5. add the day's growth ring
-6. apply heat × growth rings × activity fraction
+5. add the day's growth ring              → recomputes the income
+6. apply heat × activity fraction
 7. roll the jackpot                     → messages only
 8. save
 9. compute role changes from maxShells
@@ -43,17 +43,17 @@ The cooldown key is `{guildId}:{userId}:{activityType}`, so messages and reactio
 ## Per-event gain
 
 ```
-amount = floor(rolled × heat × growthRings × activityFraction)
+amount = floor(rolled × heat × activityFraction)
 ```
 
-where `rolled` is a uniform integer in `[base − v, base + v]`, `base` = the player's shells income (`income.shells`) and `v = floor(base × 0.1)` — a ±10 % variance.
+where `rolled` is a uniform integer in `[base − v, base + v]`, `base` = the player's shells income (`income.shells`, growth rings included) and `v = floor(base × 0.1)` — a ±10 % variance.
 
 | Activity | Fraction | Who earns                                          |
 | -------- | -------- | -------------------------------------------------- |
 | Message  | ×1.0     | The author.                                        |
 | Reaction | ×0.1     | The reactor, **and** the reacted message's author. |
 
-The author's share is a flat 10 % of their own shells income: no heat, no growth rings, no passive income, and `lastActiveAt` is left untouched. Being reacted to is not an activity of theirs. It also rides behind the _reactor's_ cooldown, so reaction spam cannot farm someone else's balance, and it never triggers a role evaluation — only the reactor's roles are checked.
+The author's share is a flat 10 % of their own shells income, their growth rings included since the income carries them: no heat, no new ring, no passive income, and `lastActiveAt` is left untouched. Being reacted to is not an activity of theirs. It also rides behind the _reactor's_ cooldown, so reaction spam cannot farm someone else's balance, and it never triggers a role evaluation — only the reactor's roles are checked.
 
 Self-reactions earn the author nothing.
 
@@ -108,7 +108,9 @@ multiplier = min(1 + 0.01 × days, 2)
 | ---------- | ----- | ----- | ----- | ----- | ----- | --------- |
 | Multiplier | ×1.01 | ×1.07 | ×1.30 | ×1.50 | ×1.70 | **×2.00** |
 
-The day's ring is added before the multiplier is read, so the first earning event already pays ×1.01. Adding a ring is idempotent — calling it several times the same day changes nothing.
+**The multiplier is part of the income.** `computeIncome` multiplies the shells income by it, so everything read off `income.shells` carries it: the message gain, passive income, the jackpot, the reacted author's share, `/shells` and the income leaderboard. Heat stays out because it moves from one message to the next; the rings move at most once a day, which makes them a property of the player, like an upgrade.
+
+The day's ring is added, and the income recomputed, before the message is paid, so the first earning event already pays ×1.01. Adding a ring is idempotent — calling it several times the same day changes nothing.
 
 **Why it is shaped this way.** The count is meant to reward showing up over the long run without punishing a missed day: the consecutive-day series it replaced reset on a single absence, and the switch carried each series over as its day count with no compensation, accepting that members between 7 and 100 days lost bonus. Growth is linear rather than compound: `1.01^days` was considered and kept aside, since it reaches ×37.8 at a year and ×1428 at two and would need its own cap and a check against the prestige layer, which the rings survive.
 
@@ -145,7 +147,7 @@ Past the plateau the clock still jumps to now. Time and shells stop being interc
 
 The cap is `income.shells × (24 + 12π) ≈ 61.7 × income.shells`. The rate never actually reaches zero, so an absence always pays something — but coming back after a month is barely better than coming back after a week.
 
-Passive income uses `income.shells` alone, upgrades included, with no heat and no growth rings.
+Passive income uses `income.shells`, upgrades and growth rings included, with no heat. It is credited before the day's ring is added, so an absence is paid at the rings the player had during it.
 
 ---
 
@@ -153,7 +155,7 @@ Passive income uses `income.shells` alone, upgrades included, with no heat and n
 
 `app/idle/core/jackpot.ts`: every **message** has a 1-in-1000 chance of paying `income.shells × 1000` **on top of** the normal gain. Reactions never roll.
 
-Neither heat nor growth rings apply. That is deliberate: at equal income, a jackpot is worth the same to everyone, whether they hit it in a dead channel on day one or in a packed channel at the growth rings cap.
+Heat does not apply; the growth rings do, since they are part of the income. At equal income a jackpot is worth the same to everyone, whether they hit it in a dead channel or a packed one.
 
 The bot announces it publicly in the channel, with a message generated by the AI model, opening and closing on 🎉 — see [Announcement markers](#announcement-markers).
 
@@ -167,9 +169,10 @@ Upgrades raise a resource's income permanently and are bought with `/shop`. Each
 
 ```
 income[resourceId] = (initial + Σ additive gains) × Π multiplicative gains
+income[SHELLS]    ×= growthRingsMultiplier
 ```
 
-where `initial` is `DEFAULT_SHELLS_PER_MESSAGE` (10) for `SHELLS` and 0 for every other resource, and the sums/products only run over upgrades whose `gainResourceId` matches. Recomputed by `computeIncome()` after every purchase.
+where `initial` is `DEFAULT_SHELLS_PER_MESSAGE` (10) for `SHELLS` and 0 for every other resource, and the sums/products only run over upgrades whose `gainResourceId` matches. Recomputed by `computeIncome()` on load, after every purchase or prestige, and when a new growth ring is added. It is never persisted: a change to the formula applies to every player on the next load, with no migration.
 
 ### The modifier DSL
 

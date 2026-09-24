@@ -30,11 +30,13 @@ A temporary working doc, `docs/<topic>.md`, in English, that the user and Claude
 
 Record every decision in the doc as it is made, with its reason.
 
+**Skip the doc when the change fits in one step** with no Part A: give the plan in chat (what changes, tests, docs, re-register or migration), and let the commit body carry the decisions.
+
 ## 3. Execute, one step at a time
 
 - Branch first if on `main` (see Ship).
 - Do one step, then stop and report. The next step waits for the user.
-- A step is done when: the four checks and `npm run check:core` pass, the matching docs are updated (CLAUDE.md, Documentation), and the plan has an **As built** line (what actually shipped, any deviation and why) and a **Status**.
+- A step is done when: the four checks and `npm run check:core` pass, the matching docs are updated (CLAUDE.md, Documentation), and the plan has an **As built** line (what actually shipped, any deviation and why) and a **Status**. Without a plan doc, the report carries the as-built instead.
 - Report deviations from the plan up front, and anything spotted outside the step (a leftover string, a stale doc) rather than silently widening the step.
 - **No legacy in the code.** A data format change ships with a one-shot script under `scripts/` (dry run by default, `--apply`, validated, atomic write, idempotent) that runs with the bot stopped, before the new code starts. The code reads only the new format. Old names are renamed everywhere: code, UI, prompts, docs.
 - Never run a migration on real data without a backup, and say where the backup is.

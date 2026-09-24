@@ -105,13 +105,13 @@ Canal : #${channelName}
 
 🐚 SYSTÈME DE COQUILLAGES :
 Les coquillages (🐚) sont la monnaie passive du serveur. Les membres en gagnent automatiquement de deux façons :
-- **Message** : chaque message rapporte environ 10 coquillages (±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente) et les stries de croissance (+1 % par jour actif, jusqu'à ×2.0). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
-- **Revenu passif** : quand un membre revient après une absence, il reçoit les coquillages accumulés pendant son inactivité. Le taux est plein (1 message-équivalent/heure) pendant les 24 premières heures d'absence, puis dégressif : environ ×0.5 à 48h, ×0.2 à 72h, quasi nul après une semaine. Le revenu passif est basé sur le gain par message du membre (upgrades inclus), sans multiplicateur de chaleur ni de stries.
+- **Message** : chaque message rapporte le gain par message du membre (10 coquillages au départ, ±10 % de variance), multiplié par la chaleur du salon (×1.0 à ×2.0 selon l'activité récente). Le gain par message inclut déjà les upgrades et les stries de croissance (+1 % par jour actif, jusqu'à ×2.0). Un même membre ne peut gagner qu'une fois toutes les 5 secondes.
+- **Revenu passif** : quand un membre revient après une absence, il reçoit les coquillages accumulés pendant son inactivité. Le taux est plein (1 message-équivalent/heure) pendant les 24 premières heures d'absence, puis dégressif : environ ×0.5 à 48h, ×0.2 à 72h, quasi nul après une semaine. Le revenu passif est basé sur le gain par message du membre (upgrades et stries inclus), sans la chaleur.
 - **Réaction** : quand quelqu'un pose une réaction sur un message, la personne qui réagit ET l'auteur du message reçoivent chacun 10 % du gain habituel par message.
 
-Les **stries de croissance** : une strie s'ajoute chaque jour où le membre gagne des coquillages, en postant un message **ou** en réagissant à un message : une seule réaction dans la journée suffit. Chaque strie ajoute +1 % au gain (×1.01 au 1er jour, ×1.50 à 50 jours), jusqu'à un plafond de ×2.0 atteint à 100 jours. Les jours n'ont pas besoin d'être consécutifs : un jour sans activité ne fait rien perdre, le compteur attend simplement le prochain jour actif, et il continue de compter au-delà de 100 jours même si le bonus reste plafonné. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 chaleur × ×2 stries).
+Les **stries de croissance** : une strie s'ajoute chaque jour où le membre gagne des coquillages, en postant un message **ou** en réagissant à un message : une seule réaction dans la journée suffit. Chaque strie ajoute +1 % au gain par message, donc aussi au revenu passif, au jackpot et au gain reçu par réaction (×1.01 au 1er jour, ×1.50 à 50 jours), jusqu'à un plafond de ×2.0 atteint à 100 jours. Les jours n'ont pas besoin d'être consécutifs : un jour sans activité ne fait rien perdre, le compteur attend simplement le prochain jour actif, et il continue de compter au-delà de 100 jours même si le bonus reste plafonné. Ce multiplicateur se combine avec la chaleur du salon : le bonus maximum est ×4.0 (×2 chaleur × ×2 stries).
 
-- **Jackpot** : chaque message a 1 chance sur 1 000 de déclencher un jackpot, qui rapporte 1 000 fois le gain de base par message, **en plus** du gain normal du message. Ni la chaleur du salon ni les stries ne s'appliquent au jackpot : il vaut la même chose pour tout le monde à gain par message égal. Le jackpot est annoncé publiquement dans le salon.
+- **Jackpot** : chaque message a 1 chance sur 1 000 de déclencher un jackpot, qui rapporte 1 000 fois le gain par message (stries incluses), **en plus** du gain normal du message. La chaleur du salon ne s'applique pas au jackpot : il vaut la même chose pour tout le monde à gain par message égal. Le jackpot est annoncé publiquement dans le salon.
 
 Le gain augmente grâce aux upgrades achetables dans \`/shop page:Coquillages\` :
 - 🦦 **Loutres plongeuses** : augmente le gain de base par message (s'accélère avec les niveaux).
@@ -143,7 +143,7 @@ Les rôles Discord se débloquent par paliers de coquillages sur le record histo
 
 Commandes du bot (version concise) :
 - /ask question:<texte> : poser une question au bot (aide, infos, explications).
-- /shells [user] [public] : voir profil coquillages (solde, record, rang actuel, prochain palier/rang, gain par message, upgrades).
+- /shells [user] [public] : voir profil coquillages (solde, record, rang actuel, prochain palier/rang, gain par message stries incluses, upgrades).
 - /leaderboard [page] [sort] [public] : classement (10/page). sort=record (maxShells), current (solde), income (gain/msg), rings (stries de croissance, en jours ; égalités départagées par le record). Le classement porte sur les coquillages.
 - /shop [upgrade] [page] [quantity] : voir la boutique ou acheter des niveaux. page=Coquillages par défaut ; les autres rayons n'existent que pour qui les a débloqués.
 - /heat [public] : afficher la chaleur du salon, le multiplicateur actif et les principaux contributeurs.

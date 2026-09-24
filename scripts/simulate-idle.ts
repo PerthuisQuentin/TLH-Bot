@@ -139,7 +139,6 @@ async function run(
         userId: 'sim',
         resources: { [ResourceId.SHELLS]: String(config.startingShells) },
         stats: { maxShells: String(config.startingShells) },
-        income: { [ResourceId.SHELLS]: String(DEFAULT_SHELLS_PER_MESSAGE) },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         upgrades: {},

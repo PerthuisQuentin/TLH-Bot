@@ -10,7 +10,7 @@
  * for a player. The design it serves is docs/prestige-design.md.
  */
 
-import { GameInstance, DEFAULT_SHELLS_PER_MESSAGE } from '../app/idle/core/game-instance.ts';
+import { GameInstance } from '../app/idle/core/game-instance.ts';
 import { ResourceId, UpgradeId } from '../app/idle/core/types.ts';
 import { bn, bnAdd, bnGte, bnMul, formatBigNum, type BigNum } from '../app/idle/core/big-number.ts';
 import {
@@ -75,7 +75,6 @@ function newPlayer(): GameInstance {
         userId: 'sim',
         resources: { [ResourceId.SHELLS]: '0' },
         stats: { maxShells: '0' },
-        income: { [ResourceId.SHELLS]: String(DEFAULT_SHELLS_PER_MESSAGE) },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         upgrades: {},

@@ -26,7 +26,6 @@ function fixture(runMaxShells: string, upgrades: Record<string, number> = {}) {
         userId: 'u1',
         resources: { shells: runMaxShells },
         stats: { maxShells: runMaxShells, runMaxShells, prestigeCount: 0 },
-        income: { shells: '10' },
         growthRings: { days: 4, lastDate: '2026-09-15' },
         lastActiveAt: new Date(0).toISOString(),
         upgrades: { coralSeedling: 1, ...upgrades },

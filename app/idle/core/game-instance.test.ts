@@ -18,7 +18,6 @@ function makeJson(overrides: Partial<GameInstanceJson> = {}): GameInstanceJson {
         userId: 'u1',
         resources: { [ResourceId.SHELLS]: '0' },
         stats: { maxShells: '0' },
-        income: { [ResourceId.SHELLS]: String(DEFAULT_SHELLS_PER_MESSAGE) },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         upgrades: {},
@@ -50,6 +49,26 @@ describe('computeIncome', () => {
 
         // (10 + 2) * 1.15 = 13.8
         expect(income[ResourceId.SHELLS].toString()).toBe('13.8');
+    });
+
+    it('multiplies the shells income by the growth rings, and nothing else', () => {
+        const instance = new GameInstance(
+            makeJson({
+                growthRings: { days: 50, lastDate: '' },
+                upgrades: { [UpgradeId.DIVING_OTTERS]: 2 },
+            }),
+        );
+
+        // (10 + 2) * 1.5
+        expect(instance.income[ResourceId.SHELLS].toString()).toBe('18');
+        expect(instance.income[ResourceId.CORAL].toString()).toBe('0');
+    });
+
+    it('is derived on load and never persisted', () => {
+        const instance = new GameInstance(makeJson({ growthRings: { days: 100, lastDate: '' } }));
+
+        expect(instance.income[ResourceId.SHELLS].toString()).toBe('20');
+        expect(instance.toJson()).not.toHaveProperty('income');
     });
 
     it('is idempotent and matches the live income getter after being called', () => {
@@ -328,14 +347,13 @@ describe('prestige', () => {
         expect(after.lastActiveAt).toBe(before.lastActiveAt);
     });
 
-    it('puts income back to the default, since the upgrades that raised it are gone', () => {
+    it('puts income back to the default times the rings, since the upgrades that raised it are gone', () => {
         const instance = readyToPrestige();
 
         instance.prestige();
 
-        expect(instance.income[ResourceId.SHELLS].toString()).toBe(
-            String(DEFAULT_SHELLS_PER_MESSAGE),
-        );
+        // 7 ring days survive the reset.
+        expect(instance.income[ResourceId.SHELLS].toString()).toBe('10.7');
     });
 
     it('leaves the coral upgrades standing, since they are the permanent half', () => {
@@ -402,6 +420,20 @@ describe('unlock conditions', () => {
     });
 });
 
+describe('addGrowthRing', () => {
+    it('raises the income on the first ring of the day, and only then', () => {
+        const instance = new GameInstance(
+            makeJson({ growthRings: { days: 9, lastDate: '2026-09-23' } }),
+        );
+
+        instance.addGrowthRing('2026-09-24');
+        expect(instance.income[ResourceId.SHELLS].toString()).toBe('11');
+
+        instance.addGrowthRing('2026-09-24');
+        expect(instance.income[ResourceId.SHELLS].toString()).toBe('11');
+    });
+});
+
 describe('growth rings cap', () => {
     const player = (days: number, upgrades: GameInstanceJson['upgrades'] = {}) =>
         new GameInstance(
@@ -428,6 +460,7 @@ describe('growth rings cap', () => {
         expect(instance.growthRingsMultiplier).toBeCloseTo(2.2, 10);
         expect(instance.growthRingsCapped).toBe(false);
         expect(instance.isUpgradeVisible(UpgradeId.MILLENNIAL_SHELL)).toBe(false);
+        expect(instance.income[ResourceId.SHELLS].toString()).toBe('22');
     });
 
     it('keeps the lift across a prestige', () => {
@@ -483,7 +516,6 @@ describe('toJson / constructor round-trip', () => {
                 userId: 'round-trip',
                 resources: { [ResourceId.SHELLS]: '4242' },
                 stats: { maxShells: '9999', runMaxShells: '512', prestigeCount: 2 },
-                income: { [ResourceId.SHELLS]: '73.5' },
                 growthRings: { days: 3, lastDate: '2026-08-10' },
                 upgrades: {
                     [UpgradeId.DIVING_OTTERS]: 6,

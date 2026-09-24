@@ -19,8 +19,8 @@ const GAIN_FRACTIONS: Record<ChannelActivityType, number> = {
     [ChannelActivityType.Reaction]: REACTION_SHELLS_FRACTION,
 };
 
-// Gain only: being reacted to is not an activity of the author's, so no cooldown,
-// growth rings, heat or passive income — leaving lastActiveAt untouched on purpose.
+// Gain only: being reacted to is not an activity of the author's, so no cooldown, new
+// growth ring, heat or passive income — leaving lastActiveAt untouched on purpose.
 async function creditMessageAuthor(guildId: string, userId: string): Promise<void> {
     const amount = await updateGameInstance(guildId, userId, (instance) =>
         instance.applyShellsGain(GAIN_FRACTIONS[ChannelActivityType.Reaction]),
@@ -60,13 +60,13 @@ export async function handleDiscordEvent(event: DiscordEvent): Promise<DiscordEv
         const passiveIncomeEarned = gameInstance.applyPassiveIncome();
 
         // No activityType guard on purpose: a single reaction is enough to add the day's ring.
+        // After the passive credit, which pays the absence at the rings it had.
         gameInstance.addGrowthRing();
-        const growthRingsMultiplier = gameInstance.growthRingsMultiplier;
         const activityTypeMultiplier = GAIN_FRACTIONS[event.activityType];
-        const finalMultiplier = heatMultiplier * growthRingsMultiplier * activityTypeMultiplier;
+        const finalMultiplier = heatMultiplier * activityTypeMultiplier;
         const shellsGained = gameInstance.applyShellsGain(finalMultiplier);
 
-        // Jackpot — independent from other multipliers, messages only
+        // Jackpot — no heat, messages only
         const jackpotGained =
             event.activityType === ChannelActivityType.Message && rollJackpot()
                 ? gameInstance.applyShellsGain(JACKPOT_MULTIPLIER)

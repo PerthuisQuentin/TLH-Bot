@@ -51,12 +51,12 @@ export function virtualDate(day: number): string {
 
 /**
  * `messages` effective messages on simulated day `day`, the player being active that day:
- * the day's growth ring first, as in the real pipeline, then the messages at the rings'
- * multiplier. Heat, passive income and the jackpot stay folded into `messages`.
+ * the day's growth ring first, as in the real pipeline, so the income already carries it.
+ * Heat, passive income and the jackpot stay folded into `messages`.
  */
 export function playMessages(instance: GameInstance, day: number, messages: number): void {
     instance.addGrowthRing(virtualDate(day));
-    instance.applyShellsGain(messages * instance.growthRingsMultiplier);
+    instance.applyShellsGain(messages);
 }
 
 // ─── Purchases ───────────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ export function projectedIncome(instance: GameInstance, bumpId?: UpgradeId): Big
         else if (upgrade.kind === UpgradeKind.MULTIPLICATIVE) multiplier = bnMul(multiplier, gain);
     }
 
-    return bnMul(additive, multiplier);
+    return bnMul(bnMul(additive, multiplier), instance.growthRingsMultiplier);
 }
 
 type Candidate = {

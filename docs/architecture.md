@@ -111,7 +111,7 @@ app/idle/handlers/handle-event.ts
     ├── updateChannelHeat            (always, even on cooldown)
     ├── 5 s per-user cooldown        → stop
     ├── one synchronous mutator:
-    │     passive income → growth rings → heat × growth rings × activity fraction → jackpot roll
+    │     passive income → growth ring (recomputes income) → heat × activity fraction → jackpot roll
     ├── credit the reacted message's author  (reactions only)
     └── getShellsRolesConfig() → computeRoleChanges(roles, maxShells, currentRoleIds)
     ↓

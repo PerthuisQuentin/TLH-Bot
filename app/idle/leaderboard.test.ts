@@ -1,32 +1,31 @@
 import { describe, it, expect } from 'vitest';
 import { Leaderboard, LeaderboardSort } from './leaderboard.ts';
 import { GameInstance } from './core/game-instance.ts';
-import { ResourceId } from './core/types.ts';
+import { ResourceId, UpgradeId } from './core/types.ts';
 
 function makeInstance(
     userId: string,
     shells: string,
     maxShells: string,
-    income: string,
+    otters: number,
     ringDays = 0,
 ): GameInstance {
     return new GameInstance({
         userId,
         resources: { [ResourceId.SHELLS]: shells },
         stats: { maxShells },
-        income: { [ResourceId.SHELLS]: income },
         growthRings: { days: ringDays, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
-        upgrades: {},
+        upgrades: { [UpgradeId.DIVING_OTTERS]: otters },
     });
 }
 
 describe('Leaderboard sorting', () => {
     // Deliberately conflicting orderings across the three fields, so a test only
     // passes if the sort key actually reads the field it claims to.
-    const u1 = makeInstance('u1', '50', '500', '5');
-    const u2 = makeInstance('u2', '200', '200', '50');
-    const u3 = makeInstance('u3', '10', '100', '20');
+    const u1 = makeInstance('u1', '50', '500', 0);
+    const u2 = makeInstance('u2', '200', '200', 9);
+    const u3 = makeInstance('u3', '10', '100', 5);
     const instances = [u1, u2, u3];
 
     it('sorts by MAX (the default) descending', () => {
@@ -47,9 +46,9 @@ describe('Leaderboard sorting', () => {
     it('sorts by RINGS descending, ties broken by record', () => {
         const board = new Leaderboard(
             [
-                makeInstance('low', '0', '999', '0', 3),
-                makeInstance('tieSmall', '0', '100', '0', 120),
-                makeInstance('tieBig', '0', '500', '0', 120),
+                makeInstance('low', '0', '999', 0, 3),
+                makeInstance('tieSmall', '0', '100', 0, 120),
+                makeInstance('tieBig', '0', '500', 0, 120),
             ],
             LeaderboardSort.RINGS,
         );
@@ -61,7 +60,7 @@ describe('Leaderboard sorting', () => {
     });
 
     it('carries the ring days and the effective multiplier on each entry', () => {
-        const board = new Leaderboard([makeInstance('u1', '0', '0', '0', 150)]);
+        const board = new Leaderboard([makeInstance('u1', '0', '0', 0, 150)]);
         expect(board.getUserEntry('u1')).toMatchObject({
             growthRingDays: 150,
             growthRingsMultiplier: 2,
@@ -77,7 +76,7 @@ describe('Leaderboard sorting', () => {
 
 describe('Leaderboard.getPage', () => {
     const instances = Array.from({ length: 25 }, (_, i) =>
-        makeInstance(`u${i}`, '0', String(100 - i), '0'),
+        makeInstance(`u${i}`, '0', String(100 - i), 0),
     );
     const board = new Leaderboard(instances);
 
@@ -133,7 +132,7 @@ describe('Leaderboard.getPage', () => {
 });
 
 describe('Leaderboard.getUserEntry', () => {
-    const instances = [makeInstance('u1', '0', '500', '0'), makeInstance('u2', '0', '200', '0')];
+    const instances = [makeInstance('u1', '0', '500', 0), makeInstance('u2', '0', '200', 0)];
     const board = new Leaderboard(instances);
 
     it('finds an existing user with their rank', () => {
@@ -147,7 +146,7 @@ describe('Leaderboard.getUserEntry', () => {
 
 describe('Leaderboard.totalUsers', () => {
     it('reflects the number of instances passed in', () => {
-        const board = new Leaderboard([makeInstance('u1', '0', '0', '0')]);
+        const board = new Leaderboard([makeInstance('u1', '0', '0', 0)]);
         expect(board.totalUsers).toBe(1);
     });
 });
