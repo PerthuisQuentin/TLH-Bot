@@ -361,6 +361,27 @@ At 200 msg/day, holding the cap at ×2 for the whole year gives 11 prestiges and
 
 It is a flat one-shot, not a curve: the effect it buys, +1 % per active day with no ceiling, already grows on its own. Past the cap the banked days pay at once, so a 120-day player jumps from ×2.00 to ×2.20. Linear rather than compound on purpose; `1.01^n` is kept aside, see [shells.md](./shells.md#growth-rings).
 
+### Pieuvre intendante calibration
+
+The goal was the otters automated at the end of the 2nd prestige. **2 coral** is the whole payout of that prestige, so level 1 lands on it at every activity level tried (day 161, 93 and 55 at 100, 200 and 400 msg/day). 3 would push it to the 3rd.
+
+**The rule mattered more than the price.** Ranking only the upgrades it manages, the Pieuvre spent every shell on otters at level 1, while flippers and bags paid back several times faster: the balance never built up for them. A player buying by hand once a day fell from 14 prestiges a year to 9 with level 1 alone. Ranking every shells upgrade and stopping when the winner is a manual one gives the balance back to the player: level 1 alone then costs about one prestige a year, the price of 2 coral that early.
+
+A perfect manual buyer gets nothing from the automation, so the simulator models the difference with `--sessions`: the day's messages come in slices, the Pieuvre buys after each, the player by hand once at the end of the day (`simulate-prestige.ts --days=365`, the Pieuvre bought as soon as it is affordable):
+
+| msg/day | Sessions | Without | With | Levels bought on days |
+| ------- | -------- | ------- | ---- | --------------------- |
+| 100     | 20       | 6       | 4    | 161, 338              |
+| 200     | 1        | 14      | 14   | 94, 185, 246          |
+| 200     | 20       | 14      | 18   | 93, 182, 242          |
+| 400     | 20       | 20      | 25   | 55, 107, 145          |
+
+Prestiges in a year. At 200 msg/day and above, the automation more than pays for its coral. At 100, coral is the bottleneck and 2 of it at the 2nd prestige delays the reef: that player loses two prestiges and should wait. The price does not fix that, since any price that lands on the 2nd prestige takes its whole payout.
+
+Levels 2 and 3 at **15 and 80** land on the 4th and 6th prestige. 8 and 30 were measured too: the 3rd level then lands on the 5th prestige, for the same prestige count at the end of the year. The later, more distant goal was chosen.
+
+The Pieuvre also competes with the Coquille millénaire. With both bought as soon as affordable, the cap lift at 200 msg/day moves from day 160 (the table above) to about day 220.
+
 ## Why the command has no gate
 
 What `/prestige` does is in [commands.md](./commands.md). Why it does it that way:

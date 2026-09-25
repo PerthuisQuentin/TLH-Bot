@@ -30,6 +30,7 @@ function fixture(runMaxShells: string, upgrades: Record<string, number> = {}) {
         stats: { maxShells: runMaxShells, runMaxShells, prestigeCount: 0 },
         growthRings: { days: 4, lastDate: '2026-09-15' },
         lastActiveAt: new Date(0).toISOString(),
+        autoBuyEnabled: true,
         upgrades: { coralSeedling: 1, ...upgrades },
     };
 }

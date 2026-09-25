@@ -4,7 +4,7 @@ import { getShellsRolesConfig, nextRoleAfter, roleForShells } from './shells-rol
 import { bnCeil, bnFromJSON, bnMul, bnSub, formatBigNum } from './core/big-number.ts';
 import { formatResource } from './core/resources.ts';
 import { ALL_UPGRADE_IDS } from './core/upgrades/upgrade-registry.ts';
-import { ResourceId } from './core/types.ts';
+import { ResourceId, UpgradeId } from './core/types.ts';
 
 /**
  * Every formatted piece of a member's Coquillages profile, shared by the `/shells`
@@ -32,6 +32,10 @@ export type ShellsProfile = {
     prestigeText: string;
     /** What `/prestige` would pay right now, or what the run peak still misses. */
     nextPrestigeText: string;
+    /** The Pieuvre intendante's switch and what it manages. Empty until its first level. */
+    automationText: string;
+    /** The switch itself, null until the Pieuvre's first level: there is nothing to toggle. */
+    automationEnabled: boolean | null;
     /** Levelled upgrades only, so a one-shot unlock does not sit in a list of levels. */
     upgradeLines: string[];
     /** Same numbers as `/shop`: next level cost, and how many levels the current balance affords. */
@@ -70,9 +74,10 @@ export async function getShellsProfile(
 
     // A one-shot unlock is left out: its level is a yes/no, and a "Niv. 0 · Récif scellé"
     // line in a list whose column is levels reads as an upgrade the player is behind on.
-    // `/shop` still sells it, and `upgradeShopLines` still prices it for the assistant.
+    // A maxed levelled one goes too, having nothing left to follow. `/shop` still sells what
+    // is on sale, and `upgradeShopLines` still tells the assistant what is owned.
     const upgradeLines = visibleUpgradeIds
-        .filter((id) => upgrades[id].maxLevel > 1)
+        .filter((id) => upgrades[id].maxLevel > 1 && !upgrades[id].isMaxed)
         .map((id) => {
             const upgrade = upgrades[id];
             return `${upgrade.emoji} **${upgrade.name}** — Niv. ${upgrade.level} · ${upgrade.formatGain()}`;
@@ -119,6 +124,12 @@ export async function getShellsProfile(
             ? '🌀 Stries de croissance : aucune'
             : `🌀 Stries de croissance : ${ringDays} jour${ringDays > 1 ? 's' : ''} — ×${instance.growthRingsMultiplier.toFixed(2)}${instance.growthRingsCapped ? ' (plafond atteint)' : ''}`;
 
+    const octopus = upgrades[UpgradeId.STEWARD_OCTOPUS];
+    const automationText =
+        octopus.level === 0
+            ? ''
+            : `${octopus.emoji} Automatisation : **${instance.autoBuyEnabled ? 'activée' : 'désactivée'}** · ${octopus.formatGain()}`;
+
     const prestigePreview = instance.previewPrestige();
     const prestigeText = coralUnlocked
         ? `${prestigeCount === 0 ? 'Aucun prestige' : `Prestige ${prestigeCount}`} · record du cycle : ${formatResource(runMaxShells, ResourceId.SHELLS)}`
@@ -145,6 +156,8 @@ export async function getShellsProfile(
             : '',
         prestigeText,
         nextPrestigeText,
+        automationText,
+        automationEnabled: octopus.level === 0 ? null : instance.autoBuyEnabled,
         upgradeLines,
         upgradeShopLines,
     };

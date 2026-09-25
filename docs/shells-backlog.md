@@ -18,7 +18,7 @@ Reference: [shells.md](./shells.md#prestige). How it was calibrated and why the 
 
 ### Passive income ✅
 
-Shells accumulate while the user is absent. Full rate (1 msg-equivalent/h) for the first 24 h, then Lorentzian decay: ×0.5 at 48 h, ×0.2 at 72 h, quasi-zero after a week. Credited on the user's next message. Uses only the user's shells income (`income.shells`, upgrades included), no heat/growth-rings multiplier.
+Shells accumulate while the user is absent. Full rate (1 msg-equivalent/h) for the first 24 h, then Lorentzian decay: ×0.5 at 48 h, ×0.2 at 72 h, quasi-zero after a week. Credited on the user's next message. Uses the user's shells income (`income.shells`, upgrades and growth rings included), no heat.
 
 ### Passive income boost (upgrade) 💡
 
@@ -158,4 +158,4 @@ When a channel has high heat, a fraction of the bonus shells generated is distri
 
 Every message carries a 1-in-1000 chance of paying ×1000 the base income, on top of the normal gain. Announced publicly.
 
-Neither heat nor growth rings apply, on purpose: at equal income a jackpot is worth the same to everyone, so hitting one in a dead channel on day one pays exactly like hitting one mid-rush at the growth rings cap. The odds are per message and independent of frequency, so the lottery is the one mechanic a low-volume member competes on evenly.
+Heat does not apply, on purpose: at equal income a jackpot is worth the same to everyone, so hitting one in a dead channel pays exactly like hitting one mid-rush. The growth rings do apply, since they are part of the income. The odds are per message and independent of frequency, so the lottery is the one mechanic a low-volume member competes on evenly.

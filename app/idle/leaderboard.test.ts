@@ -16,6 +16,7 @@ function makeInstance(
         stats: { maxShells },
         growthRings: { days: ringDays, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
+        autoBuyEnabled: true,
         upgrades: { [UpgradeId.DIVING_OTTERS]: otters },
     });
 }

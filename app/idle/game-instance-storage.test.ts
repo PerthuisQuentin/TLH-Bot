@@ -32,6 +32,7 @@ function gameInstanceFixture(userId: string, shells: string) {
         stats: { maxShells: shells },
         growthRings: { days: 3, lastDate: '2020-01-01' },
         lastActiveAt: new Date(0).toISOString(),
+        autoBuyEnabled: true,
         upgrades: {},
     };
 }

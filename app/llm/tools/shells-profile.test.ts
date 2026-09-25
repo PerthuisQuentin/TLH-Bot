@@ -27,6 +27,7 @@ function gameInstanceFixture(userId: string, shells: string) {
         stats: { maxShells: shells },
         growthRings: { days: 3, lastDate: '2020-01-01' },
         lastActiveAt: new Date(0).toISOString(),
+        autoBuyEnabled: true,
         upgrades: {},
     };
 }
@@ -68,6 +69,24 @@ describe('shellsProfileTool.execute', () => {
         expect(response).toContain('Boutique');
         expect(response).toContain('prochain niveau');
         expect(response).toContain('achetable dès maintenant');
+    });
+
+    it('tells the model whether the Pieuvre intendante is buying, once it exists', async () => {
+        await writeGameInstances('g1', [
+            {
+                ...gameInstanceFixture('u1', '100'),
+                autoBuyEnabled: false,
+                upgrades: { coralSeedling: 1, stewardOctopus: 2 },
+            },
+            gameInstanceFixture('u2', '100'),
+        ]);
+
+        const owner = await shellsProfileTool.execute({ user_id: 'u1' }, { guildId: 'g1' });
+        const newcomer = await shellsProfileTool.execute({ user_id: 'u2' }, { guildId: 'g1' });
+
+        expect(owner).toContain('Automatisation : **désactivée**');
+        expect(owner).toContain('Nageoires hydrodynamiques');
+        expect(newcomer).not.toContain('Automatisation');
     });
 
     it('reports a missing user_id to the model rather than throwing', async () => {

@@ -33,12 +33,16 @@ function gameInstanceFixture(
         stats: { maxShells: shells },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
+        autoBuyEnabled: true,
         upgrades,
     };
 }
 
 /** Coral exists for this player: the seedling is what opens the aisle. */
 const UNLOCKED = { coralSeedling: 1 };
+
+/** Every treasure short of the rings cap is bought: the Pieuvre intendante is maxed. */
+const TREASURES_BOUGHT = { ...UNLOCKED, stewardOctopus: 3 };
 
 async function writeGameInstances(guildId: string, instances: unknown[]): Promise<void> {
     await writeFile(
@@ -165,7 +169,7 @@ describe('shopCommand', () => {
     });
 
     it('drops the seedling from the shop entirely once it is owned', async () => {
-        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', TREASURES_BOUGHT)]);
 
         const reply = await click('page:treasures');
 
@@ -184,14 +188,30 @@ describe('shopCommand', () => {
 
         const reply = await click('page:treasures');
 
-        expect(upgradeNames(reply)).toEqual(['🌀 Coquille millénaire']);
+        expect(upgradeNames(reply)).toEqual(['🌀 Coquille millénaire', '🐙 Pieuvre intendante']);
         expect(reply.text).toContain('20 🪸');
     });
 
     it('stops offering the treasures page once nothing is left on it', async () => {
-        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', TREASURES_BOUGHT)]);
 
         expect(pageIds(await open())).not.toContain('shop:page:treasures');
+    });
+
+    it('sells the Pieuvre intendante on the treasures page once the seedling is owned, with no ×10 for its 3 levels', async () => {
+        const owner = {
+            ...gameInstanceFixture('u1', '0', UNLOCKED),
+            resources: { shells: '0', coral: '20' },
+        };
+        await writeGameInstances('g1', [owner]);
+
+        const reply = await click('page:treasures');
+
+        expect(upgradeNames(reply)).toEqual(['🐙 Pieuvre intendante']);
+        expect(buyButtons(reply, 'stewardOctopus').map((b) => b.id)).toEqual([
+            'shop:buy:stewardOctopus:1',
+            'shop:buy:stewardOctopus:max',
+        ]);
     });
 
     it('lands on the default page when the coral one is asked for while locked', async () => {

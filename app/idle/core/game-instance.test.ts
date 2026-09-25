@@ -20,6 +20,7 @@ function makeJson(overrides: Partial<GameInstanceJson> = {}): GameInstanceJson {
         stats: { maxShells: '0' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
+        autoBuyEnabled: true,
         upgrades: {},
         ...overrides,
     };
@@ -81,6 +82,32 @@ describe('computeIncome', () => {
         expect(instance.income[ResourceId.SHELLS].toString()).toBe(
             first[ResourceId.SHELLS].toString(),
         );
+    });
+});
+
+describe('projectShellsIncome', () => {
+    it('matches the income one more level would give, without changing anything', () => {
+        const instance = new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: '1e9' },
+                growthRings: { days: 30, lastDate: '2026-01-01' },
+                upgrades: { [UpgradeId.DIVING_OTTERS]: 9, [UpgradeId.HARVEST_BAGS]: 2 },
+            }),
+        );
+
+        for (const id of [
+            UpgradeId.DIVING_OTTERS,
+            UpgradeId.HYDRODYNAMIC_FLIPPERS,
+            UpgradeId.HARVEST_BAGS,
+        ]) {
+            const copy = new GameInstance(instance.toJson());
+            const projected = copy.projectShellsIncome(id);
+            expect(copy.income[ResourceId.SHELLS].toString()).toBe(
+                instance.income[ResourceId.SHELLS].toString(),
+            );
+            copy.buyUpgrade(id, 1);
+            expect(projected.toString()).toBe(copy.income[ResourceId.SHELLS].toString());
+        }
     });
 });
 
@@ -506,6 +533,92 @@ describe('buyUpgrade with a maxLevel', () => {
         expect(instance.buyUpgrade(UpgradeId.CORAL_SEEDLING, 2)).toBeNull();
         expect(instance.upgrades[UpgradeId.CORAL_SEEDLING].level).toBe(0);
         expect(instance.resources[ResourceId.SHELLS].toString()).toBe(balance);
+    });
+});
+
+describe('runAutoBuy', () => {
+    function withOctopus(
+        level: number,
+        shells: string,
+        upgrades: GameInstanceJson['upgrades'] = {},
+    ) {
+        return new GameInstance(
+            makeJson({
+                resources: { [ResourceId.SHELLS]: shells },
+                upgrades: {
+                    [UpgradeId.CORAL_SEEDLING]: 1,
+                    [UpgradeId.STEWARD_OCTOPUS]: level,
+                    ...upgrades,
+                },
+            }),
+        );
+    }
+
+    it('automates one more upgrade per level, in order', () => {
+        expect(withOctopus(0, '0').automatedUpgradeIds).toEqual([]);
+        expect(withOctopus(1, '0').automatedUpgradeIds).toEqual([UpgradeId.DIVING_OTTERS]);
+        expect(withOctopus(3, '0').automatedUpgradeIds).toEqual([
+            UpgradeId.DIVING_OTTERS,
+            UpgradeId.HYDRODYNAMIC_FLIPPERS,
+            UpgradeId.HARVEST_BAGS,
+        ]);
+    });
+
+    it('buys nothing while switched off, and resumes once switched back on', () => {
+        const instance = withOctopus(1, '1000000');
+
+        instance.setAutoBuy(false);
+        expect(instance.runAutoBuy()).toEqual({});
+        expect(instance.toJson().autoBuyEnabled).toBe(false);
+
+        instance.setAutoBuy(true);
+        expect(instance.runAutoBuy()[UpgradeId.DIVING_OTTERS]).toBeGreaterThan(0);
+    });
+
+    it('starts switched on for a new player', () => {
+        expect(GameInstance.newInstance('u1').autoBuyEnabled).toBe(true);
+    });
+
+    it('buys nothing without the Pieuvre intendante', () => {
+        const instance = withOctopus(0, '1e9');
+        const before = JSON.stringify(instance.toJson());
+
+        expect(instance.runAutoBuy()).toEqual({});
+        expect(JSON.stringify(instance.toJson())).toBe(before);
+    });
+
+    it('buys an automated upgrade while it is the best pick, until the balance runs out', () => {
+        // Flippers cost 15 000: at 5 000, the otters are the only level the balance covers.
+        const instance = withOctopus(1, '5000');
+        const bought = instance.runAutoBuy();
+
+        expect(Object.keys(bought)).toEqual([UpgradeId.DIVING_OTTERS]);
+        expect(instance.upgrades[UpgradeId.DIVING_OTTERS].level).toBe(bought.divingOtters);
+        expect(instance.upgrades[UpgradeId.HYDRODYNAMIC_FLIPPERS].level).toBe(0);
+        const nextOtter = instance.upgrades[UpgradeId.DIVING_OTTERS].getCost();
+        expect(bnLte(instance.resources[ResourceId.SHELLS], nextOtter)).toBe(true);
+    });
+
+    it('leaves the balance for a manual upgrade that pays back better', () => {
+        // Otters at 10 pay back in ~6 190 messages, flippers in ~3 333, and only otters are automated.
+        const instance = withOctopus(1, '15000', { [UpgradeId.DIVING_OTTERS]: 10 });
+
+        expect(instance.runAutoBuy()).toEqual({});
+        expect(instance.resources[ResourceId.SHELLS].toString()).toBe('15000');
+    });
+
+    it('takes the fastest payback the balance covers', () => {
+        // Otters at 10 pay back in ~6 190 messages, flippers in ~3 333: flippers win at 15 000.
+        const instance = withOctopus(2, '15000', { [UpgradeId.DIVING_OTTERS]: 10 });
+
+        expect(instance.runAutoBuy()).toEqual({ [UpgradeId.HYDRODYNAMIC_FLIPPERS]: 1 });
+    });
+
+    it('stops at MAX_LEVELS_PER_PURCHASE levels in one call', () => {
+        const instance = withOctopus(3, '1e300');
+
+        const levels = Object.values(instance.runAutoBuy()).reduce((sum, n) => sum + n, 0);
+        expect(levels).toBe(MAX_LEVELS_PER_PURCHASE);
     });
 });
 

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { MAX_LEVELS_PER_PURCHASE } from './upgrades/base-upgrade.ts';
 import type { BaseUpgrade, ReadonlyUpgrade, UnlockContext } from './upgrades/base-upgrade.ts';
 import { isCoralUnlocked } from './upgrades/coral-seedling.ts';
+import { AUTOMATION_ORDER } from './upgrades/steward-octopus.ts';
+import { pickPurchase, PurchaseStrategy } from './purchase-planner.ts';
 import { ResourceId, UpgradeId, UpgradeKind } from './types.ts';
 import { UPGRADE_REGISTRY } from './upgrades/upgrade-registry.ts';
 import {
@@ -38,6 +40,8 @@ export type GameInstanceJson = {
     stats: StatsJson;
     growthRings: GrowthRingsJson;
     lastActiveAt: string;
+    /** The player's switch on the Pieuvre intendante's purchases. */
+    autoBuyEnabled: boolean;
     upgrades: Partial<Record<UpgradeId, number>>;
 };
 
@@ -47,6 +51,7 @@ export const GameInstanceJsonSchema = z.object({
     stats: StatsJsonSchema,
     growthRings: GrowthRingsJsonSchema,
     lastActiveAt: z.string(),
+    autoBuyEnabled: z.boolean(),
     upgrades: z.record(z.enum(UpgradeId), z.number().optional()),
 });
 
@@ -66,6 +71,8 @@ export class GameInstance {
 
     private _lastActiveAt: Date;
 
+    private _autoBuyEnabled: boolean;
+
     private _upgrades: Record<UpgradeId, BaseUpgrade>;
 
     constructor(data: GameInstanceJson) {
@@ -83,6 +90,7 @@ export class GameInstance {
         };
         this._growthRings = new GrowthRings(data.growthRings);
         this._lastActiveAt = new Date(data.lastActiveAt);
+        this._autoBuyEnabled = data.autoBuyEnabled;
         this._upgrades = Object.fromEntries(
             Object.values(UpgradeId).map((id) => [
                 id,
@@ -125,6 +133,19 @@ export class GameInstance {
         return this._growthRings.isCapped(this.growthRingsCapLifted);
     }
 
+    get autoBuyEnabled(): boolean {
+        return this._autoBuyEnabled;
+    }
+
+    setAutoBuy(enabled: boolean): void {
+        this._autoBuyEnabled = enabled;
+    }
+
+    /** The shells upgrades the Pieuvre intendante buys on its own, in unlock order. */
+    get automatedUpgradeIds(): UpgradeId[] {
+        return AUTOMATION_ORDER.slice(0, this._upgrades[UpgradeId.STEWARD_OCTOPUS].level);
+    }
+
     get upgrades(): Readonly<Record<UpgradeId, ReadonlyUpgrade>> {
         return { ...this._upgrades };
     }
@@ -134,6 +155,16 @@ export class GameInstance {
      * Shells also carry the growth rings, so every gain read off the income (passive, jackpot) has them.
      */
     computeIncome(): Record<ResourceId, BigNum> {
+        this._income = this.incomeWith();
+        return this._income;
+    }
+
+    /** The shells income with one more level on `bumpId`, leaving the instance untouched. */
+    projectShellsIncome(bumpId: UpgradeId): BigNum {
+        return this.incomeWith(bumpId)[ResourceId.SHELLS];
+    }
+
+    private incomeWith(bumpId?: UpgradeId): Record<ResourceId, BigNum> {
         const result = {} as Record<ResourceId, BigNum>;
 
         for (const resourceId of Object.values(ResourceId)) {
@@ -142,21 +173,20 @@ export class GameInstance {
             );
             const initial =
                 resourceId === ResourceId.SHELLS ? bn(DEFAULT_SHELLS_PER_MESSAGE) : bn(0);
+            const gain = (u: BaseUpgrade) => u.computeGain(u.level + (u.id === bumpId ? 1 : 0));
 
             const additive = upgrades
                 .filter((u) => u.kind === UpgradeKind.ADDITIVE)
-                .reduce((sum, u) => bnAdd(sum, u.getGain()), bn(0));
+                .reduce((sum, u) => bnAdd(sum, gain(u)), bn(0));
 
             const multiplier = upgrades
                 .filter((u) => u.kind === UpgradeKind.MULTIPLICATIVE)
-                .reduce((product, u) => bnMul(product, u.getGain()), bn(1));
+                .reduce((product, u) => bnMul(product, gain(u)), bn(1));
 
             result[resourceId] = bnMul(bnAdd(initial, additive), multiplier);
         }
 
         result[ResourceId.SHELLS] = bnMul(result[ResourceId.SHELLS], this.growthRingsMultiplier);
-
-        this._income = result;
         return result;
     }
 
@@ -289,6 +319,7 @@ export class GameInstance {
             },
             growthRings: this._growthRings.toJson(),
             lastActiveAt: this._lastActiveAt.toISOString(),
+            autoBuyEnabled: this._autoBuyEnabled,
             upgrades: Object.fromEntries(
                 Object.values(UpgradeId).map((id) => [id, this._upgrades[id].level]),
             ),
@@ -303,6 +334,8 @@ export class GameInstance {
             stats: { maxShells: '0', runMaxShells: '0', prestigeCount: 0 },
             growthRings: GrowthRings.newInstance().toJson(),
             lastActiveAt: now.toISOString(),
+            // On, so the first level works the moment it is bought.
+            autoBuyEnabled: true,
             upgrades: {},
         });
     }
@@ -348,6 +381,32 @@ export class GameInstance {
 
         return { previousLevel, newLevel: upgrade.level, totalCost };
     }
+
+    /**
+     * Spends the shells balance one level at a time on the fastest payback it covers, among
+     * every shells upgrade on sale, and stops as soon as that pick is one the player buys by
+     * hand: the balance is left for it. Returns the levels bought per upgrade, none while the
+     * player has switched it off.
+     */
+    runAutoBuy(): Partial<Record<UpgradeId, number>> {
+        const bought: Partial<Record<UpgradeId, number>> = {};
+        const automated = this.automatedUpgradeIds;
+        // Skips the ranking on every earning event of a player with nothing automated.
+        if (!this._autoBuyEnabled || automated.length === 0) return bought;
+
+        // Bounded like a single purchase: this runs inside the storage mutator.
+        for (let i = 0; i < MAX_LEVELS_PER_PURCHASE; i++) {
+            const id = pickPurchase(
+                this,
+                Object.values(UpgradeId),
+                PurchaseStrategy.BEST_AFFORDABLE_PAYBACK,
+            );
+            if (id === null || !automated.includes(id) || !this.buyUpgrade(id, 1)) break;
+            bought[id] = (bought[id] ?? 0) + 1;
+        }
+
+        return bought;
+    }
 }
 
 /**
@@ -364,6 +423,8 @@ export type ReadonlyGameInstance = Readonly<
         | 'addGrowthRing'
         | 'computeIncome'
         | 'prestige'
+        | 'runAutoBuy'
+        | 'setAutoBuy'
         // Dropped and reinstated below: `Readonly` freezes the property, not the object behind it.
         | 'growthRings'
     >

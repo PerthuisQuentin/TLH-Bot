@@ -72,11 +72,15 @@ export async function handleDiscordEvent(event: DiscordEvent): Promise<DiscordEv
                 ? gameInstance.applyShellsGain(JACKPOT_MULTIPLIER)
                 : null;
 
+        // Last, once every credit has landed and the run peak has seen it.
+        const autoBought = gameInstance.runAutoBuy();
+
         return {
             passiveIncomeEarned,
             finalMultiplier,
             shellsGained,
             jackpotGained,
+            autoBought,
             maxShells: gameInstance.stats.maxShells,
         };
     });
@@ -90,6 +94,13 @@ export async function handleDiscordEvent(event: DiscordEvent): Promise<DiscordEv
     console.log(
         `[Shells] Added | userId=${event.userId} | guildId=${event.guildId} | amount=${outcome.shellsGained} | multiplier=${outcome.finalMultiplier.toFixed(2)} | activityType=${event.activityType}`,
     );
+
+    const autoBought = Object.entries(outcome.autoBought);
+    if (autoBought.length > 0) {
+        console.log(
+            `[Shells] AutoBuy | userId=${event.userId} | guildId=${event.guildId} | bought=${autoBought.map(([id, levels]) => `${id}+${levels}`).join(',')}`,
+        );
+    }
 
     if (outcome.jackpotGained) {
         result.jackpot = { amount: outcome.jackpotGained, multiplier: JACKPOT_MULTIPLIER };

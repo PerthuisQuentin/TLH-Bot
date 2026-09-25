@@ -25,7 +25,7 @@ Slash commands never reach the gateway client, and gateway events never reach Ex
 | `app/llm/`            | The backend-agnostic AI engine: prompt loop, tool rounds, memory protocol, provider selection.                                                             |
 | `app/llm/openrouter/` | OpenRouter adapter, same contract, via `@openrouter/sdk`.                                                                                                  |
 | `app/llm/gemini/`     | Gemini adapter: client, schema mapping, error classification.                                                                                              |
-| `app/llm/tools/`      | AI-callable tools and their registry: weather.                                                                                                             |
+| `app/llm/tools/`      | AI-callable tools and their registry: weather, shells profile, leaderboard, role thresholds.                                                               |
 | `app/idle/core/`      | Pure game logic: `GameInstance`, upgrades, heat, growth rings, passive income, jackpot, prestige, resources, big-number, modifier DSL. No I/O, no Discord. |
 | `app/idle/handlers/`  | Turns a `DiscordEvent` into game rules and returns a plain result.                                                                                         |
 | `app/idle/`           | Game persistence (`game-instance-storage.ts`), leaderboard, role thresholds.                                                                               |
@@ -128,7 +128,7 @@ app/idle/handlers/handle-event.ts
     ├── updateChannelHeat            (always, even on cooldown)
     ├── 5 s per-user cooldown        → stop
     ├── one synchronous mutator:
-    │     passive income → growth ring (recomputes income) → heat × activity fraction → jackpot roll
+    │     passive income → growth ring (recomputes income) → heat × activity fraction → jackpot roll → auto-buy
     ├── credit the reacted message's author  (reactions only)
     └── getShellsRolesConfig() → computeRoleChanges(roles, maxShells, currentRoleIds)
     ↓

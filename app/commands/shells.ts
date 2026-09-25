@@ -10,8 +10,9 @@ import type { APIMessageTopLevelComponent } from 'discord-api-types/v10';
 import type { Command } from './types.ts';
 import { PRESTIGE_OPEN_ID } from './prestige.ts';
 import { shopOpenId } from './shop.ts';
-import { ShopPage } from '../idle/core/types.ts';
+import { ShopPage, UpgradeId } from '../idle/core/types.ts';
 import { getShellsProfile } from '../idle/shells-profile.ts';
+import { flushGameInstances, updateGameInstance } from '../idle/game-instance-storage.ts';
 import {
     actionRow,
     button,
@@ -44,6 +45,10 @@ const COMMAND_NAME = 'shells';
 const ACTION_REFRESH = 'refresh';
 const ACTION_SHARE = 'share';
 const ACTION_VIEW = 'view';
+// The Pieuvre intendante's switch, one action per state it sets, on the same target shape.
+const ACTION_AUTO_ON = 'auto-on';
+const ACTION_AUTO_OFF = 'auto-off';
+const TARGETED_ACTIONS = [ACTION_REFRESH, ACTION_SHARE, ACTION_AUTO_ON, ACTION_AUTO_OFF];
 
 const ACCENT_COLOR = 0xffd700;
 
@@ -87,6 +92,18 @@ function targetCustomId(action: string, target: ProfileTarget): string {
     );
 }
 
+/** Sets the player's own switch. False while they have nothing to automate yet. */
+async function setAutomation(guildId: string, userId: string, enabled: boolean): Promise<boolean> {
+    const applied = await updateGameInstance(guildId, userId, (instance) => {
+        if (instance.upgrades[UpgradeId.STEWARD_OCTOPUS].level === 0) return false;
+        instance.setAutoBuy(enabled);
+        return true;
+    });
+    // The redrawn panel tells the player it changed, so it must not ride the write delay.
+    if (applied) await flushGameInstances(guildId);
+    return applied;
+}
+
 /**
  * Private, the panel closes with its controls; shared, it is a read-only snapshot naming who
  * posted it.
@@ -113,7 +130,7 @@ async function shellsPanel(
             `### Rôles\nRang : ${profile.rankText}\nActuel : ${profile.currentRoleText}\nProchain : ${profile.nextRoleText}`,
         ),
         text(
-            `### Coquillages\n${profile.balanceText}\nPar message : ${profile.incomePerMessageText}\nPar réaction : ${profile.incomePerReactionText}\n${profile.growthRingsText}`,
+            `### Coquillages\n${profile.balanceText}\nPar message : ${profile.incomePerMessageText}\nPar réaction : ${profile.incomePerReactionText}\n${profile.growthRingsText}${profile.automationText ? `\n${profile.automationText}` : ''}`,
         ),
         // Dropped entirely rather than left empty while the layer is locked: an empty
         // "Récif" heading announces the mechanic just as loudly as its contents would.
@@ -151,6 +168,20 @@ async function shellsPanel(
                     : []),
                 ...(own && profile.coralUnlocked
                     ? [button('🪸 Prestige', PRESTIGE_OPEN_ID, { style: ButtonStyle.Primary })]
+                    : []),
+                ...(own && profile.automationEnabled !== null
+                    ? [
+                          profile.automationEnabled
+                              ? button(
+                                    '🐙 Couper l’automatisation',
+                                    targetCustomId(ACTION_AUTO_OFF, target),
+                                )
+                              : button(
+                                    '🐙 Activer l’automatisation',
+                                    targetCustomId(ACTION_AUTO_ON, target),
+                                    { style: ButtonStyle.Success },
+                                ),
+                      ]
                     : []),
             ),
             actionRow({
@@ -190,7 +221,7 @@ async function handleShellsComponent(req: Request, res: Response, action: string
     const [kind, rawTarget, rawAvatar] = action.split(':');
 
     let target: ProfileTarget;
-    if ((kind === ACTION_REFRESH || kind === ACTION_SHARE) && rawTarget) {
+    if (TARGETED_ACTIONS.includes(kind) && rawTarget) {
         target = { userId: rawTarget, avatar: decodeAvatarRef(rawAvatar) };
     } else if (kind === ACTION_VIEW && body.data?.values?.[0]) {
         const userId = body.data.values[0];
@@ -214,6 +245,21 @@ async function handleShellsComponent(req: Request, res: Response, action: string
             const panel = await shellsPanel(guild_id, target, clickerId, clickerId);
             replyComponents(res, panel, { suppressMentions: true });
             return;
+        }
+
+        if (kind === ACTION_AUTO_ON || kind === ACTION_AUTO_OFF) {
+            // The button only shows on your own profile; a forged id cannot reach someone else's.
+            if (clickerId !== target.userId) {
+                replyText(res, 'Vous ne pouvez régler que votre propre automatisation.', {
+                    ephemeral: true,
+                });
+                return;
+            }
+            // Worded without naming the Pieuvre: what lies behind the seedling stays hidden.
+            if (!(await setAutomation(guild_id, clickerId, kind === ACTION_AUTO_ON))) {
+                replyText(res, 'Vous n’avez encore rien à automatiser.', { ephemeral: true });
+                return;
+            }
         }
 
         const panel = await shellsPanel(guild_id, target, clickerId);
