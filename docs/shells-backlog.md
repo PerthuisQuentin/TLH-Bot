@@ -12,7 +12,7 @@ Legend: ✅ implemented — 💡 idea — 🔜 good next step
 
 ### Prestige ✅
 
-`/prestige` trades the current run, the shell balance and the three otter upgrades, for coral (🪸), spent on permanent upgrades in `/shop page:Corail`. The all-time record, roles and growth rings are untouched, so a reset costs no rank.
+`/prestige` trades the current run, the shell balance and the three otter upgrades, for coral (🪸), spent on permanent upgrades in the Corail aisle of `/shop`. The all-time record, roles and growth rings are untouched, so a reset costs no rank.
 
 Reference: [shells.md](./shells.md#prestige). How it was calibrated and why the currency is coral: [prestige-design.md](./prestige-design.md).
 

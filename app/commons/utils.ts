@@ -232,10 +232,6 @@ export function getOption<T = string>(
     return options?.find((o) => o.name === name)?.value as T | undefined;
 }
 
-export function isPublicOption(options: ReadonlyArray<DiscordOption> | undefined): boolean {
-    return getOption<boolean>(options, 'public') === true;
-}
-
 /**
  * Sends an ephemeral "guild-only" error and returns false if guild_id is absent.
  * Use as an early-return guard: `if (!requireGuild(res, guild_id)) return;`

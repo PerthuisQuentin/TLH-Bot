@@ -5,8 +5,13 @@ import {
     ButtonStyle,
     InteractionContextType,
 } from 'discord-api-types/v10';
-import type { APIComponentInContainer, APIMessageTopLevelComponent } from 'discord-api-types/v10';
+import type {
+    APIButtonComponentWithCustomId,
+    APIComponentInContainer,
+    APIMessageTopLevelComponent,
+} from 'discord-api-types/v10';
 import type { Command } from './types.ts';
+import { shopOpenId } from './shop.ts';
 import {
     actionRow,
     button,
@@ -29,7 +34,7 @@ import {
 } from '../idle/game-instance-storage.ts';
 import { ALL_UPGRADE_IDS, UPGRADE_REGISTRY } from '../idle/core/upgrades/upgrade-registry.ts';
 import { SHOP_PAGE_NAMES } from '../idle/core/shop-pages.ts';
-import { ResourceId, UpgradeId } from '../idle/core/types.ts';
+import { ResourceId, ShopPage, UpgradeId } from '../idle/core/types.ts';
 import { formatResource } from '../idle/core/resources.ts';
 import { bnFromJSON, bnGt, formatBigNum } from '../idle/core/big-number.ts';
 import type { ReadonlyGameInstance } from '../idle/core/game-instance.ts';
@@ -39,6 +44,10 @@ const COMMAND_NAME = 'prestige';
 const ACTION_CONFIRM = 'confirm';
 const ACTION_CANCEL = 'cancel';
 const ACTION_SHARE = 'share';
+const ACTION_OPEN = 'open';
+
+/** Opens the preview in a new private message, for a shortcut drawn by another command. */
+export const PRESTIGE_OPEN_ID = componentCustomId(COMMAND_NAME, ACTION_OPEN);
 
 const ACCENT_COLOR = 0xf4776a;
 
@@ -82,12 +91,17 @@ function notEnoughPanel(shellsMissing: string): Panel {
  * Says nothing about coral: to a locked player the currency does not exist yet. That is also
  * why the title carries the seedling's emoji rather than the 🪸 the other replies use.
  */
+function shopButton(page: ShopPage): APIButtonComponentWithCustomId {
+    return button('🏪 Boutique', shopOpenId(page), { style: ButtonStyle.Primary });
+}
+
 function lockedPanel(): Panel {
     const seedling = UPGRADE_REGISTRY[UpgradeId.CORAL_SEEDLING];
     return panel(
         text(
-            `## ${seedling.emoji} Prestige\nVos loutres n'ont rien où déposer leur récolte. Procurez-vous ${seedling.emoji} **${seedling.displayName}** dans \`/shop page:${SHOP_PAGE_NAMES[seedling.shopPage]}\` pour ouvrir le récif.`,
+            `## ${seedling.emoji} Prestige\nVos loutres n'ont rien où déposer leur récolte. Procurez-vous ${seedling.emoji} **${seedling.displayName}** dans la boutique, rayon ${SHOP_PAGE_NAMES[seedling.shopPage]}, pour ouvrir le récif.`,
         ),
+        actionRow(shopButton(seedling.shopPage)),
     );
 }
 
@@ -176,7 +190,7 @@ async function confirmPrestige(guildId: string, userId: string): Promise<Panel> 
             `## 🪸 Prestige ${outcome.prestigeCount}\n` +
                 `La récolte de vos loutres s'est déposée sur le récif, qui gagne ` +
                 `**${formatResource(outcome.coral, ResourceId.CORAL)}**.\n` +
-                `*À dépenser dans \`/shop page:Corail\` pour l'agrandir durablement.*`,
+                `*À dépenser dans la boutique, rayon ${SHOP_PAGE_NAMES[ShopPage.CORAL]}, pour l'agrandir durablement.*`,
         ),
         separator(),
         text(summary),
@@ -186,6 +200,7 @@ async function confirmPrestige(guildId: string, userId: string): Promise<Panel> 
                 `${ACTION_SHARE}:${outcome.prestigeCount}:${outcome.coral.toString()}`,
             ),
         }),
+        actionRow(shopButton(ShopPage.CORAL)),
     );
 }
 
@@ -223,6 +238,11 @@ function resolveCaller(req: Request, res: Response): Caller | undefined {
 }
 
 async function handlePrestigeCommand(req: Request, res: Response): Promise<void> {
+    await openPreview(req, res);
+}
+
+/** The command and the shortcut alike post the preview as a new private message. */
+async function openPreview(req: Request, res: Response): Promise<void> {
     const caller = resolveCaller(req, res);
     if (!caller) return;
 
@@ -244,6 +264,10 @@ async function handlePrestigeComponent(req: Request, res: Response, action: stri
     const [kind, rawCount, rawCoral] = action.split(':');
     if (kind === ACTION_SHARE) {
         handleShare(req, res, rawCount, rawCoral);
+        return;
+    }
+    if (action === ACTION_OPEN) {
+        await openPreview(req, res);
         return;
     }
     if (action !== ACTION_CONFIRM && action !== ACTION_CANCEL) {

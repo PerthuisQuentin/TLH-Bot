@@ -5,9 +5,11 @@ import type {
     APIComponentInMessageActionRow,
     APIComponentInContainer,
     APIContainerComponent,
+    APISectionAccessoryComponent,
     APISectionComponent,
     APISeparatorComponent,
     APITextDisplayComponent,
+    APIThumbnailComponent,
 } from 'discord-api-types/v10';
 
 // Building blocks for Components V2 replies. Layout stays in each command: only the
@@ -22,6 +24,18 @@ export function container(
 
 export function text(content: string): APITextDisplayComponent {
     return { type: ComponentType.TextDisplay, content };
+}
+
+/** One to three texts, with a button or a thumbnail beside them. */
+export function section(
+    accessory: APISectionAccessoryComponent,
+    ...components: APITextDisplayComponent[]
+): APISectionComponent {
+    return { type: ComponentType.Section, components, accessory };
+}
+
+export function thumbnail(url: string): APIThumbnailComponent {
+    return { type: ComponentType.Thumbnail, media: { url } };
 }
 
 export function separator(): APISeparatorComponent {
@@ -55,9 +69,5 @@ export function shareFooter(
     { sharedBy, shareId }: { sharedBy?: string; shareId: string },
 ): APISectionComponent | APITextDisplayComponent {
     if (sharedBy) return text(`-# ${line} · partagé par <@${sharedBy}>`);
-    return {
-        type: ComponentType.Section,
-        components: [text(`-# ${line}`)],
-        accessory: button('📢 Partager', shareId),
-    };
+    return section(button('📢 Partager', shareId), text(`-# ${line}`));
 }

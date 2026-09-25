@@ -7,7 +7,6 @@ import {
 import type { Response as ExpressResponse } from 'express';
 import {
     getOption,
-    isPublicOption,
     updateInteractionResponse,
     replyText,
     replyEmbed,
@@ -154,25 +153,6 @@ describe('getOption', () => {
 
     it('returns undefined when options itself is undefined', () => {
         expect(getOption(undefined, 'a')).toBeUndefined();
-    });
-});
-
-describe('isPublicOption', () => {
-    it('is true only when the public option is exactly boolean true', () => {
-        expect(isPublicOption([{ name: 'public', value: true }])).toBe(true);
-    });
-
-    it('is false when the option is absent', () => {
-        expect(isPublicOption([])).toBe(false);
-        expect(isPublicOption(undefined)).toBe(false);
-    });
-
-    it('is false for a truthy non-boolean value', () => {
-        expect(isPublicOption([{ name: 'public', value: 'true' }])).toBe(false);
-    });
-
-    it('is false when explicitly false', () => {
-        expect(isPublicOption([{ name: 'public', value: false }])).toBe(false);
     });
 });
 

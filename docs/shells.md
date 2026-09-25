@@ -225,7 +225,7 @@ Buying `k` levels sums `cost(n) … cost(n+k−1)` in a loop. There is no closed
 | cost     | `CORAL_DIVISOR / 10`, today 100K 🐚 |
 | maxLevel | 1                                   |
 
-A one-shot purchase, sold for shells on the `Trésors` page, that opens the whole coral half of the game. Until it is bought, `GameInstance.coralUnlocked` is false and **coral does not exist as far as the player can see**: `/shop page:Corail` shows a sealed door instead of its upgrades, `/shells` drops its Récif field and omits the coral upgrades from both upgrade lists, and `/prestige` declines pointing at the shop. The AI is not kept from talking about it: since a prestige can be shared in a channel, members meet the mechanic before unlocking it, and the AI only tells them the seedling opens it.
+A one-shot purchase, sold for shells on the `Trésors` page, that opens the whole coral half of the game. Until it is bought, `GameInstance.coralUnlocked` is false and **coral does not exist as far as the player can see**: `/shop` has no Corail aisle button (asking for it lands on the default aisle), `/shells` drops its Récif field and omits the coral upgrades from both upgrade lists, and `/prestige` declines pointing at the shop. The AI is not kept from talking about it: since a prestige can be shared in a channel, members meet the mechanic before unlocking it, and the AI only tells them the seedling opens it.
 
 Its price is derived from `CORAL_DIVISOR`, not written down: the door is always a tenth of the way to the room, so rebalancing the prestige threshold moves both together. Both land on round figures — 100K to open it, 1M of run peak for the first coral — because these are the two numbers a player quotes back at you.
 
@@ -248,7 +248,7 @@ A one-shot purchase that lifts the ×2 cap on [growth rings](#growth-rings): the
 
 ### Coral upgrades
 
-Bought with coral rather than shells, and **never reset by a prestige**: they are the permanent half of the game. They live on their own `/shop` page, `/shop page:Corail`, which stays sealed until the seedling above is bought. Coral is paid out by [Prestige](#prestige) below.
+Bought with coral rather than shells, and **never reset by a prestige**: they are the permanent half of the game. They live on their own `/shop` aisle, Corail, which stays shut until the seedling above is bought. Coral is paid out by [Prestige](#prestige) below.
 
 Their costs are plain geometric, with no decade boost: `cost(n) = base × m^n`.
 

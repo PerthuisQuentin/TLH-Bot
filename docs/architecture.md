@@ -61,7 +61,7 @@ The seam between Discord and the game lives in exactly two files. `app/discord/h
 
 A command is one object exported from `app/commands/<name>.ts` and listed in the `commands` array in `app/commands/index.ts`. That single array drives both dispatch (`interactions.ts` matches on `definition.name`) and registration (`commands.ts` → `npm run register`).
 
-Handlers receive raw Express `req`/`res`, not discord.js interaction objects, and reply through the helpers in `app/commons/utils.ts`: `replyText`, `replyEmbed`, `replyDeferred`, `getOption`, `isPublicOption`, `requireGuild`. `replyComponents` sends a Components V2 message instead; that flag makes `content` and `embeds` unusable on the message for good, so a V2 reply is never mixed with the embed helpers. A command that defers answers later through `updateInteractionResponse`, also V2. `updateInteractionResponseOrLog` is the same edit for a handler's own error path, where rethrowing would have nowhere to go — see [Error handling](#error-handling).
+Handlers receive raw Express `req`/`res`, not discord.js interaction objects, and reply through the helpers in `app/commons/utils.ts`: `replyText`, `replyEmbed`, `replyDeferred`, `getOption`, `requireGuild`. `replyComponents` sends a Components V2 message instead; that flag makes `content` and `embeds` unusable on the message for good, so a V2 reply is never mixed with the embed helpers. A command that defers answers later through `updateInteractionResponse`, also V2. `updateInteractionResponseOrLog` is the same edit for a handler's own error path, where rethrowing would have nowhere to go — see [Error handling](#error-handling).
 
 Re-run `npm run register` after any change to a command's `definition`.
 

@@ -89,7 +89,8 @@ describe('prestigeCommand', () => {
             expect(reply.text).toContain('Bouture de corail');
             // Including the title: 🪸 there would name the currency the refusal is hiding.
             expect(reply.text).not.toContain('🪸');
-            expect(reply.buttons).toEqual([]);
+            // Straight to the aisle that sells it.
+            expect(reply.buttons.map((b) => b.id)).toEqual(['shop:open:treasures']);
         }
 
         const stored = await readInstance('g1');
@@ -143,7 +144,7 @@ describe('prestigeCommand', () => {
         expect(reply.text).toContain('🪸 Prestige 1');
         expect(reply.text).toContain('36 🪸');
         // Confirm and cancel are gone; only the result's Share is left, carrying what it reports.
-        expect(reply.buttons.map((b) => b.id)).toEqual(['prestige:share:1:36']);
+        expect(reply.buttons.map((b) => b.id)).toEqual(['prestige:share:1:36', 'shop:open:coral']);
 
         const stored = await readInstance('g1');
         expect(stored.resources).toEqual({ shells: '0', coral: '36' });
