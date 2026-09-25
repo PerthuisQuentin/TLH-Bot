@@ -4,19 +4,19 @@ Discord slash commands. Definitions live in `app/commands/<name>.ts` and are pus
 
 Every user-facing string is French. The option names below are the literal ones Discord shows.
 
-New interactions favour buttons and selects on the reply over options: see [Buttons and other components](architecture.md#buttons-and-other-components). `/prestige`, `/leaderboard` and `/heat` follow it; the options still listed below on other commands predate that choice.
+New interactions favour buttons and selects on the reply over options: see [Buttons and other components](architecture.md#buttons-and-other-components). Every command follows it. The one option left, `question` on `/ask`, is input the command cannot start without.
 
-| Command        | Options                       | Scope        | Default visibility         |
-| -------------- | ----------------------------- | ------------ | -------------------------- |
-| `/ping`        | —                             | Guilds + DMs | public                     |
-| `/ask`         | `question`                    | Guilds + DMs | public                     |
-| `/leaderboard` | —                             | Guilds + DMs | ephemeral, sharable        |
-| `/shells`      | `user`, `public`              | Guilds + DMs | ephemeral                  |
-| `/shop`        | `upgrade`, `page`, `quantity` | Guilds only  | always ephemeral           |
-| `/heat`        | —                             | Guilds only  | ephemeral, sharable        |
-| `/prestige`    | —                             | Guilds only  | ephemeral, result sharable |
+| Command        | Options    | Scope        | Default visibility         |
+| -------------- | ---------- | ------------ | -------------------------- |
+| `/ping`        | —          | Guilds + DMs | public                     |
+| `/ask`         | `question` | Guilds + DMs | public                     |
+| `/leaderboard` | —          | Guilds + DMs | ephemeral, sharable        |
+| `/shells`      | —          | Guilds + DMs | ephemeral, sharable        |
+| `/shop`        | —          | Guilds only  | always ephemeral           |
+| `/heat`        | —          | Guilds only  | ephemeral, sharable        |
+| `/prestige`    | —          | Guilds only  | ephemeral, result sharable |
 
-Replies are ephemeral, so checking your own numbers doesn't spam the channel. `/shells` still takes `public:true` to show its reply to everyone.
+Replies are ephemeral, so checking your own numbers doesn't spam the channel.
 
 **📢 Partager** replaces that option on the commands moved to components: the private panel ends with a small line carrying the button, and a click posts the panel again as a new public message, recomputed at click time. The public copy names who shared it on that same line and has no Share button. What else it keeps is per command: a shared ranking is a read-only snapshot, a shared heat keeps its refresh. Deciding to share comes after seeing the result, which an option asked for before.
 
@@ -70,21 +70,23 @@ A small line under the ranking carries the participant count and when it was com
 
 ## `/shells`
 
-A member's shells profile.
+A member's shells profile. No options: it always opens on your own, and the panel's **👤 Voir le profil de…** select switches to anyone else in place. A `user` option to open straight on someone else was dropped to keep a single way in; looking someone up costs one pick in the select.
 
-| Option   | Type    | Required | Description                               |
-| -------- | ------- | -------- | ----------------------------------------- |
-| `user`   | User    | No       | Whose profile. Defaults to the requester. |
-| `public` | Boolean | No       | Show to everyone. Default false.          |
-
-Three fields:
+The header names the member beside their avatar: the server one if they set it, else their account one, else the default Discord gives an account without one. Then the blocks:
 
 - **Rôles** — leaderboard rank, current role, next role and the shells still missing.
 - **Coquillages** — balance, gain per message (±10 %, growth rings included), gain per reaction, current growth rings (_Stries de croissance_) and their multiplier.
 - **Récif** — coral balance, prestige count and what `/prestige` would pay. **Absent entirely** until 🌱 Bouture de corail is bought: an empty heading would announce the mechanic as loudly as its contents.
 - **Upgrades** — one line per upgrade with its level and current effect. The coral ones are omitted while the layer is locked, and **one-shot unlocks never appear at all**, bought or not: their level is a yes/no, and a "Niv. 0" among levelled upgrades reads as one the player is behind on. `/shop` is where they are sold, and the assistant still prices them from `upgradeShopLines`.
 
-The all-time maximum appears in the footer only when it differs from the balance.
+The small line closing the panel gives when the profile was computed, preceded by the all-time maximum only when it differs from the balance, and carries **📢 Partager**, which posts a read-only snapshot like `/leaderboard`'s. Under it:
+
+- **🔄 Rafraîchir** recomputes the profile shown, in place. Balances move with every message.
+- **🏪 Boutique**, on your own profile, opens the shop on the Coquillages aisle in a new private message.
+- **🪸 Prestige**, on your own profile once the reef is open, opens the `/prestige` preview in a new private message, leaving the profile where it is.
+- **👤 Voir le profil de…**, the select above.
+
+A click brings no avatar, so Refresh and Share carry the profile they act on in their `custom_id`, as `<userId>:<avatar ref>`: one letter for the source, then the hash (`app/discord/avatars.ts`). A member who changes avatar in between shows the old one until the next `/shells` or pick in the select, which read it afresh. Fetching it from the API on each click was the alternative, rejected for the latency it adds inside Discord's 3 seconds and the failure path it opens.
 
 Roles are read from `maxShells`, so the "current role" never regresses after a shop purchase.
 
@@ -92,13 +94,41 @@ Roles are read from `maxShells`, so the "current role" never regresses after a s
 
 ## `/shop`
 
-Browses the upgrade shop, or buys levels. Always ephemeral.
+Browses the upgrade shop and buys levels, all by button. Always ephemeral. No options.
 
-| Option     | Type        | Required | Description                                   |
-| ---------- | ----------- | -------- | --------------------------------------------- |
-| `upgrade`  | Choice      | No       | Which upgrade to buy. Omit to browse.         |
-| `page`     | Choice      | No       | Which aisle to browse. Default `Coquillages`. |
-| `quantity` | Integer ≥ 1 | No       | How many levels. Default 1.                   |
+It opens on the `Coquillages` aisle. The panel reads top to bottom:
+
+- **Header**: the aisle's name, then the balance of every currency priced on it.
+- **Banner**, after a click to buy: what was bought, or why not.
+- **One block per upgrade**: its level, description and gain now → next level, then its buy buttons.
+- **Aisle row**: one button per aisle with something on sale, the current one greyed out, and 🔄 to recompute prices after earning.
+
+**Buying** is a click on `×1`, `×10` or `Max`, each labelled with its price. `×1` and `×10` buy exactly that many and are greyed out when the balance does not cover them, rather than silently buying fewer. `Max` buys as many levels as the balance covers **at click time**, which can beat the count on its label if the balance grew in between. A one-shot unlock has a single `Acheter` button. The click rewrites the shop in place: new balances and prices, and the banner.
+
+| Outcome                             | Banner                                                         |
+| ----------------------------------- | -------------------------------------------------------------- |
+| Bought                              | ✅ upgrade, old → new level, total cost, old → new gain.       |
+| Cannot afford one level             | ❌ the next-level price and the current balance.               |
+| `×10` above what the balance covers | ❌ how many levels the balance does cover.                     |
+| Locked                              | ❌ the upgrade's own `unlockHint`, before any price is quoted. |
+| Maxed                               | ❌ already at its maximum.                                     |
+
+The check and the debit run inside a single synchronous mutator, so a shell gain landing mid-purchase cannot let the check pass and the debit fail; `Max` is resolved there too. The purchase is flushed to disk before the shop is redrawn, since the player is told it happened. Prices are rounded up once, where they are both displayed and charged, so the price shown is the price paid. `GameInstance.buyUpgrade` still throws a `RangeError` below 1 or above `MAX_LEVELS_PER_PURCHASE` (1000 levels); the buttons only ever send 1, 10 or a count the balance covers.
+
+**Aisles** are declared by each upgrade (`shopPage`) and derived from the registry: `Coquillages` holds the three otter upgrades, `Trésors` the one-shot unlocks whatever they cost (🌱 Bouture de corail, priced in shells), `Corail` the two permanent ones. Their names live in `app/idle/core/shop-pages.ts`, so `/prestige` can point at the right one.
+
+**What is on sale is the upgrade's call, not the shop's.** An aisle lists the upgrades the player may see: unlocked (its `unlockCondition`, see [shells.md](./shells.md#adding-an-upgrade)) and not maxed. A one-shot the player already owns therefore leaves the aisle entirely. An aisle with nothing on sale gets no button, so the `Corail` one only appears once the seedling is bought, and `Trésors` disappears once it is empty; if the player is already on it, it stays, saying there is nothing to sell. Asking for the coral aisle while it is locked, from a stale button or a shortcut, lands on the default aisle instead, and so does the redraw after a refused coral purchase: the aisle's title and its 🪸 never show to a locked player.
+
+**Shortcuts.** 🏪 Boutique buttons open the shop on a given aisle in a new private message (`shop:open:<aisle>`), leaving their own message in place: on your own `/shells` profile (Coquillages), on the `/prestige` refusal for a player without the seedling (Trésors), and on the prestige result (Corail).
+
+**The component budget.** A Discord message holds 40 components. Each upgrade costs 5 (a text, a row, three buttons; 3 for a one-shot) and the frame about 7, so an aisle tops out around six or seven upgrades. The `add-upgrade` skill says so.
+
+The options `upgrade`, `page` and `quantity` are gone: a choice made after seeing the prices is a button, and the shortcuts cover opening an aisle directly. So is the sealed door the coral page used to show, which no button leads to any more.
+
+---------- | ----------- | -------- | --------------------------------------------- |
+| `upgrade` | Choice | No | Which upgrade to buy. Omit to browse. |
+| `page` | Choice | No | Which aisle to browse. Default `Coquillages`. |
+| `quantity` | Integer ≥ 1 | No | How many levels. Default 1. |
 
 **Browsing** lists the upgrades of one page with their level, current effect, next-level price, and how many levels the balance covers and for how much.
 
@@ -145,7 +175,7 @@ Heat is in-memory only, so a fresh restart shows a cold channel.
 
 ## `/prestige`
 
-Trades the current run for coral. Always ephemeral. No options.
+Trades the current run for coral. Always ephemeral. No options. The **🪸 Prestige** button of your own `/shells` profile opens the same preview (`prestige:open`).
 
 Every reply is a Components V2 container in the same colour, refusals included, so the command looks the same whatever it answers. The locked refusal is the one exception to the 🪸 title: it carries the seedling's 🌱 instead, since naming the currency is exactly what it is avoiding.
 
@@ -161,14 +191,14 @@ The coral multiplier from the polyps is quoted on its own line, and only once it
 
 **The preview and the confirm click both refuse** in two cases. Without 🌱 Bouture de corail the reply names that upgrade and says nothing about coral at all, because the player has not met the currency yet. With it, below one coral, the reply names what the run peak still misses. Beyond those two, the layer is open to everyone: prestiging too early costs power rather than breaking anything.
 
-| Outcome           | Reply                                                                    |
-| ----------------- | ------------------------------------------------------------------------ |
-| Layer locked      | Points at 🌱 Bouture de corail in `/shop page:Trésors`, for either step. |
-| Run pays no coral | The shells the run peak still needs, for either step.                    |
-| `/prestige`       | The preview above, with its two buttons.                                 |
-| Confirm click     | Coral gained, new coral balance, starting otter level, and new income.   |
-| Cancel click      | Says nothing changed.                                                    |
-| Share click       | A public line: who prestiged, which prestige, the coral it paid.         |
+| Outcome           | Reply                                                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Layer locked      | Points at 🌱 Bouture de corail, with a 🏪 Boutique button to the Trésors aisle, for either step.                      |
+| Run pays no coral | The shells the run peak still needs, for either step.                                                                 |
+| `/prestige`       | The preview above, with its two buttons.                                                                              |
+| Confirm click     | Coral gained, new coral balance, starting otter level, and new income, with a 🏪 Boutique button to the Corail aisle. |
+| Cancel click      | Says nothing changed.                                                                                                 |
+| Share click       | A public line: who prestiged, which prestige, the coral it paid.                                                      |
 
 The reset runs inside a single synchronous mutator, so a shell gain landing mid-prestige cannot slip between reading the run peak and wiping it, and it is flushed to disk before the confirmation is sent.
 

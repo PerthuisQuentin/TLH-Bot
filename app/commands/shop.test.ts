@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
+import { InteractionResponseFlags, InteractionResponseType } from 'discord-interactions';
 import { shopCommand } from './shop.ts';
+import { mockRes, readPanel } from '../../test/discord-interaction.ts';
 
 let dir: string;
 let originalFilesDir: string | undefined;
@@ -54,18 +56,50 @@ function mockReq(body: Record<string, unknown>): Request {
     return { body } as unknown as Request;
 }
 
-function mockRes(): { res: Response; payload?: { type: number; data: Record<string, unknown> } } {
-    const result: { res: Response; payload?: { type: number; data: Record<string, unknown> } } = {
-        res: undefined as unknown as Response,
+async function open() {
+    const mock = mockRes();
+    await shopCommand.handler(
+        mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+        mock.res,
+    );
+    return { ...readPanel(mock.payload), content: mock.payload?.data.content };
+}
+
+async function click(action: string) {
+    const mock = mockRes();
+    await shopCommand.onComponent!(
+        mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+        mock.res,
+        action,
+    );
+    return { ...readPanel(mock.payload), status: mock.status };
+}
+
+type Reply = ReturnType<typeof readPanel>;
+
+function title(reply: Reply): string | undefined {
+    return reply.text.match(/^## (.+)$/m)?.[1];
+}
+
+/** The upgrades listed, by name, in order. */
+function upgradeNames(reply: Reply): string[] {
+    return [...reply.text.matchAll(/^### (.+) · niv\. \d+$/gm)].map((m) => m[1]);
+}
+
+function pageIds(reply: Reply): Array<string | undefined> {
+    return reply.buttons.filter((b) => b.id?.startsWith('shop:page:')).map((b) => b.id);
+}
+
+function buyButtons(reply: Reply, upgradeId: string) {
+    return reply.buttons.filter((b) => b.id?.startsWith(`shop:buy:${upgradeId}:`));
+}
+
+async function stored() {
+    const [instance] = await readGameInstances('g1');
+    return {
+        shells: (instance.resources as Record<string, string>).shells,
+        upgrades: instance.upgrades as Record<string, number>,
     };
-    const res = {
-        send: (payload: { type: number; data: Record<string, unknown> }) => {
-            result.payload = payload;
-            return res;
-        },
-    };
-    result.res = res as unknown as Response;
-    return result;
 }
 
 describe('shopCommand', () => {
@@ -76,80 +110,68 @@ describe('shopCommand', () => {
         expect(mock.payload?.data.content).toContain('serveur');
     });
 
-    it('defaults to the shells page, listing only what shells can buy', async () => {
+    it('opens privately on the shells page, listing only what shells can buy', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-        );
+        const reply = await open();
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.title).toBe('🏪 Boutique — Coquillages');
-        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
+        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeTruthy();
+        expect(reply.flags & InteractionResponseFlags.IS_COMPONENTS_V2).toBeTruthy();
+        expect(title(reply)).toBe('🏪 Boutique — Coquillages');
+        expect(upgradeNames(reply)).toEqual([
             '🦦 Loutres plongeuses',
             '🐟 Nageoires hydrodynamiques',
             '🎒 Sacs de récolte XXL',
         ]);
-        // The seedling's aisle is the way in; the coral one is not advertised until it is open.
-        expect(embed.description).toContain('/shop page:Trésors');
-        expect(embed.description).not.toContain('/shop page:Corail');
+        // The seedling's aisle is the way in; the coral one gets no button until it is open.
+        expect(pageIds(reply)).toEqual(['shop:page:shells', 'shop:page:treasures']);
+        expect(reply.buttons.find((b) => b.id === 'shop:page:shells')?.disabled).toBe(true);
     });
 
-    it('sells the seedling on the treasures page, against the shells balance', async () => {
+    it('prices the three quantities on the buttons, greying out what the balance cannot cover', async () => {
+        // Level 0->1 costs 1000, 1->2 costs 1200: 2500 covers two levels, not ten.
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '2500')]);
+
+        const buttons = buyButtons(await open(), 'divingOtters');
+
+        expect(buttons.map((b) => [b.id, b.disabled])).toEqual([
+            ['shop:buy:divingOtters:1', false],
+            ['shop:buy:divingOtters:10', true],
+            ['shop:buy:divingOtters:max', false],
+        ]);
+        expect(buttons[0].label).toMatch(/^×1 · 1(\.00)?K 🐚$/);
+        expect(buttons[2].label).toContain('Max · 2 niv.');
+    });
+
+    it('sells the seedling on the treasures page with a single button, against the shells balance', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '42')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'page', value: 'treasures' }] },
-            }),
-            mock.res,
-        );
+        const reply = await click('page:treasures');
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.title).toBe('🏪 Boutique — Trésors');
-        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
-            '🌱 Bouture de corail',
+        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(title(reply)).toBe('🏪 Boutique — Trésors');
+        expect(upgradeNames(reply)).toEqual(['🌱 Bouture de corail']);
+        expect(reply.text).toContain('42 🐚');
+        expect(buyButtons(reply, 'coralSeedling').map((b) => b.label)).toEqual([
+            expect.stringMatching(/^Acheter · /),
         ]);
-        expect(embed.description).toContain('42 🐚');
-        expect(JSON.stringify(embed)).not.toContain('🪸');
+        expect(JSON.stringify(reply)).not.toContain('🪸');
     });
 
-    it('points at the coral aisle once the seedling is bought', async () => {
+    it('offers the coral aisle once the seedling is bought', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-        );
-
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.description).toContain('/shop page:Corail');
+        expect(pageIds(await open())).toContain('shop:page:coral');
     });
 
     it('drops the seedling from the shop entirely once it is owned', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'page', value: 'treasures' }] },
-            }),
-            mock.res,
-        );
+        const reply = await click('page:treasures');
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.fields).toEqual([]);
-        expect(embed.description).toContain('Rien à vendre');
-        // Not just out of the fields: nothing is left of it anywhere on the page.
-        expect(JSON.stringify(embed)).not.toContain('Bouture');
+        expect(upgradeNames(reply)).toEqual([]);
+        expect(reply.text).toContain('Rien à vendre');
+        expect(reply.text).not.toContain('Bouture');
     });
 
     it('sells the Coquille millénaire for coral on the treasures page once the rings reach the cap', async () => {
@@ -160,228 +182,125 @@ describe('shopCommand', () => {
         };
         await writeGameInstances('g1', [veteran]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'page', value: 'treasures' }] },
-            }),
-            mock.res,
-        );
+        const reply = await click('page:treasures');
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
-            '🌀 Coquille millénaire',
-        ]);
-        expect(embed.description).toContain('20 🪸');
+        expect(upgradeNames(reply)).toEqual(['🌀 Coquille millénaire']);
+        expect(reply.text).toContain('20 🪸');
     });
 
-    it('stops advertising the treasures page once nothing is left on it', async () => {
+    it('stops offering the treasures page once nothing is left on it', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-        );
-
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.description).not.toContain('Trésors');
+        expect(pageIds(await open())).not.toContain('shop:page:treasures');
     });
 
-    it('seals the coral page until the seedling is bought, naming the way in', async () => {
+    it('lands on the default page when the coral one is asked for while locked', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'page', value: 'coral' }] },
-            }),
-            mock.res,
-        );
+        const reply = await click('page:coral');
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.fields).toBeUndefined();
-        expect(embed.description).toContain('Bouture de corail');
-        expect(embed.description).toContain('/shop page:Trésors');
-        // The prices and the currency itself stay behind the door.
-        expect(JSON.stringify(embed)).not.toContain('🪸');
+        expect(title(reply)).toBe('🏪 Boutique — Coquillages');
+        expect(JSON.stringify(reply)).not.toContain('🪸');
     });
 
-    it('refuses to sell a coral upgrade by name while the layer is locked', async () => {
+    it('refuses to sell a coral upgrade while the layer is locked, without opening its aisle', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'upgrade', value: 'nourishingReef' }] },
-            }),
-            mock.res,
-        );
+        const reply = await click('buy:nourishingReef:1');
 
-        const content = mock.payload?.data.content as string;
-        expect(content).toContain('Bouture de corail');
-        expect(content).not.toContain('🪸');
+        expect(reply.text).toContain('❌');
+        expect(reply.text).toContain('Bouture de corail');
+        expect(title(reply)).toBe('🏪 Boutique — Coquillages');
+        expect(JSON.stringify(reply)).not.toContain('🪸');
     });
 
     it('refuses a second seedling, since it is a one-shot purchase', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '1e9', UNLOCKED)]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'upgrade', value: 'coralSeedling' }] },
-            }),
-            mock.res,
-        );
-
-        expect(mock.payload?.data.content).toContain('niveau maximum');
+        expect((await click('buy:coralSeedling:1')).text).toContain('niveau maximum');
     });
 
     it('shows the coral upgrades and the coral balance on the coral page', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'page', value: 'coral' }] },
-            }),
-            mock.res,
-        );
+        const reply = await click('page:coral');
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.title).toBe('🏪 Boutique — Corail');
-        expect((embed.fields as Array<{ name: string }>).map((f) => f.name)).toEqual([
-            '🫧 Récif nourricier',
-            '🪷 Polypes bâtisseurs',
-        ]);
-        expect(embed.description).toContain('🪸');
+        expect(title(reply)).toBe('🏪 Boutique — Corail');
+        expect(upgradeNames(reply)).toEqual(['🫧 Récif nourricier', '🪷 Polypes bâtisseurs']);
+        expect(reply.text).toContain('🪸');
     });
 
     it('falls back to the default page when the value is not a page', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'page', value: 'bogus' }] },
-            }),
-            mock.res,
-        );
-
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.title).toBe('🏪 Boutique — Coquillages');
+        expect(title(await click('page:bogus'))).toBe('🏪 Boutique — Coquillages');
     });
 
-    it('rejects an unknown upgrade id', async () => {
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'upgrade', value: 'bogus' }] },
-            }),
-            mock.res,
-        );
+    it('refreshes the page in place', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
 
-        expect(mock.payload?.data.content).toBe('Amélioration introuvable.');
+        const reply = await click('refresh:coral');
+
+        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(title(reply)).toBe('🏪 Boutique — Corail');
     });
 
-    it('reports insufficient funds and debits nothing', async () => {
+    it('opens a page in a new private message for a shortcut from another command', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+
+        const reply = await click('open:coral');
+
+        expect(reply.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
+        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeTruthy();
+        expect(title(reply)).toBe('🏪 Boutique — Corail');
+    });
+
+    it.each(['buy:bogus:1', 'buy:divingOtters:5', 'buy:divingOtters', 'nope'])(
+        'rejects an action it never drew (%s)',
+        async (action) => {
+            expect((await click(action)).status).toBe(400);
+        },
+    );
+
+    it('reports insufficient funds in the banner and debits nothing', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'upgrade', value: 'divingOtters' }] },
-            }),
-            mock.res,
-        );
+        const reply = await click('buy:divingOtters:1');
 
-        expect(mock.payload?.data.content).toContain('Fonds insuffisants');
-        const [instance] = await readGameInstances('g1');
-        expect((instance.resources as Record<string, string>).shells).toBe('0');
+        expect(reply.text).toContain('❌ Fonds insuffisants');
+        expect((await stored()).shells).toBe('0');
     });
 
-    it('reports a quantity above the affordable maximum', async () => {
-        // Level 0->1 costs 1000; not enough for 2 levels (1000 + 1200).
+    it('refuses ten levels the balance cannot cover, rather than buying fewer', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '1000')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: {
-                    options: [
-                        { name: 'upgrade', value: 'divingOtters' },
-                        { name: 'quantity', value: 2 },
-                    ],
-                },
-            }),
-            mock.res,
-        );
+        const reply = await click('buy:divingOtters:10');
 
-        expect(mock.payload?.data.content).toContain('Vous ne pouvez acheter que');
+        expect(reply.text).toContain('ne couvrent que **1** niveau');
+        expect((await stored()).shells).toBe('1000');
     });
 
-    // Discord's min_value: 1 makes this unreachable in practice; the guard exists so a
-    // malformed payload cannot reach buyUpgrade, where 0 used to be a free no-op purchase.
-    it('rejects a non-positive quantity and debits nothing', async () => {
+    it('completes a purchase: debits and levels up on disk, and redraws with the banner', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '1000')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: {
-                    options: [
-                        { name: 'upgrade', value: 'divingOtters' },
-                        { name: 'quantity', value: 0 },
-                    ],
-                },
-            }),
-            mock.res,
-        );
+        const reply = await click('buy:divingOtters:1');
 
-        expect(mock.payload?.data.content).toContain('entier positif');
-        const [instance] = await readGameInstances('g1');
-        expect((instance.resources as Record<string, string>).shells).toBe('1000');
+        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(reply.text).toContain('✅ 🦦 **Loutres plongeuses** : niv. 0 → **1**');
+        expect(reply.text).toContain('### 🦦 Loutres plongeuses · niv. 1');
+        const disk = await stored();
+        expect(disk.shells).toBe('0');
+        expect(disk.upgrades.divingOtters).toBe(1);
     });
 
-    it('completes a purchase: debits the balance and increments the level, both on disk', async () => {
-        await writeGameInstances('g1', [gameInstanceFixture('u1', '1000')]);
+    it('buys as many levels as the balance covers at click time on Max', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '2200')]);
 
-        const mock = mockRes();
-        await shopCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'upgrade', value: 'divingOtters' }] },
-            }),
-            mock.res,
-        );
+        const reply = await click('buy:divingOtters:max');
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.title).toBe('✅ Achat effectué');
-
-        // No quantity option given: this also covers the default-to-1 behavior.
-        const [instance] = await readGameInstances('g1');
-        expect((instance.resources as Record<string, string>).shells).toBe('0');
-        expect((instance.upgrades as Record<string, number>).divingOtters).toBe(1);
+        expect(reply.text).toContain('niv. 0 → **2**');
+        const disk = await stored();
+        expect(disk.shells).toBe('0');
+        expect(disk.upgrades.divingOtters).toBe(2);
     });
 });

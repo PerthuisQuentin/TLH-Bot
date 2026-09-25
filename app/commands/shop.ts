@@ -1,9 +1,14 @@
 import type { Request, Response } from 'express';
 import {
     ApplicationCommandType,
-    ApplicationCommandOptionType,
     ApplicationIntegrationType,
+    ButtonStyle,
     InteractionContextType,
+} from 'discord-api-types/v10';
+import type {
+    APIButtonComponentWithCustomId,
+    APIComponentInContainer,
+    APIMessageTopLevelComponent,
 } from 'discord-api-types/v10';
 import type { Command } from './types.ts';
 import {
@@ -11,21 +16,46 @@ import {
     ALL_UPGRADE_IDS,
     UPGRADE_REGISTRY,
 } from '../idle/core/upgrades/upgrade-registry.ts';
-import { getOption, replyEmbed, replyText, requireGuild } from '../commons/utils.ts';
+import { actionRow, button, container, separator, text } from '../commons/components.ts';
+import {
+    componentCustomId,
+    replyComponents,
+    replyText,
+    requireGuild,
+    updateComponents,
+} from '../commons/utils.ts';
 import {
     getGameInstance,
     updateGameInstance,
     flushGameInstances,
 } from '../idle/game-instance-storage.ts';
-import { BigNum, bnCeil } from '../idle/core/big-number.ts';
+import { bnCeil } from '../idle/core/big-number.ts';
+import type { BigNum } from '../idle/core/big-number.ts';
 import { formatResource } from '../idle/core/resources.ts';
 import { SHOP_PAGE_NAMES } from '../idle/core/shop-pages.ts';
+import type { ReadonlyGameInstance } from '../idle/core/game-instance.ts';
 import type { ReadonlyUpgrade } from '../idle/core/upgrades/base-upgrade.ts';
 import { ResourceId, ShopPage, UpgradeId } from '../idle/core/types.ts';
 
-const PARAM_UPGRADE = 'upgrade';
-const PARAM_QUANTITY = 'quantity';
-const PARAM_PAGE = 'page';
+const COMMAND_NAME = 'shop';
+
+// `buy:<upgradeId>:<quantity>`, `page:<page>`, `refresh:<page>`, `open:<page>`: the panel keeps
+// no state of its own, and a purchase redraws the page its upgrade is sold on.
+const ACTION_BUY = 'buy';
+const ACTION_PAGE = 'page';
+const ACTION_REFRESH = 'refresh';
+const ACTION_OPEN = 'open';
+
+const QUANTITY_MAX = 'max';
+const QUANTITIES = ['1', '10', QUANTITY_MAX];
+
+const ACCENT_COLOR = 0x4fc3f7;
+
+const PAGE_EMOJIS: Record<ShopPage, string> = {
+    [ShopPage.SHELLS]: '🐚',
+    [ShopPage.TREASURES]: '💎',
+    [ShopPage.CORAL]: '🪸',
+};
 
 /**
  * The pages the upgrades declare, derived from the registry so a page nothing is sold on
@@ -34,307 +64,297 @@ const PARAM_PAGE = 'page';
  */
 const SHOP_PAGES: ShopPage[] = [...new Set(ALL_UPGRADE_CLASSES.map((c) => c.shopPage))];
 
+type Panel = APIMessageTopLevelComponent[];
+
+/** Opens the shop on `page` in a new private message, for a shortcut drawn by another command. */
+export function shopOpenId(page: ShopPage): string {
+    return componentCustomId(COMMAND_NAME, `${ACTION_OPEN}:${page}`);
+}
+
 function resolvePage(requested: string | undefined): ShopPage {
     return SHOP_PAGES.find((id) => id === requested) ?? SHOP_PAGES[0];
 }
 
-function buildUpgradeField(
+function onSale(instance: ReadonlyGameInstance, page: ShopPage): ReadonlyUpgrade[] {
+    return ALL_UPGRADE_IDS.filter((id) => instance.isUpgradeVisible(id))
+        .map((id) => instance.upgrades[id])
+        .filter((upgrade) => upgrade.shopPage === page);
+}
+
+// ─── Purchase ────────────────────────────────────────────────────────────────
+
+type PurchaseOutcome =
+    | { status: 'locked'; upgrade: ReadonlyUpgrade }
+    | { status: 'maxed'; upgrade: ReadonlyUpgrade }
+    | { status: 'no-funds'; nextCost: BigNum; balance: BigNum; currency: ResourceId }
+    | { status: 'too-many'; maxBuyable: number; balance: BigNum; currency: ResourceId }
+    | {
+          status: 'bought';
+          upgrade: ReadonlyUpgrade;
+          previousLevel: number;
+          newLevel: number;
+          totalCost: BigNum;
+          balance: BigNum;
+          currency: ResourceId;
+      };
+
+/**
+ * Check and debit inside the mutator, so a concurrent gain cannot land between the
+ * affordability check and the purchase. `max` is resolved there too, on the balance of the
+ * moment rather than the one the button was drawn with.
+ */
+async function purchase(
+    guildId: string,
+    userId: string,
+    upgradeId: UpgradeId,
+    quantity: number | typeof QUANTITY_MAX,
+): Promise<PurchaseOutcome> {
+    const outcome = await updateGameInstance(guildId, userId, (instance): PurchaseOutcome => {
+        const upgrade = instance.upgrades[upgradeId];
+        const currency = upgrade.costResourceId;
+        const balance = instance.resources[currency];
+
+        // Before anything is quoted: naming the price of a hidden upgrade would give away
+        // what it is hidden to protect.
+        if (!instance.isUpgradeUnlocked(upgradeId)) return { status: 'locked', upgrade };
+        if (upgrade.isMaxed) return { status: 'maxed', upgrade };
+
+        const { levels: maxBuyable } = upgrade.getMaxBuyable(balance);
+        const levels = quantity === QUANTITY_MAX ? maxBuyable : quantity;
+
+        if (maxBuyable === 0) {
+            return { status: 'no-funds', nextCost: bnCeil(upgrade.getCost()), balance, currency };
+        }
+        if (levels > maxBuyable) {
+            return { status: 'too-many', maxBuyable, balance, currency };
+        }
+
+        const result = instance.buyUpgrade(upgradeId, levels);
+        if (!result) {
+            return { status: 'no-funds', nextCost: bnCeil(upgrade.getCost()), balance, currency };
+        }
+        return {
+            status: 'bought',
+            upgrade,
+            previousLevel: result.previousLevel,
+            newLevel: result.newLevel,
+            totalCost: result.totalCost,
+            balance: instance.resources[currency],
+            currency,
+        };
+    });
+
+    // A purchase is told to the player as done, so it does not ride the write delay.
+    if (outcome.status === 'bought') await flushGameInstances(guildId);
+    return outcome;
+}
+
+function outcomeBanner(outcome: PurchaseOutcome): string {
+    switch (outcome.status) {
+        case 'locked': {
+            const hint = outcome.upgrade.unlockHint;
+            return `❌ Cette amélioration n'est pas encore accessible.${hint ? ` ${hint}` : ''}`;
+        }
+        case 'maxed':
+            return `❌ **${outcome.upgrade.name}** est déjà à son niveau maximum.`;
+        case 'no-funds':
+            return `❌ Fonds insuffisants : il vous faut **${formatResource(outcome.nextCost, outcome.currency)}** pour le prochain niveau (vous avez **${formatResource(outcome.balance, outcome.currency)}**).`;
+        case 'too-many':
+            return `❌ Vos **${formatResource(outcome.balance, outcome.currency)}** ne couvrent que **${outcome.maxBuyable}** niveau${outcome.maxBuyable > 1 ? 'x' : ''}.`;
+        case 'bought': {
+            const { upgrade } = outcome;
+            return `✅ ${upgrade.emoji} **${upgrade.name}** : niv. ${outcome.previousLevel} → **${outcome.newLevel}** pour **${formatResource(outcome.totalCost, outcome.currency)}** · gain ${upgrade.computeFormatGain(outcome.previousLevel)} → **${upgrade.formatGain()}**`;
+        }
+    }
+}
+
+// ─── Panel ───────────────────────────────────────────────────────────────────
+
+function buyButton(
     upgrade: ReadonlyUpgrade,
-    resources: Record<ResourceId, BigNum>,
-): { name: string; value: string; inline: boolean } {
+    quantity: string,
+    label: string,
+    disabled: boolean,
+): APIButtonComponentWithCustomId {
+    return button(
+        label,
+        componentCustomId(COMMAND_NAME, `${ACTION_BUY}:${upgrade.id}:${quantity}`),
+        {
+            style: ButtonStyle.Success,
+            disabled,
+        },
+    );
+}
+
+/**
+ * Prices sit on the buttons, rounded up once where they are both shown and charged. ×10 is
+ * greyed out below ten affordable levels rather than silently buying fewer.
+ */
+function upgradeBlock(
+    upgrade: ReadonlyUpgrade,
+    instance: ReadonlyGameInstance,
+): APIComponentInContainer[] {
     const currency = upgrade.costResourceId;
-    const nextCost = bnCeil(upgrade.getCost());
-    const { levels: maxBuyable, totalCost } = upgrade.getMaxBuyable(resources[currency]);
-    const maxCost = bnCeil(totalCost);
-    // Derived from maxBuyable rather than compared to nextCost, so the price and the
-    // "max" hint can never contradict each other.
-    const canAfford = maxBuyable > 0;
+    const balance = instance.resources[currency];
+    const { levels: maxBuyable, totalCost } = upgrade.getMaxBuyable(balance);
+    const price = (levels: number) =>
+        formatResource(bnCeil(upgrade.getTotalCost(levels)), currency);
 
-    // Only visible upgrades get a field, and a visible one always has a next level.
-    const secondLine = `> Prochain niveau : **${formatResource(nextCost, currency)}** → **${upgrade.computeFormatGain(upgrade.level + 1)}**${canAfford ? ` *(max : ${maxBuyable} niveau${maxBuyable > 1 ? 'x' : ''} pour **${formatResource(maxCost, currency)}**)*` : ' *(fonds insuffisants)*'}`;
+    const buttons =
+        upgrade.maxLevel === 1
+            ? [buyButton(upgrade, '1', `Acheter · ${price(1)}`, maxBuyable < 1)]
+            : [
+                  buyButton(upgrade, '1', `×1 · ${price(1)}`, maxBuyable < 1),
+                  buyButton(upgrade, '10', `×10 · ${price(10)}`, maxBuyable < 10),
+                  buyButton(
+                      upgrade,
+                      QUANTITY_MAX,
+                      maxBuyable > 0
+                          ? `Max · ${maxBuyable} niv. · ${formatResource(bnCeil(totalCost), currency)}`
+                          : 'Max',
+                      maxBuyable < 1,
+                  ),
+              ];
 
-    const lines = [
-        upgrade.description,
-        `> Niveau **${upgrade.level}** — Gain actuel : **${upgrade.formatGain()}**`,
-        secondLine,
+    return [
+        text(
+            `### ${upgrade.emoji} ${upgrade.name} · niv. ${upgrade.level}\n${upgrade.description}\n` +
+                `Gain : **${upgrade.formatGain()}** → **${upgrade.computeFormatGain(upgrade.level + 1)}** au prochain niveau`,
+        ),
+        actionRow(...buttons),
     ];
-
-    return {
-        name: `${upgrade.emoji} ${upgrade.name}`,
-        value: lines.join('\n'),
-        inline: false,
-    };
 }
 
-/** The aisle a locked player sees instead of the coral one: a door, not an inventory. */
-function lockedCoralEmbed(): Parameters<typeof replyEmbed>[1] {
-    const seedling = UPGRADE_REGISTRY[UpgradeId.CORAL_SEEDLING];
-    return {
-        title: `🏪 Boutique — ${SHOP_PAGE_NAMES[ShopPage.CORAL]}`,
-        description:
-            `Ce rayon est encore fermé.\n\n` +
-            `Il vous faut ${seedling.emoji} **${seedling.displayName}**, en vente dans ` +
-            `\`/shop ${PARAM_PAGE}:${SHOP_PAGE_NAMES[seedling.shopPage]}\`, pour l'ouvrir.`,
-        color: 0x4fc3f7,
-    };
+function shopPanel(instance: ReadonlyGameInstance, page: ShopPage, banner?: string): Panel {
+    const upgrades = onSale(instance, page);
+    // Every currency the page prices in, so a page mixing them shows each balance.
+    const balances = [...new Set(upgrades.map((upgrade) => upgrade.costResourceId))]
+        .map((id) => `**${formatResource(instance.resources[id], id)}**`)
+        .join(' · ');
+    // Reachable once every treasure is bought: the page stays a valid place to land.
+    const header =
+        upgrades.length > 0 ? `Vous avez ${balances}` : "*Rien à vendre ici pour l'instant.*";
+
+    // An aisle with nothing to sell gets no button, so a locked player is never shown one
+    // they cannot enter; the current one stays, greyed out, to say where they are.
+    const pageButtons = SHOP_PAGES.filter(
+        (id) => id === page || onSale(instance, id).length > 0,
+    ).map((id) =>
+        button(
+            `${PAGE_EMOJIS[id]} ${SHOP_PAGE_NAMES[id]}`,
+            componentCustomId(COMMAND_NAME, `${ACTION_PAGE}:${id}`),
+            { disabled: id === page },
+        ),
+    );
+
+    return [
+        container(
+            ACCENT_COLOR,
+            text(`## 🏪 Boutique — ${SHOP_PAGE_NAMES[page]}\n${header}`),
+            ...(banner ? [text(banner)] : []),
+            separator(),
+            ...upgrades.flatMap((upgrade) => upgradeBlock(upgrade, instance)),
+            ...(upgrades.length > 0 ? [separator()] : []),
+            actionRow(
+                ...pageButtons,
+                button('🔄', componentCustomId(COMMAND_NAME, `${ACTION_REFRESH}:${page}`)),
+            ),
+        ),
+    ];
 }
 
-async function handleShopCommand(req: Request, res: Response): Promise<void> {
+/** The coral aisle stays shut until the seedling opens it; asking for it lands on the default. */
+function landingPage(instance: ReadonlyGameInstance, requested: string | undefined): ShopPage {
+    const page = resolvePage(requested);
+    return page === ShopPage.CORAL && !instance.coralUnlocked ? SHOP_PAGES[0] : page;
+}
+
+// ─── Handlers ────────────────────────────────────────────────────────────────
+
+type Caller = { guildId: string; userId: string };
+
+function resolveCaller(req: Request, res: Response): Caller | undefined {
     const body = req.body as {
         guild_id?: string;
         member?: { user?: { id: string } };
         user?: { id: string };
-        data?: { options?: Array<{ name: string; value: unknown }> };
     };
-
     const { guild_id } = body;
     const userId = body.member?.user?.id ?? body.user?.id;
 
-    if (!requireGuild(res, guild_id)) return;
+    if (!requireGuild(res, guild_id)) return undefined;
     if (!userId) {
-        replyText(res, 'Impossible de déterminer l\u2019utilisateur.', { ephemeral: true });
-        return;
+        replyText(res, 'Impossible de déterminer l’utilisateur.', { ephemeral: true });
+        return undefined;
     }
+    return { guildId: guild_id, userId };
+}
 
-    const options = body.data?.options ?? [];
-    const upgradeId = getOption<string>(options, PARAM_UPGRADE);
-    const page = resolvePage(getOption<string>(options, PARAM_PAGE));
+async function handleShopCommand(req: Request, res: Response): Promise<void> {
+    const caller = resolveCaller(req, res);
+    if (!caller) return;
 
-    // Both branches reply as their last statement, so reaching the catch means
-    // nothing was sent yet and the error reply is always the only one.
+    // The reply is the last statement, so reaching the catch means nothing was sent yet.
     try {
-        if (upgradeId) {
-            await handlePurchase(res, guild_id, userId, upgradeId, options);
-        } else {
-            await handleListing(res, guild_id, userId, page);
-        }
+        const instance = await getGameInstance(caller.guildId, caller.userId);
+        replyComponents(res, shopPanel(instance, SHOP_PAGES[0]), { ephemeral: true });
     } catch (error) {
         console.error('Error handling shop command:', error);
         replyText(res, 'Une erreur est survenue dans la boutique.', { ephemeral: true });
     }
 }
 
-async function handleListing(
-    res: Response,
-    guildId: string,
-    userId: string,
-    page: ShopPage,
-): Promise<void> {
-    const instance = await getGameInstance(guildId, userId);
+/**
+ * The shop is always ephemeral, so every click comes from its owner. A purchase acts on the
+ * clicker's own instance anyway, whatever the panel was drawn for.
+ */
+async function handleShopComponent(req: Request, res: Response, action: string): Promise<void> {
+    const [kind, arg, rawQuantity] = action.split(':');
 
-    if (page === ShopPage.CORAL && !instance.coralUnlocked) {
-        replyEmbed(res, lockedCoralEmbed(), { ephemeral: true });
+    const isPageAction = kind === ACTION_PAGE || kind === ACTION_REFRESH || kind === ACTION_OPEN;
+    const isBuy =
+        kind === ACTION_BUY &&
+        ALL_UPGRADE_IDS.includes(arg as UpgradeId) &&
+        QUANTITIES.includes(rawQuantity);
+    if (!isPageAction && !isBuy) {
+        console.error(`unknown shop action: ${action}`);
+        res.status(400).json({ error: 'unknown component' });
         return;
     }
 
-    const resources = instance.resources;
-    const onSale = (shopPage: ShopPage) =>
-        ALL_UPGRADE_IDS.filter((id) => instance.isUpgradeVisible(id))
-            .map((id) => instance.upgrades[id])
-            .filter((upgrade) => upgrade.shopPage === shopPage);
+    const caller = resolveCaller(req, res);
+    if (!caller) return;
 
-    const pageUpgrades = onSale(page);
-    // Every currency the page prices in, so a page mixing them shows each balance.
-    const balances = [...new Set(pageUpgrades.map((upgrade) => upgrade.costResourceId))]
-        .map((id) => `**${formatResource(resources[id], id)}**`)
-        .join(' · ');
-
-    const fields = pageUpgrades.map((upgrade) => buildUpgradeField(upgrade, resources));
-
-    // An aisle with nothing to show is not advertised, so a locked player is never pointed
-    // at a currency they have no idea about.
-    const others = SHOP_PAGES.filter((id) => id !== page && onSale(id).length > 0).map(
-        (id) => `\`/shop ${PARAM_PAGE}:${SHOP_PAGE_NAMES[id]}\``,
-    );
-    const otherPages = others.length > 0 ? `\n*Autres rayons : ${others.join(' · ')}*` : '';
-    // Reachable once every treasure is bought: the page stays a valid choice for everyone.
-    const header =
-        pageUpgrades.length > 0
-            ? `Vous avez ${balances}\n*Pour acheter, utilisez \`/shop ${PARAM_UPGRADE}:… ${PARAM_QUANTITY}:…\`*`
-            : "*Rien à vendre ici pour l'instant.*";
-
-    replyEmbed(
-        res,
-        {
-            title: `🏪 Boutique — ${SHOP_PAGE_NAMES[page]}`,
-            description: `${header}${otherPages}`,
-            color: 0x4fc3f7,
-            fields,
-        },
-        { ephemeral: true },
-    );
-}
-
-async function handlePurchase(
-    res: Response,
-    guildId: string,
-    userId: string,
-    upgradeId: string,
-    options: Array<{ name: string; value: unknown }>,
-): Promise<void> {
-    const exist = ALL_UPGRADE_IDS.includes(upgradeId as UpgradeId);
-    if (!exist) {
-        replyText(res, 'Amélioration introuvable.', { ephemeral: true });
-        return;
-    }
-
-    const rawQuantity = getOption<number>(options, PARAM_QUANTITY);
-    const quantity = typeof rawQuantity === 'number' ? Math.floor(rawQuantity) : 1;
-    // Discord already enforces min_value: 1, so this only catches a malformed payload
-    // before it reaches buyUpgrade, which throws on anything but a positive integer.
-    if (!Number.isInteger(quantity) || quantity < 1) {
-        replyText(res, 'La quantité doit être un nombre entier positif.', { ephemeral: true });
-        return;
-    }
-
-    // Check and debit inside the mutator, so a concurrent gain cannot land between
-    // the affordability check and the purchase.
-    const outcome = await updateGameInstance(guildId, userId, (instance) => {
-        const upgrade = instance.upgrades[upgradeId as UpgradeId];
-        const currency = upgrade.costResourceId;
-        const balance = instance.resources[currency];
-
-        // Before anything is quoted: naming the price of a hidden upgrade would give away
-        // what it is hidden to protect, the coral currency for one.
-        if (!instance.isUpgradeUnlocked(upgradeId as UpgradeId)) {
-            return { status: 'locked' as const, upgrade };
-        }
-        if (upgrade.isMaxed) {
-            return { status: 'maxed' as const, upgrade };
+    try {
+        if (isBuy) {
+            const upgradeId = arg as UpgradeId;
+            const quantity = rawQuantity === QUANTITY_MAX ? QUANTITY_MAX : Number(rawQuantity);
+            const outcome = await purchase(caller.guildId, caller.userId, upgradeId, quantity);
+            const instance = await getGameInstance(caller.guildId, caller.userId);
+            const page = landingPage(instance, UPGRADE_REGISTRY[upgradeId].shopPage);
+            updateComponents(res, shopPanel(instance, page, outcomeBanner(outcome)));
+            return;
         }
 
-        const { levels: maxBuyable } = upgrade.getMaxBuyable(balance);
-
-        if (maxBuyable === 0) {
-            const nextCost = bnCeil(upgrade.getCost());
-            return { status: 'no-funds' as const, nextCost, balance, currency };
-        }
-        if (quantity > maxBuyable) {
-            return { status: 'too-many' as const, maxBuyable, balance, currency };
-        }
-
-        const result = instance.buyUpgrade(upgradeId as UpgradeId, quantity);
-        if (!result) {
-            const nextCost = bnCeil(upgrade.getCost());
-            return { status: 'no-funds' as const, nextCost, balance, currency };
-        }
-
-        return {
-            status: 'bought' as const,
-            result,
-            upgrade,
-            balance: instance.resources[currency],
-            currency,
-        };
-    });
-
-    if (outcome.status === 'locked') {
-        const hint = outcome.upgrade.unlockHint;
-        replyText(res, `Cette amélioration n'est pas encore accessible.${hint ? ` ${hint}` : ''}`, {
-            ephemeral: true,
-        });
-        return;
+        const instance = await getGameInstance(caller.guildId, caller.userId);
+        const panel = shopPanel(instance, landingPage(instance, arg));
+        // A shortcut from another command opens a new message and leaves its own in place.
+        if (kind === ACTION_OPEN) replyComponents(res, panel, { ephemeral: true });
+        else updateComponents(res, panel);
+    } catch (error) {
+        console.error('Error handling shop click:', error);
+        replyText(res, 'Une erreur est survenue dans la boutique.', { ephemeral: true });
     }
-
-    if (outcome.status === 'maxed') {
-        replyText(res, `**${outcome.upgrade.name}** est déjà à son niveau maximum.`, {
-            ephemeral: true,
-        });
-        return;
-    }
-
-    if (outcome.status === 'no-funds') {
-        replyText(
-            res,
-            `Fonds insuffisants. Il vous faut **${formatResource(outcome.nextCost, outcome.currency)}** pour le prochain niveau (vous avez **${formatResource(outcome.balance, outcome.currency)}**).`,
-            { ephemeral: true },
-        );
-        return;
-    }
-
-    if (outcome.status === 'too-many') {
-        replyText(
-            res,
-            `Vous ne pouvez acheter que **${outcome.maxBuyable}** niveau(x) avec vos **${formatResource(outcome.balance, outcome.currency)}**.`,
-            { ephemeral: true },
-        );
-        return;
-    }
-
-    const { result, upgrade } = outcome;
-
-    // A purchase is told to the player as done, so it does not ride the write delay.
-    await flushGameInstances(guildId);
-
-    replyEmbed(
-        res,
-        {
-            title: '✅ Achat effectué',
-            color: 0x66bb6a,
-            fields: [
-                { name: 'Amélioration', value: upgrade.name, inline: true },
-                {
-                    name: 'Niveau',
-                    value: `${result.previousLevel} → **${result.newLevel}**`,
-                    inline: true,
-                },
-                {
-                    name: 'Coût total',
-                    value: formatResource(result.totalCost, outcome.currency),
-                    inline: true,
-                },
-                {
-                    name: 'Gain',
-                    value: `${upgrade.computeFormatGain(result.previousLevel)} → **${upgrade.formatGain()}**`,
-                    inline: true,
-                },
-                {
-                    name: 'Solde restant',
-                    value: formatResource(outcome.balance, outcome.currency),
-                    inline: true,
-                },
-            ],
-        },
-        { ephemeral: true },
-    );
 }
 
 export const shopCommand: Command = {
     definition: {
-        name: 'shop',
+        name: COMMAND_NAME,
         description: "Affiche la boutique d'améliorations.",
         type: ApplicationCommandType.ChatInput,
         integration_types: [ApplicationIntegrationType.GuildInstall],
         contexts: [InteractionContextType.Guild],
-        options: [
-            {
-                name: PARAM_UPGRADE,
-                description: "L'amélioration à acheter",
-                type: ApplicationCommandOptionType.String,
-                required: false,
-                choices: ALL_UPGRADE_IDS.map((id) => ({
-                    name: UPGRADE_REGISTRY[id].displayName,
-                    value: id,
-                })),
-            },
-            {
-                name: PARAM_PAGE,
-                description: 'Le rayon à afficher (défaut : Coquillages)',
-                type: ApplicationCommandOptionType.String,
-                required: false,
-                choices: SHOP_PAGES.map((id) => ({
-                    name: SHOP_PAGE_NAMES[id],
-                    value: id,
-                })),
-            },
-            {
-                name: PARAM_QUANTITY,
-                description: 'Nombre de niveaux à acheter (défaut : 1)',
-                type: ApplicationCommandOptionType.Integer,
-                required: false,
-                min_value: 1,
-            },
-        ],
     },
     handler: handleShopCommand,
+    onComponent: handleShopComponent,
 };

@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import { InteractionResponseType, InteractionResponseFlags } from 'discord-interactions';
 import { shellsCommand } from './shells.ts';
+import { prestigeCommand } from './prestige.ts';
+import { mockRes, readPanel } from '../../test/discord-interaction.ts';
 
 let dir: string;
 let originalFilesDir: string | undefined;
@@ -55,18 +57,35 @@ function mockReq(body: Record<string, unknown>): Request {
     return { body } as unknown as Request;
 }
 
-function mockRes(): { res: Response; payload?: { type: number; data: Record<string, unknown> } } {
-    const result: { res: Response; payload?: { type: number; data: Record<string, unknown> } } = {
-        res: undefined as unknown as Response,
-    };
-    const res = {
-        send: (payload: { type: number; data: Record<string, unknown> }) => {
-            result.payload = payload;
-            return res;
-        },
-    };
-    result.res = res as unknown as Response;
-    return result;
+const HASH = '0123456789abcdef0123456789abcdef';
+
+async function open(body: Record<string, unknown>) {
+    const mock = mockRes();
+    await shellsCommand.handler(mockReq({ guild_id: 'g1', ...body }), mock.res);
+    return { ...readPanel(mock.payload), content: mock.payload?.data.content };
+}
+
+async function openOwn(userId = 'u1') {
+    return open({ member: { user: { id: userId } } });
+}
+
+async function click(action: string, body: Record<string, unknown> = {}) {
+    const mock = mockRes();
+    await shellsCommand.onComponent!(
+        mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } }, ...body }),
+        mock.res,
+        action,
+    );
+    return { ...readPanel(mock.payload), status: mock.status };
+}
+
+/** The text under one `### ` heading, up to the next. */
+function block(text: string, heading: string): string | undefined {
+    return text.split('### ').find((part) => part.startsWith(heading));
+}
+
+function headings(text: string): string[] {
+    return [...text.matchAll(/^### (.+)$/gm)].map((m) => m[1]);
 }
 
 describe('shellsCommand', () => {
@@ -78,25 +97,20 @@ describe('shellsCommand', () => {
         expect(mock.payload?.data.flags).toBe(InteractionResponseFlags.EPHEMERAL);
     });
 
-    it('shows a fresh player with no footer, no role, and "Non classé"', async () => {
-        const mock = mockRes();
-        await shellsCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-        );
+    it('shows a fresh player privately, with no record line, no role, and "Non classé"', async () => {
+        const reply = await openOwn();
 
-        const embed = mock.payload?.data.embeds as Array<Record<string, unknown>>;
-        expect(mock.payload?.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
-        expect(embed[0].title).toBe('🐚 Profil Coquillages');
-        expect(embed[0].description).toBe('<@u1>');
-        expect(embed[0].footer).toBeUndefined();
-
-        const fields = embed[0].fields as Array<{ name: string; value: string }>;
+        expect(reply.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
+        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeTruthy();
+        expect(reply.flags & InteractionResponseFlags.IS_COMPONENTS_V2).toBeTruthy();
+        expect(reply.allowedMentions).toEqual({ parse: [] });
+        expect(reply.text).toContain('## 🐚 Profil Coquillages\n<@u1>');
+        expect(reply.text).not.toContain('Max historique');
         // No Récif: a fresh player has not bought the seedling, so the layer does not exist
         // for them yet. The unlocked layout is covered further down.
-        expect(fields.map((f) => f.name)).toEqual(['Rôles', 'Coquillages', 'Upgrades']);
-        expect(fields[0].value).toContain('Non classé');
-        expect(fields[0].value).toContain('Aucun');
+        expect(headings(reply.text)).toEqual(['Rôles', 'Coquillages', 'Upgrades']);
+        expect(block(reply.text, 'Rôles')).toContain('Non classé');
+        expect(block(reply.text, 'Rôles')).toContain('Aucun');
     });
 
     it('shows the growth rings, the cap, and the bonus past it once lifted', async () => {
@@ -109,16 +123,8 @@ describe('shellsCommand', () => {
             }),
         ]);
 
-        const coquillages = async (userId: string) => {
-            const mock = mockRes();
-            await shellsCommand.handler(
-                mockReq({ guild_id: 'g1', member: { user: { id: userId } } }),
-                mock.res,
-            );
-            const embed = mock.payload?.data.embeds as Array<Record<string, unknown>>;
-            const fields = embed[0].fields as Array<{ name: string; value: string }>;
-            return fields.find((f) => f.name === 'Coquillages')!.value;
-        };
+        const coquillages = async (userId: string) =>
+            block((await openOwn(userId)).text, 'Coquillages')!;
 
         expect(await coquillages('u1')).toContain('🌀 Stries de croissance : 42 jours — ×1.42');
         expect(await coquillages('u1')).not.toContain('plafond');
@@ -132,21 +138,14 @@ describe('shellsCommand', () => {
     it('hides the reef block entirely until the seedling is bought', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', { shells: '40000' })]);
 
-        const mock = mockRes();
-        await shellsCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-        );
+        const reply = await openOwn();
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        const fields = embed.fields as Array<{ name: string; value: string }>;
-
-        expect(fields.map((f) => f.name)).not.toContain('Récif');
+        expect(headings(reply.text)).not.toContain('Récif');
         // Not just the block: the coral upgrades must not surface in the upgrade list either.
-        const rendered = JSON.stringify(embed);
-        expect(rendered).not.toContain('Récif nourricier');
-        expect(rendered).not.toContain('Polypes');
-        expect(rendered).not.toContain('🪸');
+        expect(reply.text).not.toContain('Récif nourricier');
+        expect(reply.text).not.toContain('Polypes');
+        expect(reply.text).not.toContain('🪸');
+        expect(reply.buttons.map((b) => b.id)).not.toContain('prestige:open');
     });
 
     it('tells a player with no coral what the run peak still misses', async () => {
@@ -158,21 +157,12 @@ describe('shellsCommand', () => {
             }),
         ]);
 
-        const mock = mockRes();
-        await shellsCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-        );
+        const reef = block((await openOwn()).text, 'Récif');
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        const reef = (embed.fields as Array<{ name: string; value: string }>).find(
-            (f) => f.name === 'Récif',
-        );
-
-        expect(reef?.value).toContain('Corail : 0 🪸');
-        expect(reef?.value).toContain('Aucun prestige');
+        expect(reef).toContain('Corail : 0 🪸');
+        expect(reef).toContain('Aucun prestige');
         // runMaxShells defaults to maxShells, so the gap is measured from 40K, not from 0.
-        expect(reef?.value).toContain('Encore 960K 🐚');
+        expect(reef).toContain('Encore 960K 🐚');
     });
 
     it('shows the coral a prestige would pay once the run peak covers it', async () => {
@@ -187,21 +177,12 @@ describe('shellsCommand', () => {
             },
         ]);
 
-        const mock = mockRes();
-        await shellsCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-        );
+        const reef = block((await openOwn()).text, 'Récif');
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        const reef = (embed.fields as Array<{ name: string; value: string }>).find(
-            (f) => f.name === 'Récif',
-        );
-
-        expect(reef?.value).toContain('Corail : 7 🪸');
-        expect(reef?.value).toContain('Prestige 3');
+        expect(reef).toContain('Corail : 7 🪸');
+        expect(reef).toContain('Prestige 3');
         // Computed from runMaxShells (2.5e12), not from the all-time 9.2e12.
-        expect(reef?.value).toContain('46 🪸');
+        expect(reef).toContain('46 🪸');
     });
 
     it('keeps the one-shot seedling out of the upgrade list, bought or not', async () => {
@@ -212,88 +193,138 @@ describe('shellsCommand', () => {
                 gameInstanceFixture('u1', { shells: '40000', maxShells: '40000', upgrades }),
             ]);
 
-            const mock = mockRes();
-            await shellsCommand.handler(
-                mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-                mock.res,
-            );
+            const upgradeBlock = block((await openOwn()).text, 'Upgrades');
 
-            const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-            const upgradeField = (embed.fields as Array<{ name: string; value: string }>).find(
-                (f) => f.name === 'Upgrades',
-            );
-
-            expect(upgradeField?.value).not.toContain('Bouture');
+            expect(upgradeBlock).not.toContain('Bouture');
             // The levelled ones are still all there: the filter is on one-shots, not on
             // everything the player happens to own.
-            expect(upgradeField?.value).toContain('Loutres plongeuses');
-            expect(upgradeField?.value).toContain('Nageoires hydrodynamiques');
-            expect(upgradeField?.value).toContain('Sacs de récolte XXL');
+            expect(upgradeBlock).toContain('Loutres plongeuses');
+            expect(upgradeBlock).toContain('Nageoires hydrodynamiques');
+            expect(upgradeBlock).toContain('Sacs de récolte XXL');
         }
     });
 
-    it('shows the "Max historique" footer once maxShells differs from the current balance', async () => {
+    it('shows the all-time record on the small line once it differs from the balance', async () => {
         await writeGameInstances('g1', [
             gameInstanceFixture('u1', { shells: '100', maxShells: '900' }),
         ]);
 
+        expect((await openOwn()).text).toContain('-# Max historique : 900 🐚 · mis à jour <t:');
+    });
+
+    it("shows the caller's server avatar over their account one", async () => {
+        const reply = await open({ member: { avatar: HASH, user: { id: 'u1', avatar: 'x' } } });
+
+        expect(reply.thumbnail).toBe(
+            `https://cdn.discordapp.com/guilds/g1/users/u1/avatars/${HASH}.png?size=128`,
+        );
+    });
+
+    it('offers refresh, share and the profile select, carrying the avatar in the ids', async () => {
+        const reply = await open({ member: { user: { id: 'u1', avatar: HASH } } });
+
+        expect(reply.buttons.map((b) => b.id)).toEqual([
+            `shells:share:u1:u${HASH}`,
+            `shells:refresh:u1:u${HASH}`,
+            'shop:open:shells',
+        ]);
+        expect(reply.selects).toEqual(['shells:view']);
+    });
+
+    it('offers the shop shortcut on your own profile only', async () => {
+        const ownIds = (await openOwn('u1')).buttons.map((b) => b.id);
+        // u2 looking at u1's profile through the select.
+        const otherIds = (
+            await click('view', { member: { user: { id: 'u2' } }, data: { values: ['u1'] } })
+        ).buttons.map((b) => b.id);
+
+        expect(ownIds).toContain('shop:open:shells');
+        expect(otherIds).not.toContain('shop:open:shells');
+    });
+
+    it('offers the prestige shortcut on your own profile only, once the reef is open', async () => {
+        await writeGameInstances('g1', [
+            gameInstanceFixture('u1', { upgrades: { coralSeedling: 1 } }),
+        ]);
+
+        const ownIds = (await openOwn('u1')).buttons.map((b) => b.id);
+        // u2 looking at u1's profile through the select.
+        const otherIds = (
+            await click('view', { member: { user: { id: 'u2' } }, data: { values: ['u1'] } })
+        ).buttons.map((b) => b.id);
+
+        expect(ownIds).toContain('prestige:open');
+        expect(otherIds).not.toContain('prestige:open');
+    });
+
+    it('opens the prestige preview in a new private message from the shortcut', async () => {
+        await writeGameInstances('g1', [
+            gameInstanceFixture('u1', { upgrades: { coralSeedling: 1 } }),
+        ]);
+
         const mock = mockRes();
-        await shellsCommand.handler(
+        await prestigeCommand.onComponent!(
             mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
             mock.res,
+            'open',
         );
+        const reply = readPanel(mock.payload);
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.footer).toEqual({ text: 'Max historique : 900 🐚' });
+        expect(reply.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
+        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeTruthy();
+        expect(reply.text).toContain('Prestige');
     });
 
-    it('targets the user option instead of the caller when provided', async () => {
-        const mock = mockRes();
-        await shellsCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'caller' } },
-                data: { options: [{ name: 'user', value: 'someone-else' }] },
-            }),
-            mock.res,
-        );
+    it('refreshes the profile in place, keeping the avatar from its id', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u2', { shells: '1234' })]);
 
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        expect(embed.description).toBe('<@someone-else>');
+        const reply = await click(`refresh:u2:u${HASH}`);
+
+        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(reply.text).toContain('<@u2>');
+        expect(reply.text).toContain('1.23K');
+        expect(reply.thumbnail).toBe(`https://cdn.discordapp.com/avatars/u2/${HASH}.png?size=128`);
     });
 
-    it('is ephemeral by default and public only when asked', async () => {
-        const privateMock = mockRes();
-        await shellsCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            privateMock.res,
-        );
-        expect(privateMock.payload?.data.flags).toBe(InteractionResponseFlags.EPHEMERAL);
+    it('switches to the profile picked in the select, avatar resolved by Discord', async () => {
+        const reply = await click('view', {
+            data: {
+                values: ['u7'],
+                resolved: { users: { u7: { avatar: null } }, members: { u7: { avatar: HASH } } },
+            },
+        });
 
-        const publicMock = mockRes();
-        await shellsCommand.handler(
-            mockReq({
-                guild_id: 'g1',
-                member: { user: { id: 'u1' } },
-                data: { options: [{ name: 'public', value: true }] },
-            }),
-            publicMock.res,
+        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(reply.text).toContain('<@u7>');
+        expect(reply.thumbnail).toBe(
+            `https://cdn.discordapp.com/guilds/g1/users/u7/avatars/${HASH}.png?size=128`,
         );
-        expect(publicMock.payload?.data.flags).toBeUndefined();
     });
+
+    it('shares a read-only snapshot, naming the sharer and pinging nobody', async () => {
+        const reply = await click(`share:u2:u${HASH}`);
+
+        expect(reply.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
+        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeFalsy();
+        expect(reply.allowedMentions).toEqual({ parse: [] });
+        expect(reply.text).toContain('<@u2>');
+        expect(reply.text).toContain('partagé par <@u1>');
+        expect(reply.thumbnail).toBe(`https://cdn.discordapp.com/avatars/u2/${HASH}.png?size=128`);
+        expect(reply.buttons).toEqual([]);
+        expect(reply.selects).toEqual([]);
+    });
+
+    it.each(['refresh', 'share:', 'view', 'nope'])(
+        'rejects an action it cannot act on (%s)',
+        async (action) => {
+            expect((await click(action)).status).toBe(400);
+        },
+    );
 
     it('shows the currently held role once a threshold is reached', async () => {
         await writeConfig('g1', { shellsRoles: [{ roleId: 'role-1', threshold: '50' }] });
         await writeGameInstances('g1', [gameInstanceFixture('u1', { maxShells: '1000' })]);
 
-        const mock = mockRes();
-        await shellsCommand.handler(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-        );
-
-        const embed = (mock.payload?.data.embeds as Array<Record<string, unknown>>)[0];
-        const fields = embed.fields as Array<{ name: string; value: string }>;
-        expect(fields[0].value).toContain('<@&role-1>');
+        expect(block((await openOwn()).text, 'Rôles')).toContain('<@&role-1>');
     });
 });

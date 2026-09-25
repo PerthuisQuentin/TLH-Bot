@@ -6,6 +6,7 @@ import type { Response } from 'express';
 type ComponentNode = {
     type: ComponentType;
     accent_color?: number | null;
+    media?: { url: string };
     content?: string;
     label?: string;
     custom_id?: string;
@@ -70,5 +71,11 @@ export function readPanel(payload: InteractionPayload | undefined) {
             .filter((n) => n.type === ComponentType.Button)
             .map((n) => ({ label: n.label, id: n.custom_id, disabled: n.disabled })),
         selected: select?.options?.find((o) => o.default)?.value,
+        selects: nodes
+            .filter(
+                (n) => n.type === ComponentType.StringSelect || n.type === ComponentType.UserSelect,
+            )
+            .map((n) => n.custom_id),
+        thumbnail: nodes.find((n) => n.type === ComponentType.Thumbnail)?.media?.url,
     };
 }
