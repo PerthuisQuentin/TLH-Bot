@@ -4,17 +4,21 @@ Discord slash commands. Definitions live in `app/commands/<name>.ts` and are pus
 
 Every user-facing string is French. The option names below are the literal ones Discord shows.
 
-| Command        | Options                       | Scope        | Default visibility |
-| -------------- | ----------------------------- | ------------ | ------------------ |
-| `/ping`        | —                             | Guilds + DMs | public             |
-| `/ask`         | `question`                    | Guilds + DMs | public             |
-| `/leaderboard` | `page`, `sort`, `public`      | Guilds + DMs | ephemeral          |
-| `/shells`      | `user`, `public`              | Guilds + DMs | ephemeral          |
-| `/shop`        | `upgrade`, `page`, `quantity` | Guilds only  | always ephemeral   |
-| `/heat`        | `public`                      | Guilds only  | ephemeral          |
-| `/prestige`    | `confirmer`                   | Guilds only  | always ephemeral   |
+New interactions favour buttons and selects on the reply over options: see [Buttons and other components](architecture.md#buttons-and-other-components). `/prestige`, `/leaderboard` and `/heat` follow it; the options still listed below on other commands predate that choice.
 
-The three shells commands that accept `public` default to an ephemeral reply, so checking your own profile doesn't spam the channel. Pass `public:true` to show it to everyone.
+| Command        | Options                       | Scope        | Default visibility         |
+| -------------- | ----------------------------- | ------------ | -------------------------- |
+| `/ping`        | —                             | Guilds + DMs | public                     |
+| `/ask`         | `question`                    | Guilds + DMs | public                     |
+| `/leaderboard` | —                             | Guilds + DMs | ephemeral, sharable        |
+| `/shells`      | `user`, `public`              | Guilds + DMs | ephemeral                  |
+| `/shop`        | `upgrade`, `page`, `quantity` | Guilds only  | always ephemeral           |
+| `/heat`        | —                             | Guilds only  | ephemeral, sharable        |
+| `/prestige`    | —                             | Guilds only  | ephemeral, result sharable |
+
+Replies are ephemeral, so checking your own numbers doesn't spam the channel. `/shells` still takes `public:true` to show its reply to everyone.
+
+**📢 Partager** replaces that option on the commands moved to components: the private panel ends with a small line carrying the button, and a click posts the panel again as a new public message, recomputed at click time. The public copy names who shared it on that same line and has no Share button. What else it keeps is per command: a shared ranking is a read-only snapshot, a shared heat keeps its refresh. Deciding to share comes after seeing the result, which an option asked for before.
 
 ---
 
@@ -50,17 +54,17 @@ Names come from the gateway's member cache, so the history shows server nickname
 
 ## `/leaderboard`
 
-The guild's shells ranking, 10 per page.
+The guild's shells ranking, 10 per page. No options.
 
-| Option   | Type        | Required | Description                                                                                                                       |
-| -------- | ----------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `page`   | Integer ≥ 1 | No       | Page number. Default 1, clamped to the last page.                                                                                 |
-| `sort`   | Choice      | No       | `max` (all-time record, default), `current` (balance), `income` (per message, growth rings included), `rings` (growth ring days). |
-| `public` | Boolean     | No       | Show to everyone. Default false.                                                                                                  |
+It opens on page 1, sorted by all-time record. From there the reply drives itself. The sort select heads the panel and doubles as its title ("Classement par record historique"), right above the ranking it orders. A row of five buttons closes it, so nothing sits between the select and the list: ⏮ first page, ◀ previous, the current page as a greyed-out `2/4`, ▶ next, ⏭ last, the ones leading nowhere greyed out. A page select was the other candidate, but Discord puts buttons and a select on separate rows, so it would have stacked a second navigation row under the arrows. Switching the sort goes back to page 1: `max` (all-time record), `current` (balance), `income` (per message, growth rings included), `rings` (growth ring days). The buttons carry the page and sort they lead to in their `custom_id`, so every click recomputes the ranking as it stands.
+
+**Sharing** posts the page and sort being viewed as a **read-only snapshot**: the sharer's line bolded, the sort named in a heading since there is no select left to show it, and the page, the count, when it was computed and who shared it on the small line. No buttons, so nobody can page a ranking others are reading, and every click the command receives comes from a private panel and rewrites it in place. A reader who wants to browse runs `/leaderboard` themselves.
+
+A navigable shared ranking was built first and dropped: the sharer paged it in place for everyone while anyone else got a private copy, which worked but was hard to predict from the reader's side, and hung on Discord reporting who had shared the message.
 
 Each line shows the rank, the member, their record, and their balance and income in parentheses. Under `rings` the line leads with what is ranked instead: the growth ring days, the effective multiplier (above ×2 with the Coquille millénaire), then the record. Ring ties are frequent, so they are broken by record. The requester's own line is bold; if they are not on the displayed page, it is appended below a separator, or "Non classé" if they have never earned.
 
-The footer carries the page, the participant count and the active sort. Mentions are suppressed, so nobody gets pinged by the ranking.
+A small line under the ranking carries the participant count and when it was computed, as a relative Discord timestamp. Mentions are suppressed, so nobody gets pinged by the ranking.
 
 ---
 
@@ -127,13 +131,11 @@ The `upgrade` choices are generated from the upgrade registry, so adding an upgr
 
 ## `/heat`
 
-The channel's current conversation heat.
+The channel's current conversation heat. No options.
 
-| Option   | Type    | Required | Description                      |
-| -------- | ------- | -------- | -------------------------------- |
-| `public` | Boolean | No       | Show to everyone. Default false. |
+Renders a 12-block progress bar, the raw heat value, the resulting multiplier and the active contributors with their contribution and relative share. The container's accent colour scales with the multiplier: green → yellow → orange → red. Contributors are listed by mention without being pinged.
 
-Renders a 12-block progress bar, the raw heat value, the resulting multiplier and the active contributors with their contribution and relative share. The embed colour scales with the multiplier: green → yellow → orange → red.
+A small line gives when the reading was taken, and a **🔄 Rafraîchir** button rewrites the panel in place with the heat as it is now. Anyone may click it, on a shared reply too: heat belongs to the channel, not to whoever ran the command, so there is no one else's view to protect. A refreshed shared panel keeps naming its sharer.
 
 The bar saturates at heat 7, while the ×2.0 bucket only starts at 12 — so a full bar does not mean a maxed multiplier. The number next to it is the one that matters.
 
@@ -143,15 +145,13 @@ Heat is in-memory only, so a fresh restart shows a cold channel.
 
 ## `/prestige`
 
-Trades the current run for coral. Always ephemeral.
+Trades the current run for coral. Always ephemeral. No options.
 
-| Option      | Type    | Required | Description                                                   |
-| ----------- | ------- | -------- | ------------------------------------------------------------- |
-| `confirmer` | Boolean | No       | Performs the reset. Without it, the command only previews it. |
+Every reply is a Components V2 container in the same colour, refusals included, so the command looks the same whatever it answers. The locked refusal is the one exception to the 🪸 title: it carries the seedling's 🌱 instead, since naming the currency is exactly what it is avoiding.
 
-Every reply is an embed, refusals included, so the command looks the same whatever it answers. The locked refusal is the one exception to the 🪸 title: it carries the seedling's 🌱 instead, since naming the currency is exactly what it is avoiding.
+**Preview, then a button.** The command only shows what the trade would be and changes nothing, so nobody wipes a run by typing it out of curiosity. The preview ends with two buttons: **Confirmer le prestige** performs the trade, **Annuler** changes nothing. Either click rewrites the preview in place, and the buttons disappear with it.
 
-**Two calls on purpose.** Without `confirmer`, the command shows what the trade would be and changes nothing; with `confirmer:true` it performs it. Nobody wipes a run by typing the command out of curiosity. It is two interactions rather than a confirmation button because `app/discord/interactions.ts` routes only `APPLICATION_COMMAND` and the project has no component handling.
+A click is judged on the state at click time, not on the preview: a player who earned shells in between gets the larger payout, and a second click on the same preview meets an empty run peak and is refused. There is no owner check, since the preview is ephemeral and a click only ever acts on the clicker's own instance.
 
 **The preview** states the run's peak harvest and the coral it converts to, what is lost (the shells balance and every upgrade whose `resetOnPrestige` is true) and what is kept (the all-time record, roles, growth rings, coral and the coral upgrades). The two upgrade lists are split on `resetOnPrestige`, so a new upgrade lands in the right column with no edit here.
 
@@ -159,15 +159,19 @@ The copy leads with the conversion on purpose: the harvest feeds the reef, and t
 
 The coral multiplier from the polyps is quoted on its own line, and only once it is above 1, so a player who has never bought one sees no dead line. Both branches read `GameInstance.previewPrestige()`, which applies it: quoting the bare formula would under-promise a payout the confirmation then beats.
 
-**Both branches refuse** in two cases. Without 🌱 Bouture de corail the reply names that upgrade and says nothing about coral at all, because the player has not met the currency yet. With it, below one coral, the reply names what the run peak still misses. Beyond those two, the layer is open to everyone: prestiging too early costs power rather than breaking anything.
+**The preview and the confirm click both refuse** in two cases. Without 🌱 Bouture de corail the reply names that upgrade and says nothing about coral at all, because the player has not met the currency yet. With it, below one coral, the reply names what the run peak still misses. Beyond those two, the layer is open to everyone: prestiging too early costs power rather than breaking anything.
 
-| Outcome           | Reply                                                                      |
-| ----------------- | -------------------------------------------------------------------------- |
-| Layer locked      | Points at 🌱 Bouture de corail in `/shop page:Trésors`, for either branch. |
-| Run pays no coral | The shells the run peak still needs, for either branch.                    |
-| No `confirmer`    | The preview above.                                                         |
-| `confirmer:true`  | Coral gained, new coral balance, starting otter level, and new income.     |
+| Outcome           | Reply                                                                    |
+| ----------------- | ------------------------------------------------------------------------ |
+| Layer locked      | Points at 🌱 Bouture de corail in `/shop page:Trésors`, for either step. |
+| Run pays no coral | The shells the run peak still needs, for either step.                    |
+| `/prestige`       | The preview above, with its two buttons.                                 |
+| Confirm click     | Coral gained, new coral balance, starting otter level, and new income.   |
+| Cancel click      | Says nothing changed.                                                    |
+| Share click       | A public line: who prestiged, which prestige, the coral it paid.         |
 
 The reset runs inside a single synchronous mutator, so a shell gain landing mid-prestige cannot slip between reading the run peak and wiping it, and it is flushed to disk before the confirmation is sent.
+
+**Sharing the result** posts one public line, `@x a fait son Prestige 2 : le récif gagne 36 🪸`: the event, not the private summary, so no balance goes public. The trade is already done by then, so the button carries the prestige number and the coral in its `custom_id` rather than recomputing them. This deliberately lets coral and prestige be seen by members who have not unlocked them yet: a shared prestige is a milestone worth showing, and the secrecy only ever held while nobody talked about it.
 
 **No role synchronisation is involved.** Roles are computed from `maxShells`, which a prestige never touches, and only `app/discord/handlers.ts` applies them anyway — the webhook runtime this command lives in has no gateway client.

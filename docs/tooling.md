@@ -30,7 +30,7 @@ Strict, ES2022, NodeNext.
 **Two tsconfigs on purpose.**
 
 - `tsconfig.json` covers everything, `scripts/` included, for the editor and `tsc --noEmit`. It excludes nothing but `node_modules` and `dist`. Keep it that way rather than widening the exclusion to silence a script.
-- `tsconfig.build.json`, used by `npm run build`, excludes `scripts/` and `**/*.test.ts`, so neither reaches `dist/`.
+- `tsconfig.build.json`, used by `npm run build`, excludes `scripts/`, `test/` and `**/*.test.ts`, so none of them reaches `dist/`.
 
 `exclude` replaces rather than merges through `extends`, hence the repeated list.
 
@@ -50,7 +50,7 @@ Three rules are tuned in `eslint.config.js`, with the reason inline:
 
 - **No SDK in the domain.** `no-restricted-imports` forbids `discord.js`, `@google/genai` and `@openrouter/sdk` in `app/idle/**`, `app/llm/*.ts` and `app/llm/tools/**`. The glob deliberately stops at the root of `app/llm/`: the adapters one folder down (`app/llm/gemini/`, `app/llm/openrouter/`) exist to import their SDK. Adding an adapter means adding its package to that `paths` list.
 - **`app/idle/core/` imports nothing outside itself**, npm packages aside. Two `no-restricted-imports` blocks, because how far `../` reaches depends on depth: a file directly in `core/` escapes on the first `../`, one in `core/heat/` or `core/upgrades/` only on the second.
-- **Named exports only.** `no-restricted-syntax` rejects `export default` and `export { x as default }` in `app/`, `app.ts`, `commands.ts` and `scripts/`. `eslint.config.js` and `vitest.config.ts` are exempt: their tools require a default export.
+- **Named exports only.** `no-restricted-syntax` rejects `export default` and `export { x as default }` in `app/`, `app.ts`, `commands.ts`, `scripts/` and `test/`. `eslint.config.js` and `vitest.config.ts` are exempt: their tools require a default export.
 
 Not enforced: the full `routes → commands → domain → storage` ordering. Only the SDK and `core/` rules above are.
 
@@ -78,7 +78,7 @@ Prettier owns formatting, Markdown included. `eslint-config-prettier` is loaded 
 
 ## Tests
 
-vitest. A test sits next to what it covers, `foo.test.ts` beside `foo.ts`, with explicit imports from `'vitest'` (no `globals: true`).
+vitest. A test sits next to what it covers, `foo.test.ts` beside `foo.ts`, with explicit imports from `'vitest'` (no `globals: true`). Helpers shared by several tests live apart from the app, in the top-level `test/` folder, so they can never pass for application code; it is excluded from the build, and coverage only reads `app/`. `test/discord-interaction.ts` fakes the Express response and flattens a Components V2 reply into its text and buttons.
 
 Coverage is densest where the rules are: `app/idle/core/` is pure logic with no I/O, Discord or AI, so a test there inherits the layering rules for free. It is thinnest on what only a live external service would exercise, such as `app/llm/tools/weather.ts` or the gateway wiring in `app/discord/setup.ts`. Run `npm run coverage` for the file-by-file numbers rather than trusting a list written anywhere.
 

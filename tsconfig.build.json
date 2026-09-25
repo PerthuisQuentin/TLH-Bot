@@ -9,14 +9,9 @@
     },
     // `exclude` replaces the parent's rather than merging, so it is repeated here.
     // scripts/ are dev tools run through tsx and must not reach dist/.
+    // test/ holds helpers shared by tests, never imported by the app.
     // *.test.ts files are co-located with the source they cover and must not reach dist/ either.
     // vitest.config.ts is tooling: `npm test` reads the source, so its build output was
     // only ever dead weight shipped to production.
-    "exclude": [
-        "node_modules",
-        "dist",
-        "scripts",
-        "**/*.test.ts",
-        "vitest.config.ts"
-    ]
+    "exclude": ["node_modules", "dist", "scripts", "test", "**/*.test.ts", "vitest.config.ts"]
 }

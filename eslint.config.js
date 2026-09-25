@@ -119,7 +119,7 @@ export default tseslint.config(
     // Named exports only. The two root config files are exempt: their tools require a
     // default export.
     {
-        files: ['app/**/*.ts', 'app.ts', 'commands.ts', 'scripts/**/*.ts'],
+        files: ['app/**/*.ts', 'app.ts', 'commands.ts', 'scripts/**/*.ts', 'test/**/*.ts'],
         rules: {
             'no-restricted-syntax': [
                 'error',

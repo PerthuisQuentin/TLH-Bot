@@ -25,12 +25,12 @@ ${profile.upgradeShopLines.join('\n')}`;
 }
 
 /**
- * Omitted while the layer is locked, and said outright when it is not: the model invents a
- * plausible answer from an empty field, and inventing this one spoils the mechanic.
+ * Said outright while the layer is locked: the model invents a plausible answer from an
+ * empty field.
  */
 function reefBlock(profile: ShellsProfile): string {
     if (!profile.coralUnlocked) {
-        return 'Récif : pas encore débloqué pour ce joueur. Ne mentionne ni le corail ni le prestige, il ne les a pas découverts.\n';
+        return 'Récif : pas encore débloqué pour ce joueur, il s’ouvre avec 🌱 Bouture de corail.\n';
     }
     return `Corail : ${profile.coralText}\n${profile.prestigeText}\n${profile.nextPrestigeText}\n`;
 }
