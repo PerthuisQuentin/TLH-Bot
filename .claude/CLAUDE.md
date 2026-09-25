@@ -48,14 +48,14 @@ The four automated checks are `npx tsc --noEmit`, `npm run lint`, `npm run forma
 
 `app.ts` boots **two concurrent runtimes** in one process; knowing which one a code path belongs to is the key to navigating this repo:
 
-| Runtime                   | Entry                                                | Handles                                                                        |
-| ------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Express webhook           | `POST /interactions` → `app/discord/interactions.ts` | slash commands (Discord signs the request; `verifyKeyMiddleware` validates it) |
-| discord.js gateway client | `app/discord/setup.ts` → `app/discord/handlers.ts`   | `messageCreate` / `messageReactionAdd` → shell earning, role promotions        |
+| Runtime                   | Entry                                                | Handles                                                                                             |
+| ------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Express webhook           | `POST /interactions` → `app/discord/interactions.ts` | slash commands and component clicks (Discord signs the request; `verifyKeyMiddleware` validates it) |
+| discord.js gateway client | `app/discord/setup.ts` → `app/discord/handlers.ts`   | `messageCreate` / `messageReactionAdd` → shell earning, role promotions                             |
 
 Plus a key-protected REST API under `/api` (`x-api-key` header), used by an external admin surface, not by Discord.
 
-A slash command is one `{ definition, handler }` object in `app/commands/<name>.ts`, listed in the `commands` array of `app/commands/index.ts`, which drives both dispatch and registration. Handlers receive raw Express `req`/`res` and reply through the helpers in `app/commons/utils.ts`. Details, including the defer boundary: `docs/architecture.md`.
+A slash command is one `{ definition, handler }` object in `app/commands/<name>.ts`, listed in the `commands` array of `app/commands/index.ts`, which drives both dispatch and registration. Handlers receive raw Express `req`/`res` and reply through the helpers in `app/commons/utils.ts`. A command that draws buttons also sets `onComponent`, routed by the `<command>:<action>` prefix of the `custom_id`. Details, including the defer boundary: `docs/architecture.md`.
 
 ### Layering
 
@@ -112,9 +112,10 @@ Providers, tools, the bounded tool loop and the log format: `docs/architecture.m
 - A closed set of string values (kinds, statuses, categories) is a string `enum`, not a string-literal union: see `ChannelActivityType`, `ResourceId`, `UpgradeId` (`app/idle/core/types.ts`), `ChatTriggerKind` (`app/commons/chat-trigger.ts`), `LlmCallKind` (`app/llm/types.ts`).
 - 4-space indent; section headers in longer files use `// ─── Title ───` rules.
 - **Comments are terse.** One line is the norm, a short block only for a formula or an algorithm worth deriving (see `core/passive-income.ts`). A comment carries what the code cannot: why this ordering, why this guard, what the units are. Never restate what the next line already says, never enumerate the branches of the condition below it, and don't add a JSDoc header just because something is exported. Match the existing density in the file.
+- **Interactive components over command options.** A choice made after seeing something (confirm, paginate, sort, pick an item, a quantity) is a button or a select on a Components V2 reply, not an option to retype. Options stay for input the command cannot start without (`/ask question`). New replies are V2 containers; an embed command moves to V2 when it is next reworked. Guidelines: `docs/architecture.md`, Buttons and other components.
 - **All user-facing strings are French** (embeds, error replies, command descriptions and options). Code, comments and identifiers are English.
 - Money-like values (thresholds in `config.json`, shells in game files) are JSON **strings**, parsed with `bnFromJSON` (which also accepts legacy numbers).
-- Tests sit next to what they cover, `foo.test.ts` beside `foo.ts`, with explicit imports from `'vitest'`.
+- Tests sit next to what they cover, `foo.test.ts` beside `foo.ts`, with explicit imports from `'vitest'`. Helpers shared between tests live in the top-level `test/`, never in `app/`.
 - **Commits use gitmoji**: `:emoji: Imperative summary` in English, one commit per branch, never on `main`. PRs are squash-merged and GitHub appends `(#NN)`. Steps: the `workflow` skill.
 
 ## Documentation

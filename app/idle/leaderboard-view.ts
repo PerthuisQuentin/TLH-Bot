@@ -9,7 +9,7 @@ function formatLeaderboardEntry(entry: LeaderboardEntry, sort: LeaderboardSort):
     return `#${entry.rank} <@${entry.userId}> — ${formatBigNum(entry.maxShells)} 🐚 *(${formatBigNum(entry.shells)} · +${formatBigNum(entry.shellsPerMessage)}/msg)*`;
 }
 
-/** Falls back to `MAX` for anything but a recognized sort value — same rule for `/leaderboard`'s option and the LLM tool's free-text arg. */
+/** Falls back to `MAX` for anything but a recognized sort value — same rule for a `/leaderboard` custom_id and the LLM tool's free-text arg. */
 export function parseLeaderboardSort(value: string | undefined): LeaderboardSort {
     return (Object.values(LeaderboardSort) as string[]).includes(value ?? '')
         ? (value as LeaderboardSort)
@@ -22,9 +22,9 @@ export function parseLeaderboardPage(value: number | undefined): number {
 }
 
 /**
- * One page of the Coquillages leaderboard, shared by the `/leaderboard` embed and the
+ * One page of the Coquillages leaderboard, shared by the `/leaderboard` panel and the
  * `get_leaderboard` LLM tool so neither re-derives the other's text — only how it's
- * wrapped (embed vs. a flowing text block) differs.
+ * wrapped (a V2 container vs. a flowing text block) differs.
  */
 export type LeaderboardView = {
     isEmpty: boolean;

@@ -4,6 +4,8 @@ import {
     MessageComponentTypes,
 } from 'discord-interactions';
 import type { Response as ExpressResponse } from 'express';
+import { MessageFlags } from 'discord-api-types/v10';
+import type { APIMessageTopLevelComponent } from 'discord-api-types/v10';
 
 type DiscordRequestOptions = {
     method: string;
@@ -142,6 +144,43 @@ export function replyEmbed(
     });
 }
 
+/** A Components V2 reply: the flag rules out `content` and `embeds` on this message for good. */
+export function replyComponents(
+    res: ExpressResponse,
+    components: APIMessageTopLevelComponent[],
+    options: { ephemeral?: boolean; suppressMentions?: boolean } = {},
+): void {
+    res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+            components,
+            flags:
+                InteractionResponseFlags.IS_COMPONENTS_V2 |
+                (options.ephemeral ? InteractionResponseFlags.EPHEMERAL : 0),
+            ...(options.suppressMentions ? { allowed_mentions: { parse: [] } } : {}),
+        },
+    });
+}
+
+/**
+ * Answers a component click by rewriting the message it sits on. That message is V2, and a
+ * V2 message can only be rewritten as V2. Ephemerality carries over on its own.
+ */
+export function updateComponents(
+    res: ExpressResponse,
+    components: APIMessageTopLevelComponent[],
+    options: { suppressMentions?: boolean } = {},
+): void {
+    res.send({
+        type: InteractionResponseType.UPDATE_MESSAGE,
+        data: {
+            components,
+            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+            ...(options.suppressMentions ? { allowed_mentions: { parse: [] } } : {}),
+        },
+    });
+}
+
 /**
  * Buys 15 minutes, and splits the handler in two: past this call the reply helpers above
  * are useless, the only way back to the user being `updateInteractionResponse` — and
@@ -155,6 +194,31 @@ export function replyDeferred(res: ExpressResponse): void {
 }
 
 // ─── Interaction option helpers ───────────────────────────────────────────────
+
+/** `<command>:<action>`: the prefix routes a click back to the command that drew the button. */
+export function componentCustomId(commandName: string, action: string): string {
+    return `${commandName}:${action}`;
+}
+
+/**
+ * Who posted the public message a click landed on, or undefined when the message is
+ * ephemeral. A shared panel keeps naming its sharer when someone refreshes or pages it.
+ */
+export function sharedByOf(body: {
+    message?: { flags?: number; interaction_metadata?: { user?: { id: string } } };
+}): string | undefined {
+    const message = body.message;
+    if (!message || (message.flags ?? 0) & MessageFlags.Ephemeral) return undefined;
+    return message.interaction_metadata?.user?.id;
+}
+
+export function parseComponentCustomId(
+    customId: string,
+): { commandName: string; action: string } | undefined {
+    const separator = customId.indexOf(':');
+    if (separator <= 0 || separator === customId.length - 1) return undefined;
+    return { commandName: customId.slice(0, separator), action: customId.slice(separator + 1) };
+}
 
 type DiscordOption = {
     name: string;

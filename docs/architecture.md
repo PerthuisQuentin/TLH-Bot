@@ -6,7 +6,7 @@
 
 | Runtime            | Entry point                                          | Handles                                                                                                             |
 | ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Express webhook    | `POST /interactions` → `app/discord/interactions.ts` | Slash commands. Discord signs the request; `verifyKeyMiddleware` validates the signature.                           |
+| Express webhook    | `POST /interactions` → `app/discord/interactions.ts` | Slash commands and component clicks. Discord signs the request; `verifyKeyMiddleware` validates the signature.      |
 | discord.js gateway | `app/discord/setup.ts` → `app/discord/handlers.ts`   | `messageCreate` and `messageReactionAdd` → shell earning, role promotions, jackpot announcements, spontaneous chat. |
 
 A third surface sits alongside them: a key-protected REST API under `/api` (`x-api-key` header) exposing per-guild data files, guild roles and message deletion. It is used by an external admin tool, not by Discord.
@@ -61,9 +61,26 @@ The seam between Discord and the game lives in exactly two files. `app/discord/h
 
 A command is one object exported from `app/commands/<name>.ts` and listed in the `commands` array in `app/commands/index.ts`. That single array drives both dispatch (`interactions.ts` matches on `definition.name`) and registration (`commands.ts` → `npm run register`).
 
-Handlers receive raw Express `req`/`res`, not discord.js interaction objects, and reply through the helpers in `app/commons/utils.ts`: `replyText`, `replyEmbed`, `replyDeferred`, `getOption`, `isPublicOption`, `requireGuild`. A command that defers answers later through `updateInteractionResponse`, the project's one Components V2 path — that flag makes `content` and `embeds` unusable, so it stays separate from the reply helpers. `updateInteractionResponseOrLog` is the same edit for a handler's own error path, where rethrowing would have nowhere to go — see [Error handling](#error-handling).
+Handlers receive raw Express `req`/`res`, not discord.js interaction objects, and reply through the helpers in `app/commons/utils.ts`: `replyText`, `replyEmbed`, `replyDeferred`, `getOption`, `isPublicOption`, `requireGuild`. `replyComponents` sends a Components V2 message instead; that flag makes `content` and `embeds` unusable on the message for good, so a V2 reply is never mixed with the embed helpers. A command that defers answers later through `updateInteractionResponse`, also V2. `updateInteractionResponseOrLog` is the same edit for a handler's own error path, where rethrowing would have nowhere to go — see [Error handling](#error-handling).
 
 Re-run `npm run register` after any change to a command's `definition`.
+
+### Buttons and other components
+
+**Prefer them to command options.** An option has to be known and typed before the command runs; a component is offered once the player can see what it acts on. So:
+
+- **A component** for anything decided after reading the reply: confirming a destructive action, paging, sorting, picking an item from a list, choosing a quantity, sharing an ephemeral reply publicly. `/prestige` used to take `confirmer:true`; it now previews and offers a button.
+- **An option** for input the command cannot start without, typed at invocation: the question of `/ask`. When a command has both, the option opens it and the components drive it from there.
+- **Replies are Components V2 containers** (`Container` with an accent colour, `TextDisplay` with markdown headings, `Separator`, action rows), built with the helpers of `app/commons/components.ts` (`container`, `text`, `separator`, `actionRow`, `button`). Each command keeps its own layout; only the literal shapes are shared. There are no embed fields or footer: `### ` headings and a `-# ` line stand in for them. A command still on embeds moves to V2 when it is next reworked, not in passing.
+- **Stay under the message limits** ([Discord's component reference](https://docs.discord.com/developers/components/reference)): **40 components in total** per V2 message, an action row holding up to 5 buttons or a single select, a section 1 to 3 text displays plus one accessory, a button label 80 characters, a `custom_id` 100. The reference does not say whether nested components count toward the 40, so count them all: a container, its rows and their buttons. It states no cap on the text of a Text Display. A row of buttons per list item runs out fast: put one button in a `Section` accessory and move the rarer choices to a select.
+
+A command that draws interactive components also sets `onComponent(req, res, action)`. Each component's `custom_id` is `<command>:<action>`, built with `componentCustomId`: `interactions.ts` routes a `MESSAGE_COMPONENT` interaction to the command named by the prefix and hands it the action, and answers 400 to a `custom_id` it cannot route, like an unknown command. The command answers 400 itself to an action it never drew.
+
+A click usually answers with `updateComponents`, which rewrites the message the component sits on (`UPDATE_MESSAGE`) rather than posting a new one. A click is a fresh interaction with its own 3-second deadline and token, so buttons keep working long after the 15 minutes of the original one. The handler must re-check the state at click time: the message is a snapshot, and the same button can be clicked twice. `/prestige` is the reference implementation.
+
+**Sharing** replaces a `public` option. A private panel closes with `shareFooter`, whose Share button posts the panel again as a new public message (`replyComponents` without `ephemeral`), recomputed at click time and naming the sharer instead of carrying the button. Each command decides what the public copy keeps. `/leaderboard` shares a read-only snapshot with no components at all; `/heat` keeps its refresh, and a later click on it reads who shared it with `sharedByOf`, so the name survives the refresh.
+
+Handling a click needs no `npm run register`: only command definitions are registered.
 
 ---
 

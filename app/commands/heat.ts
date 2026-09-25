@@ -1,99 +1,127 @@
 import type { Request, Response } from 'express';
 import { getChannelHeatSnapshot } from '../idle/core/heat/channel-activity.ts';
 import {
-    ApplicationCommandOptionType,
     ApplicationCommandType,
     ApplicationIntegrationType,
     InteractionContextType,
 } from 'discord-api-types/v10';
+import type { APIMessageTopLevelComponent } from 'discord-api-types/v10';
 import type { Command } from './types.ts';
-import { isPublicOption, replyEmbed, replyText } from '../commons/utils.ts';
+import {
+    actionRow,
+    button,
+    container,
+    separator,
+    shareFooter,
+    text,
+} from '../commons/components.ts';
+import {
+    componentCustomId,
+    replyComponents,
+    replyText,
+    sharedByOf,
+    updateComponents,
+} from '../commons/utils.ts';
 
-const PARAM_PUBLIC = 'public';
+const COMMAND_NAME = 'heat';
+const ACTION_REFRESH = 'refresh';
+const ACTION_SHARE = 'share';
 
 function heatBar(heat: number, maxHeat = 7, length = 12): string {
     const filled = Math.min(length, Math.round((heat / maxHeat) * length));
     return '█'.repeat(filled) + '░'.repeat(length - filled);
 }
 
-type HeatEmbed = {
-    title: string;
-    description: string;
-    color: number;
-    fields?: Array<{ name: string; value: string; inline?: boolean }>;
-};
+function heatColor(multiplier: number): number {
+    if (multiplier >= 2.0) return 0xe74c3c;
+    if (multiplier >= 1.6) return 0xe67e22;
+    if (multiplier >= 1.2) return 0xf1c40f;
+    return 0x2ecc71;
+}
 
-function formatHeatEmbed(channelId: string): HeatEmbed {
+function heatPanel(channelId: string, sharedBy?: string): APIMessageTopLevelComponent[] {
     const { heat, multiplier, contributors } = getChannelHeatSnapshot(channelId);
 
-    const bar = heatBar(heat);
-    const description =
+    const summary =
         contributors.length === 0
             ? '*Aucune activité récente.*'
-            : `\`${bar}\` **${heat.toFixed(2)}** → ×${multiplier.toFixed(1)}`;
+            : `\`${heatBar(heat)}\` **${heat.toFixed(2)}** → ×${multiplier.toFixed(1)}`;
 
-    const embed: HeatEmbed = {
-        title: '🔥 Chaleur du canal',
-        description,
-        color:
-            multiplier >= 2.0
-                ? 0xe74c3c
-                : multiplier >= 1.6
-                  ? 0xe67e22
-                  : multiplier >= 1.2
-                    ? 0xf1c40f
-                    : 0x2ecc71,
-    };
+    const total = contributors.reduce((sum, c) => sum + c.contribution, 0);
+    const contributorLines = contributors.map((c) => {
+        const pct = Math.round((c.contribution / total) * 100);
+        return `• <@${c.userId}> — \`${c.contribution.toFixed(2)}\` — ${pct}%`;
+    });
 
-    if (contributors.length > 0) {
-        const total = contributors.reduce((sum, c) => sum + c.contribution, 0);
-        embed.fields = [
-            {
-                name: 'Participants actifs',
-                value: contributors
-                    .map((c) => {
-                        const pct = Math.round((c.contribution / total) * 100);
-                        return `• <@${c.userId}> — \`${c.contribution.toFixed(2)}\` — ${pct}%`;
-                    })
-                    .join('\n'),
-            },
-        ];
-    }
+    return [
+        container(
+            heatColor(multiplier),
+            text(`## 🔥 Chaleur du canal\n${summary}`),
+            ...(contributorLines.length > 0
+                ? [text(`### Participants actifs\n${contributorLines.join('\n')}`)]
+                : []),
+            separator(),
+            shareFooter(`Mis à jour <t:${Math.floor(Date.now() / 1000)}:R>`, {
+                sharedBy,
+                shareId: componentCustomId(COMMAND_NAME, ACTION_SHARE),
+            }),
+            actionRow(button('🔄 Rafraîchir', componentCustomId(COMMAND_NAME, ACTION_REFRESH))),
+        ),
+    ];
+}
 
-    return embed;
+function channelIdOf(req: Request, res: Response): string | undefined {
+    const channelId = (req.body as { channel_id?: string }).channel_id;
+    if (!channelId) replyText(res, 'Impossible de déterminer le canal.', { ephemeral: true });
+    return channelId;
 }
 
 async function handleHeatCommand(req: Request, res: Response): Promise<void> {
-    const body = req.body as {
-        channel_id?: string;
-        data?: { options?: Array<{ name: string; value: unknown }> };
-    };
-    const channelId = body.channel_id;
-    const isPublic = isPublicOption(body.data?.options);
+    const channelId = channelIdOf(req, res);
+    if (!channelId) return;
 
-    if (!channelId) {
-        replyText(res, 'Impossible de déterminer le canal.', { ephemeral: true });
+    // An embed never pinged the contributors it listed; V2 text would, hence the suppression.
+    replyComponents(res, heatPanel(channelId), { ephemeral: true, suppressMentions: true });
+}
+
+/** Anyone may refresh, public message included: heat belongs to the channel, not to a player. */
+async function handleHeatComponent(req: Request, res: Response, action: string): Promise<void> {
+    if (action !== ACTION_REFRESH && action !== ACTION_SHARE) {
+        console.error(`unknown heat action: ${action}`);
+        res.status(400).json({ error: 'unknown component' });
         return;
     }
 
-    replyEmbed(res, formatHeatEmbed(channelId), { ephemeral: !isPublic });
+    const channelId = channelIdOf(req, res);
+    if (!channelId) return;
+
+    const body = req.body as {
+        member?: { user?: { id: string } };
+        user?: { id: string };
+        message?: { flags?: number; interaction_metadata?: { user?: { id: string } } };
+    };
+
+    if (action === ACTION_SHARE) {
+        const sharerId = body.member?.user?.id ?? body.user?.id;
+        if (!sharerId) {
+            replyText(res, 'Impossible de déterminer l’utilisateur.', { ephemeral: true });
+            return;
+        }
+        replyComponents(res, heatPanel(channelId, sharerId), { suppressMentions: true });
+        return;
+    }
+
+    updateComponents(res, heatPanel(channelId, sharedByOf(body)), { suppressMentions: true });
 }
 
 export const heatCommand: Command = {
     definition: {
-        name: 'heat',
+        name: COMMAND_NAME,
         description: 'Affiche la chaleur de la conversation en cours et les participants actifs.',
         type: ApplicationCommandType.ChatInput,
         integration_types: [ApplicationIntegrationType.GuildInstall],
         contexts: [InteractionContextType.Guild],
-        options: [
-            {
-                name: PARAM_PUBLIC,
-                description: 'Rendre la réponse visible par tous (par défaut : privée)',
-                type: ApplicationCommandOptionType.Boolean,
-                required: false,
-            },
-        ],
     },
     handler: handleHeatCommand,
+    onComponent: handleHeatComponent,
 };

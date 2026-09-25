@@ -225,7 +225,7 @@ Buying `k` levels sums `cost(n) … cost(n+k−1)` in a loop. There is no closed
 | cost     | `CORAL_DIVISOR / 10`, today 100K 🐚 |
 | maxLevel | 1                                   |
 
-A one-shot purchase, sold for shells on the `Trésors` page, that opens the whole coral half of the game. Until it is bought, `GameInstance.coralUnlocked` is false and **coral does not exist as far as the player can see**: `/shop page:Corail` shows a sealed door instead of its upgrades, `/shells` drops its Récif field and omits the coral upgrades from both upgrade lists, `/prestige` declines pointing at the shop, and the AI is told not to mention any of it.
+A one-shot purchase, sold for shells on the `Trésors` page, that opens the whole coral half of the game. Until it is bought, `GameInstance.coralUnlocked` is false and **coral does not exist as far as the player can see**: `/shop page:Corail` shows a sealed door instead of its upgrades, `/shells` drops its Récif field and omits the coral upgrades from both upgrade lists, and `/prestige` declines pointing at the shop. The AI is not kept from talking about it: since a prestige can be shared in a channel, members meet the mechanic before unlocking it, and the AI only tells them the seedling opens it.
 
 Its price is derived from `CORAL_DIVISOR`, not written down: the door is always a tenth of the way to the room, so rebalancing the prestige threshold moves both together. Both land on round figures — 100K to open it, 1M of run peak for the first coral — because these are the two numbers a player quotes back at you.
 
@@ -295,7 +295,7 @@ The walk stops at `MAX_LEVELS_PER_PURCHASE` (1000), which also bounds a single p
 
 ## Prestige
 
-Trades the current run for **coral**, the permanent currency spent on the upgrades above. Run with `/prestige`, previewed by default and performed with `confirmer:true`.
+Trades the current run for **coral**, the permanent currency spent on the upgrades above. Run with `/prestige`, which previews the trade and performs it on a confirmation button.
 
 ```
 coral = floor(coralMultiplier × (runMaxShells / CORAL_DIVISOR) ^ CORAL_EXPONENT)
