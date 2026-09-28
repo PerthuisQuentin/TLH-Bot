@@ -2,7 +2,7 @@
  * Idle progression simulation.
  *
  *   tsx scripts/simulate-idle.ts [--days=365] [--messages-per-day=200]
- *                               [--start-shells=0] [--strategy=cheapest]
+ *                               [--start-shells=0] [--strategy=cheapest|best-payback|best-affordable-payback]
  *                               [--delay=0] [--every=0]
  *
  * The time unit is a day, and the only input is an effective message count per day. Growth
@@ -27,14 +27,8 @@ import {
     formatBigNum,
     type BigNum,
 } from '../app/idle/core/big-number.ts';
-import {
-    numberArg,
-    playMessages,
-    projectedIncome,
-    table,
-    tryBuy,
-    type PurchaseStrategy,
-} from './sim-common.ts';
+import { numberArg, playMessages, table, tryBuy, strategyArg } from './sim-common.ts';
+import { PurchaseStrategy } from '../app/idle/core/purchase-planner.ts';
 
 type SimulationConfig = {
     days: number;
@@ -49,7 +43,7 @@ const DEFAULT_CONFIG: SimulationConfig = {
     days: 365,
     messagesPerDay: 200,
     startingShells: 0,
-    strategy: 'cheapest',
+    strategy: PurchaseStrategy.CHEAPEST,
     delayMs: 0,
     every: 0,
 };
@@ -90,10 +84,8 @@ function parseArgs(argv: string[]): SimulationConfig {
             continue;
         }
 
-        if (arg.startsWith('--strategy=')) {
-            const value = arg.slice('--strategy='.length).trim().toLowerCase();
-            if (value === 'cheapest' || value === 'best-payback') config.strategy = value;
-        }
+        const strategy = strategyArg(arg);
+        if (strategy !== null) config.strategy = strategy;
     }
 
     return config;
@@ -141,6 +133,7 @@ async function run(
         stats: { maxShells: String(config.startingShells) },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
+        autoBuyEnabled: true,
         upgrades: {},
     });
 
@@ -197,7 +190,7 @@ function printUpgrades(instance: GameInstance): void {
     const rows = ALL_UPGRADE_IDS.map((id) => {
         const upgrade = instance.upgrades[id];
         const cost = bnCeil(upgrade.getCost());
-        const delta = bnSub(projectedIncome(instance, id), income);
+        const delta = bnSub(instance.projectShellsIncome(id), income);
         return [
             `${upgrade.emoji} ${upgrade.name}`,
             String(upgrade.level),

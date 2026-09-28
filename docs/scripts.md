@@ -6,16 +6,17 @@ They are typechecked all the same: `tsconfig.json` includes them, `tsconfig.buil
 
 Everything here reads the game rules from `app/idle/core/`, so a new upgrade or a rebalanced curve shows up in these tools with no edit.
 
-`sim-common.ts` is not a tool: it holds what the simulations and the sandbox share, the CLI number parsing, the table renderer and the auto-buy strategies. It is there so the purchase logic exists once.
+`sim-common.ts` is not a tool: it holds what the simulations and the sandbox share, the CLI parsing, the table renderer and the naive player. Which level to buy next is not decided there but by the game's own purchase planner, `app/idle/core/purchase-planner.ts`, so the simulations and the in-game auto-buy rank purchases the same way.
 
-| Script                 | Purpose                                                               | State                                    |
-| ---------------------- | --------------------------------------------------------------------- | ---------------------------------------- |
-| `analyze-upgrade.ts`   | Level-by-level cost / gain / payback table for one upgrade.           | Ready.                                   |
-| `simulate-heat.ts`     | Replays heat scenarios against the real decay constants.              | Ready.                                   |
-| `simulate-idle.ts`     | Simulates the progression curve over days.                            | Ready.                                   |
-| `simulate-prestige.ts` | Simulates the prestige loop: coral, run lengths, coral upgrades.      | Ready. Drives the shipped curves.        |
-| `sandbox.ts`           | Plays the idle game interactively on a compressed clock.              | Ready. `npm run sandbox`.                |
-| `check-core-purity.ts` | Fails if `app/idle/core/` depends on a package outside its allowlist. | Ready. Run through `npm run check:core`. |
+| Script                 | Purpose                                                                                                            | State                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `analyze-upgrade.ts`   | Level-by-level cost / gain / payback table for one upgrade.                                                        | Ready.                                   |
+| `simulate-heat.ts`     | Replays heat scenarios against the real decay constants.                                                           | Ready.                                   |
+| `simulate-idle.ts`     | Simulates the progression curve over days.                                                                         | Ready.                                   |
+| `simulate-prestige.ts` | Simulates the prestige loop: coral, run lengths, coral upgrades.                                                   | Ready. Drives the shipped curves.        |
+| `sandbox.ts`           | Plays the idle game interactively on a compressed clock.                                                           | Ready. `npm run sandbox`.                |
+| `check-core-purity.ts` | Fails if `app/idle/core/` depends on a package outside its allowlist.                                              | Ready. Run through `npm run check:core`. |
+| `add-auto-buy-flag.ts` | One-shot: adds `autoBuyEnabled: true` to every stored player. Dry run by default, `--apply` to write, bot stopped. | One-shot, delete once run everywhere.    |
 
 ---
 
@@ -78,14 +79,14 @@ tsx scripts/simulate-idle.ts --strategy=best-payback
 tsx scripts/simulate-idle.ts --days=30 --delay=200              # live screen
 ```
 
-| Option                   | Default    | Description                                                                                                                                    |
-| ------------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--days=<n>`             | 365        | Days to simulate.                                                                                                                              |
-| `--messages-per-day=<n>` | 200        | **Effective** message count per day — see below.                                                                                               |
-| `--start-shells=<n>`     | 0          | Starting capital, credited exactly.                                                                                                            |
-| `--strategy=<mode>`      | `cheapest` | `cheapest` buys the cheapest affordable level; `best-payback` waits for the level that amortises fastest rather than settling for a worse one. |
-| `--delay=<ms>`           | 0          | `0` prints a progression table. Above 0, refreshes a live screen once per simulated day.                                                       |
-| `--every=<n>`            | auto       | Sample one table row every N days. Defaults to about 25 rows.                                                                                  |
+| Option                   | Default    | Description                                                                                                                                                                                                                             |
+| ------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--days=<n>`             | 365        | Days to simulate.                                                                                                                                                                                                                       |
+| `--messages-per-day=<n>` | 200        | **Effective** message count per day — see below.                                                                                                                                                                                        |
+| `--start-shells=<n>`     | 0          | Starting capital, credited exactly.                                                                                                                                                                                                     |
+| `--strategy=<mode>`      | `cheapest` | `cheapest` buys the cheapest affordable level; `best-payback` waits for the level that amortises fastest rather than settling for a worse one; `best-affordable-payback` takes the fastest-amortising level the balance already covers. |
+| `--delay=<ms>`           | 0          | `0` prints a progression table. Above 0, refreshes a live screen once per simulated day.                                                                                                                                                |
+| `--every=<n>`            | auto       | Sample one table row every N days. Defaults to about 25 rows.                                                                                                                                                                           |
 
 ### The one input that matters
 
@@ -113,16 +114,18 @@ tsx scripts/simulate-prestige.ts --prestige-ratio=1       # prestiges as soon as
 tsx scripts/simulate-prestige.ts --days=120 --messages-per-day=2000
 ```
 
-| Option                   | Default    | Description                                                                                |
-| ------------------------ | ---------- | ------------------------------------------------------------------------------------------ |
-| `--days=<n>`             | 365        | Days to simulate.                                                                          |
-| `--messages-per-day=<n>` | 200        | Effective message count per day, same meaning as in `simulate-idle.ts`.                    |
-| `--strategy=<mode>`      | `cheapest` | How the shell tree is bought, `cheapest` or `best-payback`.                                |
-| `--prestige-ratio=<n>`   | 2          | How many times the lifetime coral a run must be worth before the player pulls the trigger. |
+| Option                   | Default    | Description                                                                                                                |
+| ------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `--days=<n>`             | 365        | Days to simulate.                                                                                                          |
+| `--messages-per-day=<n>` | 200        | Effective message count per day, same meaning as in `simulate-idle.ts`.                                                    |
+| `--strategy=<mode>`      | `cheapest` | How the shell tree is bought, one of the `simulate-idle.ts` strategies.                                                    |
+| `--prestige-ratio=<n>`   | 2          | How many times the lifetime coral a run must be worth before the player pulls the trigger.                                 |
+| `--sessions=<n>`         | 1          | Slices of the day's messages. The Pieuvre intendante buys after each slice, the player by hand once at the end of the day. |
+| `--no-octopus`           | off        | A player who never buys the Pieuvre intendante: the baseline its price is measured against.                                |
 
 There are no curve options. The coral formula, both coral upgrades and what a reset does are read from `app/idle/core/`, and the script drives a real `GameInstance` through `applyShellsGain`, `buyUpgrade` and `prestige`. Rebalancing means editing the core and re-running this, exactly as with `simulate-idle.ts`.
 
-What the script still owns is the part the game has no opinion on: **when a player chooses to prestige**, which is `--prestige-ratio`, and the naive cheapest-first buying that stands in for a player. A one-shot unlock (`CUSTOM`) is bought first, in shells or coral, as soon as it is on sale and affordable: the seedling, then the Coquille millénaire.
+What the script still owns is the part the game has no opinion on: **when a player chooses to prestige**, which is `--prestige-ratio`, and the naive cheapest-first buying that stands in for a player. An unlock (`CUSTOM`) is bought first, in shells or coral, as soon as it is on sale and affordable: the seedling, the Coquille millénaire and the Pieuvre intendante's levels.
 
 One ordering the simulation inherits from the real code: coral is spent **after** the reset, so a level bought now only pays from the next run on. That is what a player gets, since they prestige first and walk into the shop after.
 
@@ -169,6 +172,8 @@ tsx scripts/sandbox.ts --frames=40               # render without a terminal, fo
 | `space` | Pause the clock.                                     |
 | `r`     | Start over at day 0.                                 |
 | `q`     | Quit, restoring the terminal.                        |
+
+Once bought, the 🐙 Pieuvre intendante buys after every batch of messages, as in the earn pipeline, whether the `a` auto-buyer is on or not.
 
 **The clock is virtual.** A tick advances the day counter by `speed × 0.1`, and the messages
 that many days are worth are paid through `playMessages`, like the simulations: one growth ring

@@ -42,9 +42,12 @@ Asks the AI a question, with the channel's recent conversation, the guild memory
 4. Calls the configured AI backend (`AI_PROVIDER`) with the tool declarations from `app/llm/tools/`, looping while the model returns tool calls, bounded by `MAX_TOOL_ROUNDS`. The last round is sent with the tools disarmed, so a model that will not converge still produces an answer rather than running until the interaction expires.
 5. Splits the response on the `### [MÉMOIRE]` marker, matched loosely (see `docs/storage.md`): the first half is posted, the second is persisted silently.
 
-| Tool          | Triggered by       | Action                      |
-| ------------- | ------------------ | --------------------------- |
-| `get_weather` | A weather question | Calls World Weather Online. |
+| Tool                  | Triggered by                         | Action                                                           |
+| --------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| `get_weather`         | A weather question                   | Calls World Weather Online.                                      |
+| `get_shells_profile`  | A question about one member's shells | Same data as `/shells`, plus the shop prices of their upgrades.  |
+| `get_leaderboard`     | A question about the ranking         | Same data as `/leaderboard`, with an optional member line added. |
+| `get_role_thresholds` | A question about roles in general    | Lists the role thresholds, read against `maxShells`.             |
 
 The rendering of the conversation to text happens in `app/commons/prompts.ts`, not in the command. Members are identified by Discord ID; a globally unique handle is added only when two different IDs share a display name in the same conversation.
 
@@ -75,18 +78,19 @@ A member's shells profile. No options: it always opens on your own, and the pane
 The header names the member beside their avatar: the server one if they set it, else their account one, else the default Discord gives an account without one. Then the blocks:
 
 - **Rôles** — leaderboard rank, current role, next role and the shells still missing.
-- **Coquillages** — balance, gain per message (±10 %, growth rings included), gain per reaction, current growth rings (_Stries de croissance_) and their multiplier.
+- **Coquillages** — balance, gain per message (±10 %, growth rings included), gain per reaction, current growth rings (_Stries de croissance_) and their multiplier. Once the 🐙 Pieuvre intendante has a level, a last line gives its switch and what it manages.
 - **Récif** — coral balance, prestige count and what `/prestige` would pay. **Absent entirely** until 🌱 Bouture de corail is bought: an empty heading would announce the mechanic as loudly as its contents.
-- **Upgrades** — one line per upgrade with its level and current effect. The coral ones are omitted while the layer is locked, and **one-shot unlocks never appear at all**, bought or not: their level is a yes/no, and a "Niv. 0" among levelled upgrades reads as one the player is behind on. `/shop` is where they are sold, and the assistant still prices them from `upgradeShopLines`.
+- **Upgrades** — one line per upgrade with its level and current effect. The coral ones are omitted while the layer is locked, and **one-shot unlocks never appear at all**, bought or not: their level is a yes/no, and a "Niv. 0" among levelled upgrades reads as one the player is behind on. A levelled upgrade with a cap, the 🐙 Pieuvre intendante, leaves the list once maxed. `/shop` is where they are sold, and the assistant still prices them from `upgradeShopLines`.
 
 The small line closing the panel gives when the profile was computed, preceded by the all-time maximum only when it differs from the balance, and carries **📢 Partager**, which posts a read-only snapshot like `/leaderboard`'s. Under it:
 
 - **🔄 Rafraîchir** recomputes the profile shown, in place. Balances move with every message.
 - **🏪 Boutique**, on your own profile, opens the shop on the Coquillages aisle in a new private message.
 - **🪸 Prestige**, on your own profile once the reef is open, opens the `/prestige` preview in a new private message, leaving the profile where it is.
+- **🐙 Couper / Activer l’automatisation**, on your own profile once the Pieuvre intendante has a level, flips your auto-buy switch and redraws the profile in place. The change is flushed to disk first, since the redraw tells you it happened. A click on someone else's profile, from a forged id, is refused, and so is one without the Pieuvre, in words that name nothing behind the seedling.
 - **👤 Voir le profil de…**, the select above.
 
-A click brings no avatar, so Refresh and Share carry the profile they act on in their `custom_id`, as `<userId>:<avatar ref>`: one letter for the source, then the hash (`app/discord/avatars.ts`). A member who changes avatar in between shows the old one until the next `/shells` or pick in the select, which read it afresh. Fetching it from the API on each click was the alternative, rejected for the latency it adds inside Discord's 3 seconds and the failure path it opens.
+A click brings no avatar, so Refresh, Share and the automation switch carry the profile they act on in their `custom_id`, as `<userId>:<avatar ref>`: one letter for the source, then the hash (`app/discord/avatars.ts`). A member who changes avatar in between shows the old one until the next `/shells` or pick in the select, which read it afresh. Fetching it from the API on each click was the alternative, rejected for the latency it adds inside Discord's 3 seconds and the failure path it opens.
 
 Roles are read from `maxShells`, so the "current role" never regresses after a shop purchase.
 
@@ -103,7 +107,7 @@ It opens on the `Coquillages` aisle. The panel reads top to bottom:
 - **One block per upgrade**: its level, description and gain now → next level, then its buy buttons.
 - **Aisle row**: one button per aisle with something on sale, the current one greyed out, and 🔄 to recompute prices after earning.
 
-**Buying** is a click on `×1`, `×10` or `Max`, each labelled with its price. `×1` and `×10` buy exactly that many and are greyed out when the balance does not cover them, rather than silently buying fewer. `Max` buys as many levels as the balance covers **at click time**, which can beat the count on its label if the balance grew in between. A one-shot unlock has a single `Acheter` button. The click rewrites the shop in place: new balances and prices, and the banner.
+**Buying** is a click on `×1`, `×10` or `Max`, each labelled with its price. `×1` and `×10` buy exactly that many and are greyed out when the balance does not cover them, rather than silently buying fewer. `×10` is left out when fewer than ten levels remain, as on the Pieuvre intendante's three: its price would add up levels past the cap. `Max` buys as many levels as the balance covers **at click time**, which can beat the count on its label if the balance grew in between. A one-shot unlock has a single `Acheter` button. The click rewrites the shop in place: new balances and prices, and the banner.
 
 | Outcome                             | Banner                                                         |
 | ----------------------------------- | -------------------------------------------------------------- |
@@ -115,7 +119,7 @@ It opens on the `Coquillages` aisle. The panel reads top to bottom:
 
 The check and the debit run inside a single synchronous mutator, so a shell gain landing mid-purchase cannot let the check pass and the debit fail; `Max` is resolved there too. The purchase is flushed to disk before the shop is redrawn, since the player is told it happened. Prices are rounded up once, where they are both displayed and charged, so the price shown is the price paid. `GameInstance.buyUpgrade` still throws a `RangeError` below 1 or above `MAX_LEVELS_PER_PURCHASE` (1000 levels); the buttons only ever send 1, 10 or a count the balance covers.
 
-**Aisles** are declared by each upgrade (`shopPage`) and derived from the registry: `Coquillages` holds the three otter upgrades, `Trésors` the one-shot unlocks whatever they cost (🌱 Bouture de corail, priced in shells), `Corail` the two permanent ones. Their names live in `app/idle/core/shop-pages.ts`, so `/prestige` can point at the right one.
+**Aisles** are declared by each upgrade (`shopPage`) and derived from the registry: `Coquillages` holds the three otter upgrades, `Trésors` the unlocks whatever they cost (🌱 Bouture de corail priced in shells, 🌀 Coquille millénaire and 🐙 Pieuvre intendante in coral), `Corail` the two permanent ones. Their names live in `app/idle/core/shop-pages.ts`, so `/prestige` can point at the right one.
 
 **What is on sale is the upgrade's call, not the shop's.** An aisle lists the upgrades the player may see: unlocked (its `unlockCondition`, see [shells.md](./shells.md#adding-an-upgrade)) and not maxed. A one-shot the player already owns therefore leaves the aisle entirely. An aisle with nothing on sale gets no button, so the `Corail` one only appears once the seedling is bought, and `Trésors` disappears once it is empty; if the player is already on it, it stays, saying there is nothing to sell. Asking for the coral aisle while it is locked, from a stale button or a shortcut, lands on the default aisle instead, and so does the redraw after a refused coral purchase: the aisle's title and its 🪸 never show to a locked player.
 
@@ -124,38 +128,6 @@ The check and the debit run inside a single synchronous mutator, so a shell gain
 **The component budget.** A Discord message holds 40 components. Each upgrade costs 5 (a text, a row, three buttons; 3 for a one-shot) and the frame about 7, so an aisle tops out around six or seven upgrades. The `add-upgrade` skill says so.
 
 The options `upgrade`, `page` and `quantity` are gone: a choice made after seeing the prices is a button, and the shortcuts cover opening an aisle directly. So is the sealed door the coral page used to show, which no button leads to any more.
-
----------- | ----------- | -------- | --------------------------------------------- |
-| `upgrade` | Choice | No | Which upgrade to buy. Omit to browse. |
-| `page` | Choice | No | Which aisle to browse. Default `Coquillages`. |
-| `quantity` | Integer ≥ 1 | No | How many levels. Default 1. |
-
-**Browsing** lists the upgrades of one page with their level, current effect, next-level price, and how many levels the balance covers and for how much.
-
-**Pages** are declared by each upgrade (`shopPage`) and derived from the registry, so a page can mix currencies and one nothing is sold on never opens: `Coquillages` holds the three otter upgrades, `Trésors` the one-shot unlocks whatever they cost (🌱 Bouture de corail, priced in shells), `Corail` the two permanent ones. The page names live in `app/idle/core/shop-pages.ts`, so `/prestige` can point at the right one.
-
-**The `Corail` page is sealed** until that seedling is bought. It replies with a door — no fields, no balance, no 🪸 anywhere — naming the upgrade that opens it. The page choice stays in the command definition either way, since choices are registered globally and cannot vary per player. While sealed, the shells page also stops listing `Corail` under "Autres rayons", and buying a coral upgrade by name is refused without quoting its price.
-
-**What is on sale is the upgrade's call, not the shop's.** A page lists the upgrades the player may see: unlocked (its `unlockCondition`, see [shells.md](./shells.md#adding-an-upgrade)) and not maxed. A one-shot the player already owns therefore leaves the aisle entirely, rather than sitting there with a price `buyUpgrade` would refuse. "Autres rayons" lists only pages with something on sale. Buying a locked upgrade by name is refused before any price is quoted, with the upgrade's own `unlockHint`; buying a maxed one again is refused rather than reported as no funds. The page sets the list and the header, which shows the balance of every currency priced on it, nothing else, and an unknown value falls back to the default rather than erroring. `page` does not restrict `upgrade`: any upgrade can be bought by name from anywhere. A new upgrade lands on the page it declares with no edit to the command; a new page needs a display name in `shop-pages.ts` and a re-register, since the choices change. A page whose upgrades are all bought, like `Trésors` after the seedling, stays a valid choice and says there is nothing to sell.
-
-Pages are an option rather than buttons because `app/discord/interactions.ts` routes only `APPLICATION_COMMAND`; there is no component handling in the project yet.
-
-**Buying** runs the affordability check and the debit inside a single synchronous mutator, so a shell gain landing mid-purchase cannot let the check pass and the debit fail. Four outcomes:
-
-| Outcome                                  | Reply                                                           |
-| ---------------------------------------- | --------------------------------------------------------------- |
-| `quantity` not a positive integer        | Asks for a positive integer.                                    |
-| Cannot afford one level                  | The next-level price and the current balance.                   |
-| `quantity` above what the balance covers | The maximum affordable count.                                   |
-| Bought                                   | Old → new level, total cost, old → new gain, remaining balance. |
-
-The first row is unreachable through Discord, which enforces `min_value: 1` itself; it guards against a malformed payload. `GameInstance.buyUpgrade` throws a `RangeError` on the same condition, since below 1 the cost sum is empty: a 0 would be a free no-op purchase reported as a success, a negative one would refund shells and lower the level. It throws just the same above `MAX_LEVELS_PER_PURCHASE` (1000 levels), so summing a caller-supplied count cannot become a long loop inside the storage mutator; a player never sees it, since anything that large exceeds what the balance covers and gets the third row instead.
-
-The purchase is flushed to disk before the confirmation is sent — the player is told it happened, so it must not ride the 1-second write delay.
-
-Prices are rounded up once, at the point where they are both displayed and charged, so the price shown is exactly the price paid.
-
-The `upgrade` choices are generated from the upgrade registry, so adding an upgrade needs no edit here.
 
 ---
 

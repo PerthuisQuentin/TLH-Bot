@@ -43,7 +43,13 @@ async function writeConfig(guildId: string, config: unknown): Promise<void> {
 
 function gameInstanceFixture(
     userId: string,
-    overrides: Partial<{ shells: string; maxShells: string; otters: number }> = {},
+    overrides: Partial<{
+        shells: string;
+        maxShells: string;
+        otters: number;
+        octopus: number;
+        autoBuyEnabled: boolean;
+    }> = {},
 ) {
     return {
         userId,
@@ -51,7 +57,12 @@ function gameInstanceFixture(
         stats: { maxShells: overrides.maxShells ?? '0' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
-        upgrades: { divingOtters: overrides.otters ?? 0 },
+        autoBuyEnabled: overrides.autoBuyEnabled ?? true,
+        upgrades: {
+            divingOtters: overrides.otters ?? 0,
+            coralSeedling: overrides.octopus ? 1 : 0,
+            stewardOctopus: overrides.octopus ?? 0,
+        },
     };
 }
 
@@ -145,6 +156,63 @@ describe('handleDiscordEvent — jackpot', () => {
         expect(result.jackpot).toBeDefined();
         expect(result.jackpot?.multiplier).toBe(JACKPOT_MULTIPLIER);
         expect(result.jackpot?.amount.gt(0)).toBe(true);
+    });
+});
+
+describe('handleDiscordEvent — auto-buy', () => {
+    // No jackpot, and a gain rolled at the bottom of the variance.
+    beforeEach(() => {
+        vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    });
+
+    it('spends the balance on the automated upgrades after the gain, the peak kept', async () => {
+        const guildId = 'g-auto';
+        await writeGameInstances(guildId, [
+            gameInstanceFixture('u1', { shells: '5000', maxShells: '5000', octopus: 1 }),
+        ]);
+
+        await handleDiscordEvent(makeEvent({ guildId, userId: 'u1', channelId: 'c1' }));
+
+        const instance = await getGameInstance(guildId, 'u1');
+        expect(instance.upgrades.divingOtters.level).toBeGreaterThan(0);
+        expect(instance.upgrades.hydrodynamicFlippers.level).toBe(0);
+        const nextOtter = instance.upgrades.divingOtters.getCost();
+        expect(instance.resources[ResourceId.SHELLS].lt(nextOtter)).toBe(true);
+        // The peak saw the balance before the spending.
+        expect(instance.stats.maxShells.gt(5000)).toBe(true);
+    });
+
+    it('buys nothing while the player has switched it off', async () => {
+        const guildId = 'g-auto-off';
+        await writeGameInstances(guildId, [
+            gameInstanceFixture('u1', { shells: '5000', octopus: 1, autoBuyEnabled: false }),
+        ]);
+
+        await handleDiscordEvent(makeEvent({ guildId, userId: 'u1', channelId: 'c1' }));
+
+        const instance = await getGameInstance(guildId, 'u1');
+        expect(instance.upgrades.divingOtters.level).toBe(0);
+    });
+
+    it('does not run for the author of a reacted message', async () => {
+        const guildId = 'g-auto-author';
+        await writeGameInstances(guildId, [
+            gameInstanceFixture('reactor'),
+            gameInstanceFixture('author', { shells: '5000', octopus: 1 }),
+        ]);
+
+        await handleDiscordEvent(
+            makeEvent({
+                guildId,
+                userId: 'reactor',
+                channelId: 'c1',
+                activityType: ChannelActivityType.Reaction,
+                messageAuthorId: 'author',
+            }),
+        );
+
+        const author = await getGameInstance(guildId, 'author');
+        expect(author.upgrades.divingOtters.level).toBe(0);
     });
 });
 

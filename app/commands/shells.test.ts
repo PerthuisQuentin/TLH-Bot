@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Request } from 'express';
@@ -42,6 +42,7 @@ function gameInstanceFixture(
         stats: { maxShells: overrides.maxShells ?? '0' },
         growthRings: { days: overrides.ringDays ?? 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
+        autoBuyEnabled: true,
         upgrades: overrides.upgrades ?? {},
     };
 }
@@ -52,6 +53,15 @@ async function writeGameInstances(guildId: string, instances: unknown[]): Promis
         JSON.stringify(instances, null, 2),
     );
 }
+
+async function storedSwitch(userId: string): Promise<unknown> {
+    const raw = await readFile(join(dir, 'g1-game-instances.json'), 'utf-8');
+    const entries = JSON.parse(raw) as Array<{ userId: string; autoBuyEnabled: unknown }>;
+    return entries.find((e) => e.userId === userId)?.autoBuyEnabled;
+}
+
+/** The Pieuvre intendante at level 1: the otters are automated. */
+const AUTOMATED = { coralSeedling: 1, stewardOctopus: 1 };
 
 function mockReq(body: Record<string, unknown>): Request {
     return { body } as unknown as Request;
@@ -173,6 +183,7 @@ describe('shellsCommand', () => {
                 stats: { maxShells: '9.2e12', runMaxShells: '2.5e12', prestigeCount: 3 },
                 growthRings: { days: 0, lastDate: '' },
                 lastActiveAt: new Date(0).toISOString(),
+                autoBuyEnabled: true,
                 upgrades: { coralSeedling: 1 },
             },
         ]);
@@ -202,6 +213,102 @@ describe('shellsCommand', () => {
             expect(upgradeBlock).toContain('Nageoires hydrodynamiques');
             expect(upgradeBlock).toContain('Sacs de récolte XXL');
         }
+    });
+
+    it('lists the Pieuvre intendante while it has levels left', async () => {
+        await writeGameInstances('g1', [
+            gameInstanceFixture('u1', { upgrades: { coralSeedling: 1, stewardOctopus: 2 } }),
+        ]);
+
+        expect(block((await openOwn()).text, 'Upgrades')).toContain('Pieuvre intendante');
+    });
+
+    it('drops the Pieuvre intendante from the upgrade list once maxed', async () => {
+        await writeGameInstances('g1', [
+            gameInstanceFixture('u1', { upgrades: { coralSeedling: 1, stewardOctopus: 3 } }),
+        ]);
+
+        const upgrades = block((await openOwn()).text, 'Upgrades');
+        expect(upgrades).not.toContain('Pieuvre intendante');
+        expect(upgrades).toContain('Loutres plongeuses');
+    });
+
+    describe('automation', () => {
+        const AUTO_OFF = 'shells:auto-off:u1:';
+
+        it('shows the switch and what it manages once the Pieuvre is bought', async () => {
+            await writeGameInstances('g1', [gameInstanceFixture('u1', { upgrades: AUTOMATED })]);
+
+            expect(block((await openOwn()).text, 'Coquillages')).toContain(
+                '🐙 Automatisation : **activée** · Gère 🦦 Loutres plongeuses',
+            );
+        });
+
+        it('says nothing of it, and offers no switch, before the first level', async () => {
+            const reply = await openOwn();
+
+            expect(block(reply.text, 'Coquillages')).not.toContain('Automatisation');
+            expect(reply.buttons.some((b) => b.id?.startsWith('shells:auto-'))).toBe(false);
+        });
+
+        it('offers the switch on your own profile only', async () => {
+            await writeGameInstances('g1', [gameInstanceFixture('u1', { upgrades: AUTOMATED })]);
+
+            const own = (await openOwn('u1')).buttons;
+            // u2 looking at u1's profile through the select.
+            const other = (
+                await click('view', { member: { user: { id: 'u2' } }, data: { values: ['u1'] } })
+            ).buttons;
+
+            expect(own.find((b) => b.id?.startsWith(AUTO_OFF))?.label).toBe(
+                '🐙 Couper l’automatisation',
+            );
+            expect(other.some((b) => b.id?.startsWith('shells:auto-'))).toBe(false);
+        });
+
+        it('switches it off in place, on disk before the redraw, and offers to switch it back on', async () => {
+            await writeGameInstances('g1', [gameInstanceFixture('u1', { upgrades: AUTOMATED })]);
+
+            const reply = await click(`auto-off:u1:u${HASH}`);
+
+            expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+            expect(block(reply.text, 'Coquillages')).toContain('**désactivée**');
+            expect(reply.buttons.map((b) => b.id)).toContain(`shells:auto-on:u1:u${HASH}`);
+            expect(await storedSwitch('u1')).toBe(false);
+        });
+
+        it("refuses to change someone else's", async () => {
+            await writeGameInstances('g1', [
+                gameInstanceFixture('u1', { upgrades: AUTOMATED }),
+                gameInstanceFixture('u2', { upgrades: AUTOMATED }),
+            ]);
+
+            const mock = mockRes();
+            await shellsCommand.onComponent!(
+                mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+                mock.res,
+                `auto-off:u2:u${HASH}`,
+            );
+
+            expect(mock.payload?.data.content).toContain('votre propre automatisation');
+            expect(await storedSwitch('u2')).toBe(true);
+        });
+
+        it('refuses without the Pieuvre, naming nothing behind the seedling', async () => {
+            await writeGameInstances('g1', [gameInstanceFixture('u1')]);
+
+            const mock = mockRes();
+            await shellsCommand.onComponent!(
+                mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
+                mock.res,
+                `auto-off:u1:u${HASH}`,
+            );
+
+            const content = mock.payload?.data.content ?? '';
+            expect(content).toContain('rien à automatiser');
+            expect(content).not.toMatch(/Pieuvre|corail|🪸/i);
+            expect(await storedSwitch('u1')).toBe(true);
+        });
     });
 
     it('shows the all-time record on the small line once it differs from the balance', async () => {

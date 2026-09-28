@@ -28,11 +28,12 @@ Its persistence boundary is exactly three methods — `toJson()`, `new GameInsta
 5. add the day's growth ring              → recomputes the income
 6. apply heat × activity fraction
 7. roll the jackpot                     → messages only
-8. save
-9. compute role changes from maxShells
+8. auto-buy                             → Pieuvre intendante, if switched on
+9. save
+10. compute role changes from maxShells
 ```
 
-Steps 4 to 8 run inside **one synchronous mutator** passed to `updateGameInstance`. That is what makes the read-modify-write atomic: the cycle never spans an `await`, so two concurrent events cannot each write back a stale snapshot.
+Steps 4 to 9 run inside **one synchronous mutator** passed to `updateGameInstance`. That is what makes the read-modify-write atomic: the cycle never spans an `await`, so two concurrent events cannot each write back a stale snapshot.
 
 Step 2 sits before the cooldown check on purpose. A member on cooldown still makes the channel livelier, and their message should count toward heat even though it earns them nothing.
 
@@ -116,7 +117,7 @@ The day's ring is added, and the income recomputed, before the message is paid, 
 
 **Days keep counting past the cap.** Only the bonus stops at ×2 (`isCapped`, shown on `/shells` as `🌀 Stries de croissance : 120 jours — ×2.00 (plafond atteint)`), so the [Coquille millénaire](#the-cap-lift), which lifts it, pays the banked days at once.
 
-Heat and growth rings combine multiplicatively, so the ceiling on a normal message is **×4.0**.
+Heat and growth rings combine multiplicatively, so at the rings cap a normal message tops out at **×4.0**. The Coquille millénaire lifts that ceiling along with the cap.
 
 ---
 
@@ -153,7 +154,7 @@ Passive income uses `income.shells`, upgrades and growth rings included, with no
 
 ## Jackpot
 
-`app/idle/core/jackpot.ts`: every **message** has a 1-in-1000 chance of paying `income.shells × 1000` **on top of** the normal gain. Reactions never roll.
+`app/idle/core/jackpot.ts`: every **message** has a 1-in-1000 chance of paying `income.shells × 1000`, with the usual ±10 % variance, **on top of** the normal gain. Reactions never roll.
 
 Heat does not apply; the growth rings do, since they are part of the income. At equal income a jackpot is worth the same to everyone, whether they hit it in a dead channel or a packed one.
 
@@ -246,6 +247,25 @@ It is `UpgradeKind.CUSTOM`, like the Coquille millénaire below. It produces not
 
 A one-shot purchase that lifts the ×2 cap on [growth rings](#growth-rings): the multiplier becomes `1 + 0.01 × days` with no ceiling, banked days included. Kept across a prestige. `GameInstance.growthRingsCapLifted` reads its level; `growthRingsMultiplier` and `growthRingsCapped` are what callers use. Its `unlockHint` names the seedling and the 100 days, never coral, since a player without the seedling can ask for it by name. Why 16: [prestige-design.md](./prestige-design.md#coquille-millénaire-calibration).
 
+### The automation
+
+|          | 🐙 Pieuvre intendante |
+| -------- | --------------------- |
+| id       | `stewardOctopus`      |
+| kind     | CUSTOM                |
+| costs    | CORAL, 2 / 15 / 80 🪸 |
+| maxLevel | 3                     |
+| unlock   | seedling owned        |
+| page     | `Trésors`             |
+
+Each level hands one more shells upgrade to the auto-buy, in `AUTOMATION_ORDER`: the otters, then the flippers, then the bags. Kept across a prestige, so every run after it starts automated. `GameInstance.automatedUpgradeIds` reads its level.
+
+`GameInstance.runAutoBuy()` spends the shells balance one level at a time. Each time it asks the [purchase planner](#the-purchase-planner) for the `BEST_AFFORDABLE_PAYBACK` pick among **every** shells upgrade on sale, and buys it only when it is automated. When the pick is one the player buys by hand, it stops and leaves the balance for it: ranking the automated ones alone would spend everything on otters while flippers or bags paid back far better. Why, and the prices: [prestige-design.md](./prestige-design.md#pieuvre-intendante-calibration). It stops after `MAX_LEVELS_PER_PURCHASE` levels in one call, since it runs inside the storage mutator. Buying goes through `buyUpgrade`, so the automation cannot buy anything the player could not.
+
+It runs at the end of the player's own earning events, once every credit has landed: so the balance it spends has already counted toward the run peak, as with a manual purchase. The author's share on a reaction does not trigger it, since being reacted to is not an activity of theirs. The player can switch it off, for instance to save up for an upgrade it does not manage: `autoBuyEnabled`, stored with the player and on for a new one.
+
+It has three levels, unlike the other treasures, so `/shells` lists it with the levelled upgrades until it is maxed. At level 3 it leaves both `/shells` and `/shop`.
+
 ### Coral upgrades
 
 Bought with coral rather than shells, and **never reset by a prestige**: they are the permanent half of the game. They live on their own `/shop` aisle, Corail, which stays shut until the seedling above is bought. Coral is paid out by [Prestige](#prestige) below.
@@ -272,7 +292,7 @@ The polyps' levels cost 1, 2, 4, 8, 16 coral and multiply the prestige payout by
 No single level may multiply what pays for it by more than it multiplies its own price. What "what pays for it" means differs by upgrade, and the difference is a factor of five:
 
 - **Gaining CORAL** (the polyps) is a direct loop: a level multiplies coral by `g` and must cost more than `g` per level. 1.1 against ×2 is a wide margin, which is why the polyps carry no step.
-- **Gaining SHELLS** (the reef) goes through the otter tree first, and the tree amplifies. Measured at a fixed horizon, the run peak grows as `income^5.7`, so a reef level worth ×2 of income is worth ×52 of run peak and, after `CORAL_EXPONENT`, ×2.6 of coral. The bound is `price > gain^(5.7 × CORAL_EXPONENT)`, that is `gain^1.25`: ×4 against ×2.6 per level.
+- **Gaining SHELLS** (the reef) goes through the otter tree first, and the tree amplifies. Measured at a fixed horizon, the run peak grows as `income^5.7`, so a reef level worth ×2 of income is worth ×52 of run peak and, after `CORAL_EXPONENT`, ×2.8 of coral. The bound is `price > gain^(5.7 × CORAL_EXPONENT)`, that is `gain^1.48`: ×4 against ×2.8 per level.
 
 The rule is per level, not on average. A step on the gain alone breaks it at every step, and the simulated loop collapses from 30-day runs to 10-day ones. The calibration and the failed variants are in [prestige-design.md](./prestige-design.md).
 
@@ -288,6 +308,20 @@ The walk stops at `MAX_LEVELS_PER_PURCHASE` (1000), which also bounds a single p
 `/shop`, `/shells`, `GameInstance` and `scripts/analyze-upgrade.ts` all iterate the registry, so nothing else needs editing. `/shop` puts the upgrade on the page its `shopPage` declares, which is independent of the currency it costs.
 
 **Whether an upgrade can be seen and bought is decided by the upgrade.** `isUnlocked` reads its `unlockCondition`, and `isVisible` adds "not maxed". `GameInstance.isUpgradeUnlocked` / `isUpgradeVisible` hand it the player's state, and `buyUpgrade` refuses a locked upgrade, so no caller (the shop, the sandbox, the simulations) can buy what the player cannot see. The shop only renders the answer. The reef and the polyps are locked on `isCoralUnlocked`, which `coral-seedling.ts` owns, as does `GameInstance.coralUnlocked`.
+
+### The purchase planner
+
+`app/idle/core/purchase-planner.ts` answers one question: given a player and a list of upgrades they may buy, which level comes next? `pickPurchase(instance, candidateIds, strategy)` returns an id or null and changes nothing. The simulations call it rather than keeping their own copy of the ranking.
+
+It keeps only the candidates priced in shells and on sale (`isUpgradeVisible`): a maxed or locked upgrade keeps quoting a price `buyUpgrade` would refuse, and a caller looping on the answer would stall on it. Each candidate's payback is its price over the income one more level adds, `GameInstance.projectShellsIncome(id)` minus the current income. That projection runs the same code as `computeIncome`, growth rings included, so it cannot drift from it.
+
+| Strategy                  | Picks                                                                |
+| ------------------------- | -------------------------------------------------------------------- |
+| `CHEAPEST`                | The cheapest affordable level.                                       |
+| `BEST_PAYBACK`            | The fastest payback overall, or nothing until the balance covers it. |
+| `BEST_AFFORDABLE_PAYBACK` | The fastest payback among the levels the balance already covers.     |
+
+Ties on payback go to the cheaper level. A level that adds no income has no payback and is only ever picked by `CHEAPEST`.
 
 **Write every price and balance with `formatResource(amount, resourceId)`** from `core/resources.ts`, never `formatBigNum` plus a literal 🐚. The literal reads fine and is wrong the moment the value is not shells: that is how `/shop`, `analyze-upgrade.ts` and the shop pricing lines the AI reads each ended up quoting coral prices in shells.
 

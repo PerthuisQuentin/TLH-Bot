@@ -7,6 +7,7 @@ import { NourishingReefUpgrade } from './nourishing-reef.ts';
 import { BuildingPolypsUpgrade } from './building-polyps.ts';
 import { CoralSeedlingUpgrade } from './coral-seedling.ts';
 import { MillennialShellUpgrade } from './millennial-shell.ts';
+import { StewardOctopusUpgrade } from './steward-octopus.ts';
 
 type UpgradeConstructor = (new (level: number) => BaseUpgrade) & UpgradeMeta;
 
@@ -18,6 +19,7 @@ export const UPGRADE_REGISTRY: Record<UpgradeId, UpgradeConstructor> = {
     [UpgradeId.NOURISHING_REEF]: NourishingReefUpgrade,
     [UpgradeId.BUILDING_POLYPS]: BuildingPolypsUpgrade,
     [UpgradeId.MILLENNIAL_SHELL]: MillennialShellUpgrade,
+    [UpgradeId.STEWARD_OCTOPUS]: StewardOctopusUpgrade,
 };
 
 export const ALL_UPGRADE_CLASSES: UpgradeConstructor[] = Object.values(UPGRADE_REGISTRY);

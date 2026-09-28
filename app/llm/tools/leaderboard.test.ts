@@ -27,6 +27,7 @@ function gameInstanceFixture(userId: string, maxShells: string, ringDays = 0) {
         stats: { maxShells },
         growthRings: { days: ringDays, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
+        autoBuyEnabled: true,
         upgrades: {},
     };
 }

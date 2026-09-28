@@ -23,6 +23,7 @@ export enum UpgradeId {
     NOURISHING_REEF = 'nourishingReef',
     BUILDING_POLYPS = 'buildingPolyps',
     MILLENNIAL_SHELL = 'millennialShell',
+    STEWARD_OCTOPUS = 'stewardOctopus',
 }
 
 /**
@@ -31,7 +32,7 @@ export enum UpgradeId {
  */
 export enum ShopPage {
     SHELLS = 'shells',
-    /** One-shot unlocks, whatever they cost: bought once, gone from the shop after. */
+    /** Unlocks rather than income, whatever they cost: gone from the shop once maxed. */
     TREASURES = 'treasures',
     CORAL = 'coral',
 }

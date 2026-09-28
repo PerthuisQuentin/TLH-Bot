@@ -205,7 +205,10 @@ function upgradeBlock(
             ? [buyButton(upgrade, '1', `Acheter · ${price(1)}`, maxBuyable < 1)]
             : [
                   buyButton(upgrade, '1', `×1 · ${price(1)}`, maxBuyable < 1),
-                  buyButton(upgrade, '10', `×10 · ${price(10)}`, maxBuyable < 10),
+                  // Not on a curve with fewer levels left: its price would sum levels past the cap.
+                  ...(upgrade.maxLevel - upgrade.level >= 10
+                      ? [buyButton(upgrade, '10', `×10 · ${price(10)}`, maxBuyable < 10)]
+                      : []),
                   buyButton(
                       upgrade,
                       QUANTITY_MAX,

@@ -22,6 +22,7 @@ import { ResourceId, UpgradeId } from '../app/idle/core/types.ts';
 import { RESOURCE_META, formatResource } from '../app/idle/core/resources.ts';
 import { bnCeil, bnGte, bnMul, formatBigNum } from '../app/idle/core/big-number.ts';
 import { numberArg, playMessages, spendCoral, tryBuy } from './sim-common.ts';
+import { PurchaseStrategy } from '../app/idle/core/purchase-planner.ts';
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -122,10 +123,12 @@ function tick(): void {
     if (messages > 0) {
         messageCarry -= messages;
         playMessages(instance, day, messages);
+        // As in the earn pipeline: the Pieuvre intendante buys right after the gain.
+        instance.runAutoBuy();
     }
 
     if (config.auto) {
-        while (tryBuy(instance, 'cheapest') !== null);
+        while (tryBuy(instance, PurchaseStrategy.CHEAPEST) !== null);
         // Only the coral half is logged. Shell purchases land several times a second at any
         // useful speed, and would push everything else out of the log.
         noteCoralPurchases(spendCoral);
