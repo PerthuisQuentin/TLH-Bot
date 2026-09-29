@@ -17,7 +17,7 @@ function makeJson(overrides: Partial<GameInstanceJson> = {}): GameInstanceJson {
     return {
         userId: 'u1',
         resources: { [ResourceId.SHELLS]: '0' },
-        stats: { maxShells: '0' },
+        stats: { maxShells: '0', totalCoral: '0' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         autoBuyEnabled: true,
@@ -193,7 +193,9 @@ describe('applyShellsGain', () => {
 
 describe('stats.runMaxShells / stats.prestigeCount', () => {
     it('defaults runMaxShells to maxShells, so loading a pre-prestige file is not a free prestige', () => {
-        const instance = new GameInstance(makeJson({ stats: { maxShells: '12345' } }));
+        const instance = new GameInstance(
+            makeJson({ stats: { maxShells: '12345', totalCoral: '0' } }),
+        );
 
         expect(instance.stats.runMaxShells.toString()).toBe('12345');
         expect(instance.stats.prestigeCount).toBe(0);
@@ -201,7 +203,14 @@ describe('stats.runMaxShells / stats.prestigeCount', () => {
 
     it('reads both back as stored once the fields exist, independently of maxShells', () => {
         const instance = new GameInstance(
-            makeJson({ stats: { maxShells: '12345', runMaxShells: '42', prestigeCount: 3 } }),
+            makeJson({
+                stats: {
+                    maxShells: '12345',
+                    runMaxShells: '42',
+                    prestigeCount: 3,
+                    totalCoral: '0',
+                },
+            }),
         );
 
         expect(instance.stats.maxShells.toString()).toBe('12345');
@@ -267,7 +276,7 @@ describe('prestige', () => {
         return new GameInstance(
             makeJson({
                 resources: { [ResourceId.SHELLS]: '1e12' },
-                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12', totalCoral: '0' },
                 growthRings: { days: 7, lastDate: '2026-09-15' },
                 upgrades: {
                     [UpgradeId.DIVING_OTTERS]: 40,
@@ -283,7 +292,7 @@ describe('prestige', () => {
         const instance = new GameInstance(
             makeJson({
                 resources: { [ResourceId.SHELLS]: '1000' },
-                stats: { maxShells: '1000' },
+                stats: { maxShells: '1000', totalCoral: '0' },
                 upgrades: { [UpgradeId.DIVING_OTTERS]: 3 },
             }),
         );
@@ -297,7 +306,7 @@ describe('prestige', () => {
         const instance = new GameInstance(
             makeJson({
                 resources: { [ResourceId.SHELLS]: '1e12' },
-                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12', totalCoral: '0' },
                 upgrades: { [UpgradeId.DIVING_OTTERS]: 40 },
             }),
         );
@@ -331,12 +340,21 @@ describe('prestige', () => {
         expect(instance.upgrades[UpgradeId.CORAL_SEEDLING].level).toBe(1);
     });
 
+    it('adds the payout to totalCoral', () => {
+        const instance = readyToPrestige();
+        const payout = instance.previewPrestige().coral;
+
+        instance.prestige();
+
+        expect(instance.stats.totalCoral.toString()).toBe(payout.toString());
+    });
+
     it('multiplies the payout by the coral upgrades, which no other stack applies', () => {
         const bare = readyToPrestige().prestige();
         const instance = new GameInstance(
             makeJson({
                 resources: { [ResourceId.SHELLS]: '1e12' },
-                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12', totalCoral: '0' },
                 upgrades: { [UpgradeId.BUILDING_POLYPS]: 5, [UpgradeId.CORAL_SEEDLING]: 1 },
             }),
         );
@@ -351,7 +369,7 @@ describe('prestige', () => {
         const instance = new GameInstance(
             makeJson({
                 resources: { [ResourceId.SHELLS]: '1e12' },
-                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12', totalCoral: '0' },
                 upgrades: { [UpgradeId.BUILDING_POLYPS]: 5, [UpgradeId.CORAL_SEEDLING]: 1 },
             }),
         );
@@ -387,7 +405,7 @@ describe('prestige', () => {
         const instance = new GameInstance(
             makeJson({
                 resources: { [ResourceId.SHELLS]: '1e12' },
-                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12', totalCoral: '0' },
                 upgrades: {
                     [UpgradeId.DIVING_OTTERS]: 40,
                     [UpgradeId.NOURISHING_REEF]: 2,
@@ -493,7 +511,7 @@ describe('growth rings cap', () => {
     it('keeps the lift across a prestige', () => {
         const instance = new GameInstance(
             makeJson({
-                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12', totalCoral: '0' },
                 growthRings: { days: 120, lastDate: '' },
                 upgrades: { [UpgradeId.CORAL_SEEDLING]: 1, [UpgradeId.MILLENNIAL_SHELL]: 1 },
             }),
@@ -509,7 +527,7 @@ describe('buyUpgrade with a maxLevel', () => {
         return new GameInstance(
             makeJson({
                 resources: { [ResourceId.SHELLS]: '1e12' },
-                stats: { maxShells: '1e12' },
+                stats: { maxShells: '1e12', totalCoral: '0' },
             }),
         );
     }
@@ -622,13 +640,39 @@ describe('runAutoBuy', () => {
     });
 });
 
+describe('stats.totalCoral', () => {
+    it('is left alone by a coral purchase, unlike the balance', () => {
+        const instance = new GameInstance(
+            makeJson({
+                resources: { [ResourceId.CORAL]: '10' },
+                stats: { maxShells: '1e12', runMaxShells: '0', prestigeCount: 1, totalCoral: '10' },
+                upgrades: { [UpgradeId.CORAL_SEEDLING]: 1 },
+            }),
+        );
+
+        expect(instance.buyUpgrade(UpgradeId.BUILDING_POLYPS, 1)).not.toBeNull();
+
+        expect(instance.resources[ResourceId.CORAL].toString()).toBe('9');
+        expect(instance.stats.totalCoral.toString()).toBe('10');
+    });
+
+    it('starts at 0 for a new player', () => {
+        expect(GameInstance.newInstance('u').stats.totalCoral.toString()).toBe('0');
+    });
+});
+
 describe('toJson / constructor round-trip', () => {
     it('reproduces the same observable state after a serialize/deserialize cycle', () => {
         const original = new GameInstance(
             makeJson({
                 userId: 'round-trip',
                 resources: { [ResourceId.SHELLS]: '4242' },
-                stats: { maxShells: '9999', runMaxShells: '512', prestigeCount: 2 },
+                stats: {
+                    maxShells: '9999',
+                    runMaxShells: '512',
+                    prestigeCount: 2,
+                    totalCoral: '77',
+                },
                 growthRings: { days: 3, lastDate: '2026-08-10' },
                 upgrades: {
                     [UpgradeId.DIVING_OTTERS]: 6,
@@ -647,6 +691,7 @@ describe('toJson / constructor round-trip', () => {
         expect(roundTripped.stats.maxShells.toString()).toBe(original.stats.maxShells.toString());
         expect(roundTripped.stats.runMaxShells.toString()).toBe('512');
         expect(roundTripped.stats.prestigeCount).toBe(2);
+        expect(roundTripped.stats.totalCoral.toString()).toBe('77');
         expect(roundTripped.income[ResourceId.SHELLS].toString()).toBe(
             original.income[ResourceId.SHELLS].toString(),
         );

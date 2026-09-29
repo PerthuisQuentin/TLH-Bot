@@ -29,7 +29,7 @@ function gameInstanceFixture(userId: string, shells: string) {
     return {
         userId,
         resources: { shells },
-        stats: { maxShells: shells },
+        stats: { maxShells: shells, totalCoral: '0' },
         growthRings: { days: 3, lastDate: '2020-01-01' },
         lastActiveAt: new Date(0).toISOString(),
         autoBuyEnabled: true,

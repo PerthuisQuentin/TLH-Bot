@@ -24,7 +24,7 @@ function gameInstanceFixture(userId: string, maxShells: string, ringDays = 0) {
     return {
         userId,
         resources: { shells: maxShells },
-        stats: { maxShells },
+        stats: { maxShells, totalCoral: '0' },
         growthRings: { days: ringDays, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         autoBuyEnabled: true,

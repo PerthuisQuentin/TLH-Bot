@@ -11,6 +11,9 @@ import {
     replyText,
     replyEmbed,
     replyDeferred,
+    replyDeferredUpdate,
+    editInteractionComponents,
+    NO_MENTIONS,
     requireGuild,
     DiscordRequest,
     DiscordApiError,
@@ -88,6 +91,28 @@ describe('DiscordRequest', () => {
 
         await DiscordRequest('a', { method: 'POST', body: { x: 1 } });
         expect((fetchSpy.mock.calls[1][1] as RequestInit).body).toBe('{"x":1}');
+    });
+
+    it('sends files as multipart, the body as payload_json', async () => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, {}));
+        const data = new Uint8Array([1, 2, 3]);
+
+        await DiscordRequest('a', {
+            method: 'PATCH',
+            body: { x: 1 },
+            files: [{ name: 'ocean.png', data, contentType: 'image/png' }],
+        });
+
+        const init = fetchSpy.mock.calls[0][1] as RequestInit;
+        const form = init.body as FormData;
+        expect(form).toBeInstanceOf(FormData);
+        expect(form.get('payload_json')).toBe('{"x":1}');
+        const file = form.get('files[0]') as File;
+        expect(file.name).toBe('ocean.png');
+        expect(file.type).toBe('image/png');
+        expect(new Uint8Array(await file.arrayBuffer())).toEqual(data);
+        // fetch has to write it, boundary included.
+        expect(init.headers).not.toHaveProperty('Content-Type');
     });
 });
 
@@ -177,6 +202,47 @@ describe('updateInteractionResponse', () => {
     });
 });
 
+describe('editInteractionComponents', () => {
+    const components = [{ type: MessageComponentTypes.TEXT_DISPLAY, content: 'hi' }] as never[];
+
+    it('lists each file as an attachment, its id the index of its part', async () => {
+        const fetchSpy = vi
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValue(new Response(JSON.stringify({ id: '42' }), { status: 200 }));
+        process.env.APP_ID = 'app-1';
+
+        await editInteractionComponents('tok-1', components, {
+            files: [{ name: 'ocean.png', data: new Uint8Array([1]), contentType: 'image/png' }],
+            allowedMentions: NO_MENTIONS,
+        });
+
+        const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+        expect(url).toBe('https://discord.com/api/v10/webhooks/app-1/tok-1/messages/@original');
+        expect(init.method).toBe('PATCH');
+        const form = init.body as FormData;
+        expect(JSON.parse(form.get('payload_json') as string)).toEqual({
+            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+            components,
+            allowed_mentions: { parse: [] },
+            attachments: [{ id: 0, filename: 'ocean.png' }],
+        });
+        expect((form.get('files[0]') as File).name).toBe('ocean.png');
+    });
+
+    it('sends plain JSON and leaves the attachments alone without files', async () => {
+        const fetchSpy = vi
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValue(new Response(JSON.stringify({ id: '42' }), { status: 200 }));
+
+        await editInteractionComponents('tok-1', components, { allowedMentions: NO_MENTIONS });
+
+        const body = JSON.parse(
+            (fetchSpy.mock.calls[0][1] as RequestInit).body as string,
+        ) as object;
+        expect(body).not.toHaveProperty('attachments');
+    });
+});
+
 describe('updateInteractionResponseOrLog', () => {
     it('sends the same edit as updateInteractionResponse', async () => {
         const fetchSpy = vi
@@ -253,6 +319,29 @@ describe('replyDeferred', () => {
 
         expect(send).toHaveBeenCalledWith({
             type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        });
+    });
+});
+
+describe('replyDeferred ephemeral', () => {
+    it('carries the ephemeral flag on the deferral', () => {
+        const { send, res } = mockRes();
+        replyDeferred(res, { ephemeral: true });
+
+        expect(send).toHaveBeenCalledWith({
+            type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { flags: InteractionResponseFlags.EPHEMERAL },
+        });
+    });
+});
+
+describe('replyDeferredUpdate', () => {
+    it('acknowledges a click with the deferred update type', () => {
+        const { send, res } = mockRes();
+        replyDeferredUpdate(res);
+
+        expect(send).toHaveBeenCalledWith({
+            type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
         });
     });
 });

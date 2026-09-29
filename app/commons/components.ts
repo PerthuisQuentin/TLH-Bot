@@ -5,6 +5,7 @@ import type {
     APIComponentInMessageActionRow,
     APIComponentInContainer,
     APIContainerComponent,
+    APIMediaGalleryComponent,
     APISectionAccessoryComponent,
     APISectionComponent,
     APISeparatorComponent,
@@ -36,6 +37,22 @@ export function section(
 
 export function thumbnail(url: string): APIThumbnailComponent {
     return { type: ComponentType.Thumbnail, media: { url } };
+}
+
+/**
+ * One to ten images. An uploaded file is named `attachment://<filename>`; on a V2 message
+ * an attachment no component names is not shown at all.
+ */
+export function mediaGallery(
+    ...items: { url: string; description?: string }[]
+): APIMediaGalleryComponent {
+    return {
+        type: ComponentType.MediaGallery,
+        items: items.map(({ url, description }) => ({
+            media: { url },
+            ...(description ? { description } : {}),
+        })),
+    };
 }
 
 export function separator(): APISeparatorComponent {

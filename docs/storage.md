@@ -102,7 +102,12 @@ The whole shells game state, one entry per player. See [shells.md](./shells.md) 
     {
         "userId": "123456789",
         "resources": { "shells": "531234", "coral": "0" },
-        "stats": { "maxShells": "912004", "runMaxShells": "912004", "prestigeCount": 0 },
+        "stats": {
+            "maxShells": "912004",
+            "runMaxShells": "912004",
+            "prestigeCount": 0,
+            "totalCoral": "0"
+        },
         "growthRings": { "days": 4, "lastDate": "2026-08-10" },
         "lastActiveAt": "2026-08-10T18:42:11.003Z",
         "autoBuyEnabled": true,
@@ -121,6 +126,7 @@ The whole shells game state, one entry per player. See [shells.md](./shells.md) 
 | `stats.maxShells`      | string  | All-time peak balance. Role thresholds are evaluated against this, never the current balance, and **nothing ever resets it**.                                                 |
 | `stats.runMaxShells`   | string  | Peak balance since the last prestige. Optional; **a file without it reads it back as `maxShells`**, not as 0, because a player with no prestige has run since the beginning.  |
 | `stats.prestigeCount`  | number  | Prestiges performed. Optional, defaults to 0.                                                                                                                                 |
+| `stats.totalCoral`     | string  | Every coral ever credited. Spending leaves it, so it only grows; the reef of the `/shells` ocean scene reads it. Required, `"0"` for a new player.                            |
 | `growthRings.days`     | number  | Active days, not necessarily consecutive. Never goes down.                                                                                                                    |
 | `growthRings.lastDate` | string  | `YYYY-MM-DD`, Europe/Paris.                                                                                                                                                   |
 | `lastActiveAt`         | string  | ISO timestamp passive income has been credited up to — the last earning event, minus the fraction of a shell that event did not pay for. Passive income integrates from here. |

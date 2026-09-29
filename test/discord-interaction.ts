@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { ComponentType } from 'discord-api-types/v10';
 import type { Response } from 'express';
 
@@ -14,6 +15,7 @@ type ComponentNode = {
     options?: Array<{ value: string; default?: boolean }>;
     components?: ComponentNode[];
     accessory?: ComponentNode;
+    items?: Array<{ media: { url: string } }>;
 };
 
 export type InteractionPayload = {
@@ -44,6 +46,36 @@ export function mockRes(): { res: Response; payload?: InteractionPayload; status
     };
     result.res = res as unknown as Response;
     return result;
+}
+
+/** An edit of a deferred reply, as `editInteractionComponents` sent it to Discord. */
+export type CapturedEdit = { url: string; data: InteractionPayload['data']; files: File[] };
+
+/**
+ * Stubs `fetch` to record every edit a handler sends past its deferral, multipart or JSON,
+ * and answer each with a success. Undone by `vi.restoreAllMocks()`.
+ */
+export function captureEdits(): CapturedEdit[] {
+    const edits: CapturedEdit[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        const body = init?.body;
+        if (body instanceof FormData) {
+            edits.push({
+                url,
+                data: JSON.parse(body.get('payload_json') as string) as CapturedEdit['data'],
+                files: [...body.values()].filter((v): v is File => v instanceof File),
+            });
+        } else {
+            edits.push({
+                url,
+                data: JSON.parse(body as string) as CapturedEdit['data'],
+                files: [],
+            });
+        }
+        return new Response('{}', { status: 200 });
+    });
+    return edits;
 }
 
 function walk(nodes: ComponentNode[] = []): ComponentNode[] {
@@ -77,5 +109,12 @@ export function readPanel(payload: InteractionPayload | undefined) {
             )
             .map((n) => n.custom_id),
         thumbnail: nodes.find((n) => n.type === ComponentType.Thumbnail)?.media?.url,
+        gallery: nodes
+            .filter((n) => n.type === ComponentType.MediaGallery)
+            .flatMap((n) => n.items?.map((item) => item.media.url) ?? []),
+        /** The component types at the top of the container, in order. */
+        layout: nodes
+            .find((n) => n.type === ComponentType.Container)
+            ?.components?.map((n) => n.type),
     };
 }
