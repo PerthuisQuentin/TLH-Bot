@@ -1,10 +1,11 @@
 import { getAllGameInstances, getGameInstance } from './game-instance-storage.ts';
 import { Leaderboard } from './leaderboard.ts';
 import { getShellsRolesConfig, nextRoleAfter, roleForShells } from './shells-roles.ts';
-import { bnCeil, bnFromJSON, bnMul, bnSub, formatBigNum } from './core/big-number.ts';
+import { bnCeil, bnFromJSON, bnMul, bnSub, formatBigNum, type BigNum } from './core/big-number.ts';
 import { formatResource } from './core/resources.ts';
 import { ALL_UPGRADE_IDS } from './core/upgrades/upgrade-registry.ts';
 import { ResourceId, UpgradeId } from './core/types.ts';
+import type { InstancePrestigePreview } from './core/game-instance.ts';
 
 /**
  * Every formatted piece of a member's Coquillages profile, shared by the `/shells`
@@ -15,6 +16,14 @@ export type ShellsProfile = {
     rankText: string;
     currentRoleText: string;
     nextRoleText: string;
+    /** Raw, for a layout that words the amounts its own way. */
+    shells: BigNum;
+    shellsPerMessage: BigNum;
+    growthRingDays: number;
+    growthRingsMultiplier: number;
+    growthRingsCapped: boolean;
+    coral: BigNum;
+    prestigePreview: InstancePrestigePreview;
     balanceText: string;
     maxShellsText: string;
     hasSpentBelowMax: boolean;
@@ -113,7 +122,7 @@ export async function getShellsProfile(
     const currentRole = roleForShells(shellsRoles, maxShells);
     const nextRole = nextRoleAfter(shellsRoles, maxShells);
 
-    const currentRoleText = currentRole ? `<@&${currentRole.roleId}>` : 'Aucun';
+    const currentRoleText = currentRole ? `<@&${currentRole.roleId}>` : 'Aucun rôle';
     const nextRoleText = nextRole
         ? `<@&${nextRole.roleId}> — encore **${formatBigNum(bnSub(bnFromJSON(nextRole.threshold), maxShells))} 🐚**`
         : '✨ Rang maximum atteint';
@@ -144,6 +153,13 @@ export async function getShellsProfile(
         rankText,
         currentRoleText,
         nextRoleText,
+        shells: currentShells,
+        shellsPerMessage,
+        growthRingDays: ringDays,
+        growthRingsMultiplier: instance.growthRingsMultiplier,
+        growthRingsCapped: instance.growthRingsCapped,
+        coral: instance.resources[ResourceId.CORAL],
+        prestigePreview,
         balanceText: `${formatBigNum(currentShells)} 🐚`,
         maxShellsText: `${formatBigNum(maxShells)} 🐚`,
         hasSpentBelowMax: !maxShells.eq(currentShells),
