@@ -130,7 +130,7 @@ async function run(
     const instance = new GameInstance({
         userId: 'sim',
         resources: { [ResourceId.SHELLS]: String(config.startingShells) },
-        stats: { maxShells: String(config.startingShells) },
+        stats: { maxShells: String(config.startingShells), totalCoral: '0' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         autoBuyEnabled: true,

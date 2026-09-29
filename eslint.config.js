@@ -116,6 +116,26 @@ export default tseslint.config(
         },
     },
 
+    // The ocean scene is a leaf too: it draws levels, and must never learn the game or
+    // Discord, so a rebalance only ever touches the mapping in app/idle/.
+    {
+        files: ['app/ocean/*.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: ['../**'],
+                            message:
+                                'app/ocean/ must not import outside itself — see docs/tooling.md.',
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+
     // Named exports only. The two root config files are exempt: their tools require a
     // default export.
     {

@@ -17,7 +17,7 @@ function player(
     return new GameInstance({
         userId: 'u1',
         resources: { [ResourceId.SHELLS]: shells, [ResourceId.CORAL]: coral },
-        stats: { maxShells: '0' },
+        stats: { maxShells: '0', totalCoral: '0' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         autoBuyEnabled: true,

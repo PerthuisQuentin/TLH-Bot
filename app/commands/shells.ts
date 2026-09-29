@@ -14,6 +14,8 @@ import { formatResource } from '../idle/core/resources.ts';
 import { UPGRADE_REGISTRY } from '../idle/core/upgrades/upgrade-registry.ts';
 import { formatBigNum } from '../idle/core/big-number.ts';
 import { getShellsProfile, type ShellsProfile } from '../idle/shells-profile.ts';
+import { oceanLevelsFor } from '../idle/ocean-levels.ts';
+import { renderOceanCached } from '../ocean/cache.ts';
 import {
     flushGameInstances,
     getGameInstance,
@@ -23,6 +25,7 @@ import {
     actionRow,
     button,
     container,
+    mediaGallery,
     section,
     separator,
     shareFooter,
@@ -30,11 +33,15 @@ import {
     thumbnail,
 } from '../commons/components.ts';
 import {
+    NO_MENTIONS,
     componentCustomId,
-    replyComponents,
+    editInteractionComponents,
+    replyDeferred,
+    replyDeferredUpdate,
     replyText,
     requireGuild,
-    updateComponents,
+    updateInteractionResponseOrLog,
+    type DiscordFile,
 } from '../commons/utils.ts';
 import {
     avatarRefFrom,
@@ -59,9 +66,14 @@ const TARGETED_ACTIONS = [ACTION_REFRESH, ACTION_SHARE, ACTION_AUTO_ON, ACTION_A
 
 const ACCENT_COLOR = 0xffd700;
 
+const OCEAN_FILE = 'ocean.png';
+
+const ERROR_TEXT = 'Une erreur est survenue en récupérant le profil.';
+
 type AvatarHolder = { avatar?: string | null };
 
 type InteractionBody = {
+    token: string;
     guild_id?: string;
     member?: AvatarHolder & { user?: { id: string } & AvatarHolder };
     user?: { id: string } & AvatarHolder;
@@ -149,6 +161,9 @@ function resourceLines(profile: ShellsProfile): string[] {
     ];
 }
 
+/** The components, and the ocean picture they name. */
+type Panel = { components: APIMessageTopLevelComponent[]; files: DiscordFile[] };
+
 /**
  * Private, the panel closes with its controls; shared, it is a read-only snapshot naming who
  * posted it.
@@ -158,8 +173,10 @@ async function shellsPanel(
     target: ProfileTarget,
     viewerId: string | undefined,
     sharedBy?: string,
-): Promise<APIMessageTopLevelComponent[]> {
+): Promise<Panel> {
     const profile = await getShellsProfile(guildId, target.userId);
+    const ocean = renderOceanCached(oceanLevelsFor(await getGameInstance(guildId, target.userId)));
+    const files = [{ name: OCEAN_FILE, data: ocean, contentType: 'image/png' }];
     const now = `<t:${Math.floor(Date.now() / 1000)}:R>`;
     const footerLine = profile.hasSpentBelowMax
         ? `Max historique : ${profile.maxShellsText} · mis à jour ${now}`
@@ -170,6 +187,10 @@ async function shellsPanel(
             thumbnail(avatarUrl(target.avatar, target.userId, guildId)),
             text(`## 🐚 Profil Coquillages\n${bannerLines(target.userId, profile).join('\n')}`),
         ),
+        mediaGallery({
+            url: `attachment://${OCEAN_FILE}`,
+            description: 'L’océan du profil : loutres, kelp, corail et coquillages',
+        }),
         separator(),
         text(`### Ressources\n${resourceLines(profile).join('\n')}`),
         text(`### Upgrades\n${profile.upgradeLines.join('\n')}`),
@@ -180,7 +201,7 @@ async function shellsPanel(
         }),
     ];
 
-    if (sharedBy) return [container(ACCENT_COLOR, ...body)];
+    if (sharedBy) return { components: [container(ACCENT_COLOR, ...body)], files };
 
     const own = target.userId === viewerId;
     // The navigation acts on whoever clicks, so its prestige button follows their reef.
@@ -188,7 +209,7 @@ async function shellsPanel(
         own || !viewerId
             ? profile.coralUnlocked
             : (await getGameInstance(guildId, viewerId)).coralUnlocked;
-    return [
+    const components = [
         container(
             ACCENT_COLOR,
             ...body,
@@ -220,27 +241,36 @@ async function shellsPanel(
             }),
         ),
     ];
+    return { components, files };
+}
+
+/** Past the deferral: the panel goes out as an edit, the only way to carry the picture. */
+async function sendPanel(token: string, panel: Panel): Promise<void> {
+    await editInteractionComponents(token, panel.components, {
+        files: panel.files,
+        allowedMentions: NO_MENTIONS,
+    });
 }
 
 async function handleShellsCommand(req: Request, res: Response): Promise<void> {
+    const body = req.body as InteractionBody;
+    const { guild_id } = body;
+    const requesterId = callerIdOf(body);
+
+    if (!requireGuild(res, guild_id)) return;
+    if (!requesterId) {
+        replyText(res, 'Impossible de déterminer l’utilisateur.', { ephemeral: true });
+        return;
+    }
+
+    replyDeferred(res, { ephemeral: true });
     try {
-        const body = req.body as InteractionBody;
-        const { guild_id } = body;
-        const requesterId = callerIdOf(body);
-
-        if (!requireGuild(res, guild_id)) return;
-        if (!requesterId) {
-            replyText(res, 'Impossible de déterminer l’utilisateur.', { ephemeral: true });
-            return;
-        }
-
         // Always your own profile first: the select switches to anyone else from there.
         const target = { userId: requesterId, avatar: avatarOf(body, requesterId) };
-        const panel = await shellsPanel(guild_id, target, requesterId);
-        replyComponents(res, panel, { ephemeral: true, suppressMentions: true });
+        await sendPanel(body.token, await shellsPanel(guild_id, target, requesterId));
     } catch (error) {
         console.error('Error handling shells command:', error);
-        replyText(res, 'Une erreur est survenue en récupérant le profil.', { ephemeral: true });
+        await updateInteractionResponseOrLog(body.token, ERROR_TEXT);
     }
 }
 
@@ -264,17 +294,14 @@ async function handleShellsComponent(req: Request, res: Response, action: string
         return;
     }
 
-    try {
-        const { guild_id } = body;
-        if (!requireGuild(res, guild_id)) return;
+    const { guild_id } = body;
+    if (!requireGuild(res, guild_id)) return;
 
-        if (kind === ACTION_SHARE) {
-            if (!callerId) {
-                replyText(res, 'Impossible de déterminer l’utilisateur.', { ephemeral: true });
-                return;
-            }
-            const panel = await shellsPanel(guild_id, target, callerId, callerId);
-            replyComponents(res, panel, { suppressMentions: true });
+    // Everything that answers with a plain refusal happens before the deferral, while a
+    // reply of its own is still possible.
+    try {
+        if (kind === ACTION_SHARE && !callerId) {
+            replyText(res, 'Impossible de déterminer l’utilisateur.', { ephemeral: true });
             return;
         }
 
@@ -292,12 +319,21 @@ async function handleShellsComponent(req: Request, res: Response, action: string
                 return;
             }
         }
-
-        const panel = await shellsPanel(guild_id, target, callerId);
-        updateComponents(res, panel, { suppressMentions: true });
     } catch (error) {
         console.error('Error handling shells click:', error);
-        replyText(res, 'Une erreur est survenue en récupérant le profil.', { ephemeral: true });
+        replyText(res, ERROR_TEXT, { ephemeral: true });
+        return;
+    }
+
+    // Share posts a new public message; every other click redraws the one clicked.
+    const sharedBy = kind === ACTION_SHARE ? callerId : undefined;
+    if (sharedBy) replyDeferred(res);
+    else replyDeferredUpdate(res);
+    try {
+        await sendPanel(body.token, await shellsPanel(guild_id, target, callerId, sharedBy));
+    } catch (error) {
+        console.error('Error handling shells click:', error);
+        await updateInteractionResponseOrLog(body.token, ERROR_TEXT);
     }
 }
 

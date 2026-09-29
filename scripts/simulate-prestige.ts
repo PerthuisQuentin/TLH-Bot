@@ -89,7 +89,7 @@ function newPlayer(): GameInstance {
     return new GameInstance({
         userId: 'sim',
         resources: { [ResourceId.SHELLS]: '0' },
-        stats: { maxShells: '0' },
+        stats: { maxShells: '0', totalCoral: '0' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         autoBuyEnabled: true,

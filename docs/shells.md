@@ -349,6 +349,8 @@ The multiplier sits **inside** the floor. Multiplying a floored payout would thr
 | Every upgrade with `resetOnPrestige: true` | Every upgrade with `resetOnPrestige: false`      |
 | `stats.runMaxShells`                       | `growthRings`, `lastActiveAt`, `resources.coral` |
 
+The payout is also added to `stats.totalCoral`, the coral ever earned, which no purchase lowers.
+
 **The payout reads `runMaxShells`, not the balance and not `maxShells`.** A peak rather than the balance, so spending on upgrades — the whole game — does not reduce what the run is worth. A per-run peak rather than the all-time one, because `maxShells` never decreases: paying on it would let a player prestige again immediately for the same run, and it cannot be reset since the roles and the leaderboard read it.
 
 That last point is what makes a reset socially free: **no role is lost and no rank moves**, which is the property the whole mechanic rests on.
@@ -388,6 +390,39 @@ In `shells-roles.ts`, `getShellsRolesConfig` is the only async function and the 
 No separate config cache: the store already keeps the config file in RAM.
 
 ---
+
+## Ocean scene
+
+`/shells` shows the player's state as a pixel-art ocean. `app/ocean/` draws integer levels and knows nothing of the game; `oceanLevelsFor` (`app/idle/ocean-levels.ts`) is the one place that decides which state gives which level. A level is the number of thresholds reached.
+
+| Level      | Read from               | Thresholds                                                                    |
+| ---------- | ----------------------- | ----------------------------------------------------------------------------- |
+| `otters`   | `divingOtters` level    | 1, 5, 10, 20, 35, 55, 80, 120, 180, 260                                       |
+| `bubbles`  | `hydrodynamicFlippers`  | 1, 3, 6, 10, 16, 25, 40, 60, 90, 130                                          |
+| `bags`     | `harvestBags` level     | 1, 10, 30                                                                     |
+| `shells`   | shells balance          | 10, 1e3, 1e5, 1e7, 1e10, 1e14, 1e19, 1e25, 1e32, 1e40                         |
+| `kelp`     | growth ring days        | 3, 7, 14, 30, 60, 100, 150, 210, 280, 365                                     |
+| `coral`    | `stats.totalCoral`      | 0 before the seedling, 1 with it, then 1, 3, 10, 30, 100, 1e3, 1e5, 1e8, 1e12 |
+| `octopus`  | `stewardOctopus` level  | as is                                                                         |
+| `nautilus` | `millennialShell` owned | 0 or 1                                                                        |
+
+**The picture shows the moment.** The run's upgrades and the balance, not their peaks: the mound shrinks when the player buys, and the otters, the bubbles, the bags and the mound all go back to zero at a prestige. The kelp and the reef read counters no purchase and no prestige lowers, so they are what grows across runs. Nothing coral-related is drawn before the seedling, as the profile text hides it.
+
+**Calibration**, on `scripts/simulate-prestige.ts` and `simulate-idle.ts` at 200 msg/day. The thresholds widen because every source grows faster than linearly.
+
+| Moment               | Source values                                    | Levels                        |
+| -------------------- | ------------------------------------------------ | ----------------------------- |
+| First run, day 15    | otters 12, flippers 1, 2.7K shells               | otters 3, bubbles 1, shells 2 |
+| First run, day 60    | otters 28, flippers 10, bags 3, 218K shells      | 4, 4, bags 1, shells 3        |
+| First run, day 90    | otters 50, flippers 25, bags 10, 193M shells     | 5, 6, bags 2, shells 4        |
+| Prestige 1, day 62   | 1 coral                                          | coral 2                       |
+| Prestige 7, day 269  | otters 108 at the peak, 3.4e15 shells, 784 coral | otters 7, shells 6, coral 6   |
+| Prestige 14, day 367 | otters 216, 3.6e27 shells, 3.6M coral            | otters 9, shells 8, coral 8   |
+| Prestige 28, day 709 | otters 429, 3.4e50 shells, 3.0e13 coral          | 10, 10, coral 10              |
+
+The kelp takes a year of active days to fill, well past the rings' 100-day cap, so it keeps growing for a player who has maxed the multiplier; its thresholds sit closer together early, so a newcomer sees a first stalk within days. On the production data at the time of writing, the 28 players spread over 18 distinct scenes, most of them between levels 0 and 3.
+
+A threshold change is a visible change for every player: review it with `tsx scripts/render-ocean.ts`.
 
 ## Announcement markers
 

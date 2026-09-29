@@ -22,7 +22,12 @@ type ResourcesJson = Partial<Record<ResourceId, string>>;
 
 const ResourcesJsonSchema = z.record(z.enum(ResourceId), z.string().optional());
 
-type StatsJson = { maxShells: string; runMaxShells?: string; prestigeCount?: number };
+type StatsJson = {
+    maxShells: string;
+    runMaxShells?: string;
+    prestigeCount?: number;
+    totalCoral: string;
+};
 
 // The two prestige fields are optional so every file written before prestige existed still
 // validates. What they default to is decided in the constructor, not here.
@@ -30,9 +35,16 @@ const StatsJsonSchema = z.object({
     maxShells: z.string(),
     runMaxShells: z.string().optional(),
     prestigeCount: z.number().optional(),
+    totalCoral: z.string(),
 });
 
-type StatsData = { maxShells: BigNum; runMaxShells: BigNum; prestigeCount: number };
+type StatsData = {
+    maxShells: BigNum;
+    runMaxShells: BigNum;
+    prestigeCount: number;
+    /** Every coral ever credited. Spending leaves it, so it only grows. */
+    totalCoral: BigNum;
+};
 
 export type GameInstanceJson = {
     userId: string;
@@ -87,6 +99,7 @@ export class GameInstance {
             // player base a free prestige on the first load.
             runMaxShells: bn(data.stats.runMaxShells ?? data.stats.maxShells),
             prestigeCount: data.stats.prestigeCount ?? 0,
+            totalCoral: bn(data.stats.totalCoral),
         };
         this._growthRings = new GrowthRings(data.growthRings);
         this._lastActiveAt = new Date(data.lastActiveAt);
@@ -246,10 +259,15 @@ export class GameInstance {
     /**
      * Two peaks, both on shells alone. `maxShells` is the all-time one the roles and the
      * leaderboard read; `runMaxShells` is the one a prestige resets, and what the coral a
-     * prestige pays out is computed from.
+     * prestige pays out is computed from. Coral keeps a running total instead, since it is
+     * earned in lumps and spent in lumps, and a peak would miss what was spent in between.
      */
     private addResource(id: ResourceId, amount: BigNum): void {
         this._resources[id] = bnAdd(this._resources[id], amount);
+        if (id === ResourceId.CORAL) {
+            this._stats.totalCoral = bnAdd(this._stats.totalCoral, amount);
+            return;
+        }
         if (id !== ResourceId.SHELLS) return;
         this._stats.maxShells = bnMax(this._stats.maxShells, this._resources[id]);
         this._stats.runMaxShells = bnMax(this._stats.runMaxShells, this._resources[id]);
@@ -316,6 +334,7 @@ export class GameInstance {
                 maxShells: this._stats.maxShells.toString(),
                 runMaxShells: this._stats.runMaxShells.toString(),
                 prestigeCount: this._stats.prestigeCount,
+                totalCoral: this._stats.totalCoral.toString(),
             },
             growthRings: this._growthRings.toJson(),
             lastActiveAt: this._lastActiveAt.toISOString(),
@@ -331,7 +350,7 @@ export class GameInstance {
         return new GameInstance({
             userId,
             resources: { [ResourceId.SHELLS]: '0' },
-            stats: { maxShells: '0', runMaxShells: '0', prestigeCount: 0 },
+            stats: { maxShells: '0', runMaxShells: '0', prestigeCount: 0, totalCoral: '0' },
             growthRings: GrowthRings.newInstance().toJson(),
             lastActiveAt: now.toISOString(),
             // On, so the first level works the moment it is bought.

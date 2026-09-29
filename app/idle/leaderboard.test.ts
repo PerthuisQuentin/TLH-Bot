@@ -13,7 +13,7 @@ function makeInstance(
     return new GameInstance({
         userId,
         resources: { [ResourceId.SHELLS]: shells },
-        stats: { maxShells },
+        stats: { maxShells, totalCoral: '0' },
         growthRings: { days: ringDays, lastDate: '' },
         lastActiveAt: new Date().toISOString(),
         autoBuyEnabled: true,

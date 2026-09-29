@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Request } from 'express';
 import { InteractionResponseType, InteractionResponseFlags } from 'discord-interactions';
+import { ComponentType } from 'discord-api-types/v10';
 import { shellsCommand } from './shells.ts';
-import { mockRes, readPanel } from '../../test/discord-interaction.ts';
+import { captureEdits, mockRes, readPanel } from '../../test/discord-interaction.ts';
+import { renderOcean } from '../ocean/render.ts';
 
 let dir: string;
 let originalFilesDir: string | undefined;
@@ -17,6 +19,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+    vi.restoreAllMocks();
     if (originalFilesDir === undefined) delete process.env.FILES_DIR;
     else process.env.FILES_DIR = originalFilesDir;
     await rm(dir, { recursive: true, force: true });
@@ -38,7 +41,7 @@ function gameInstanceFixture(
     return {
         userId,
         resources: { shells: overrides.shells ?? '0' },
-        stats: { maxShells: overrides.maxShells ?? '0' },
+        stats: { maxShells: overrides.maxShells ?? '0', totalCoral: '0' },
         growthRings: { days: overrides.ringDays ?? 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         autoBuyEnabled: true,
@@ -68,10 +71,30 @@ function mockReq(body: Record<string, unknown>): Request {
 
 const HASH = '0123456789abcdef0123456789abcdef';
 
-async function open(body: Record<string, unknown>) {
+/**
+ * Runs a handler and reads the panel it drew. A panel goes out as an edit after a deferral,
+ * so the panel is the edit and `type` is the deferral's; a refusal is the HTTP reply itself.
+ */
+async function answer(run: (res: ReturnType<typeof mockRes>['res']) => Promise<unknown>) {
     const mock = mockRes();
-    await shellsCommand.handler(mockReq({ guild_id: 'g1', ...body }), mock.res);
-    return { ...readPanel(mock.payload), content: mock.payload?.data.content };
+    const edits = captureEdits();
+    await run(mock.res);
+    const edit = edits.at(-1);
+    const panel = edit ? { type: mock.payload!.type, data: edit.data } : mock.payload;
+    return {
+        ...readPanel(panel),
+        deferralFlags: mock.payload?.data?.flags ?? 0,
+        files: edit?.files ?? [],
+        edits,
+        content: mock.payload?.data?.content,
+        status: mock.status,
+    };
+}
+
+async function open(body: Record<string, unknown>) {
+    return answer((res) =>
+        shellsCommand.handler(mockReq({ guild_id: 'g1', token: 'tok', ...body }), res),
+    );
 }
 
 async function openOwn(userId = 'u1') {
@@ -79,13 +102,13 @@ async function openOwn(userId = 'u1') {
 }
 
 async function click(action: string, body: Record<string, unknown> = {}) {
-    const mock = mockRes();
-    await shellsCommand.onComponent!(
-        mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } }, ...body }),
-        mock.res,
-        action,
+    return answer((res) =>
+        shellsCommand.onComponent!(
+            mockReq({ guild_id: 'g1', token: 'tok', member: { user: { id: 'u1' } }, ...body }),
+            res,
+            action,
+        ),
     );
-    return { ...readPanel(mock.payload), status: mock.status };
 }
 
 /** The text under one `### ` heading, up to the next. */
@@ -114,8 +137,8 @@ describe('shellsCommand', () => {
     it('shows a fresh player privately, with no record line, no role, and "Non classé"', async () => {
         const reply = await openOwn();
 
-        expect(reply.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
-        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeTruthy();
+        expect(reply.type).toBe(InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE);
+        expect(reply.deferralFlags & InteractionResponseFlags.EPHEMERAL).toBeTruthy();
         expect(reply.flags & InteractionResponseFlags.IS_COMPONENTS_V2).toBeTruthy();
         expect(reply.allowedMentions).toEqual({ parse: [] });
         expect(reply.text).toContain('## 🐚 Profil Coquillages\n<@u1>');
@@ -185,7 +208,12 @@ describe('shellsCommand', () => {
             {
                 userId: 'u1',
                 resources: { shells: '4.1e11', coral: '7' },
-                stats: { maxShells: '9.2e12', runMaxShells: '2.5e12', prestigeCount: 3 },
+                stats: {
+                    maxShells: '9.2e12',
+                    runMaxShells: '2.5e12',
+                    prestigeCount: 3,
+                    totalCoral: '0',
+                },
                 growthRings: { days: 0, lastDate: '' },
                 lastActiveAt: new Date(0).toISOString(),
                 autoBuyEnabled: true,
@@ -273,7 +301,7 @@ describe('shellsCommand', () => {
 
             const reply = await click(`auto-off:u1:u${HASH}`);
 
-            expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+            expect(reply.type).toBe(InteractionResponseType.DEFERRED_UPDATE_MESSAGE);
             expect(banner(reply.text)).toContain('Automatisation : **désactivée**');
             expect(reply.buttons.map((b) => b.id)).toContain(`shells:auto-on:u1:u${HASH}`);
             expect(await storedSwitch('u1')).toBe(false);
@@ -374,7 +402,7 @@ describe('shellsCommand', () => {
     it("navigates back to the clicker's own profile in place", async () => {
         const reply = await click('open', { member: { user: { id: 'u2', avatar: HASH } } });
 
-        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(reply.type).toBe(InteractionResponseType.DEFERRED_UPDATE_MESSAGE);
         expect(reply.text).toContain('<@u2>');
         expect(reply.thumbnail).toBe(`https://cdn.discordapp.com/avatars/u2/${HASH}.png?size=128`);
     });
@@ -384,7 +412,7 @@ describe('shellsCommand', () => {
 
         const reply = await click(`refresh:u2:u${HASH}`);
 
-        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(reply.type).toBe(InteractionResponseType.DEFERRED_UPDATE_MESSAGE);
         expect(reply.text).toContain('<@u2>');
         expect(reply.text).toContain('1.23K');
         expect(reply.thumbnail).toBe(`https://cdn.discordapp.com/avatars/u2/${HASH}.png?size=128`);
@@ -398,7 +426,7 @@ describe('shellsCommand', () => {
             },
         });
 
-        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(reply.type).toBe(InteractionResponseType.DEFERRED_UPDATE_MESSAGE);
         expect(reply.text).toContain('<@u7>');
         expect(reply.thumbnail).toBe(
             `https://cdn.discordapp.com/guilds/g1/users/u7/avatars/${HASH}.png?size=128`,
@@ -408,8 +436,8 @@ describe('shellsCommand', () => {
     it('shares a read-only snapshot, naming the sharer and pinging nobody', async () => {
         const reply = await click(`share:u2:u${HASH}`);
 
-        expect(reply.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
-        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeFalsy();
+        expect(reply.type).toBe(InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE);
+        expect(reply.deferralFlags & InteractionResponseFlags.EPHEMERAL).toBeFalsy();
         expect(reply.allowedMentions).toEqual({ parse: [] });
         expect(reply.text).toContain('<@u2>');
         expect(reply.text).toContain('partagé par <@u1>');
@@ -424,6 +452,67 @@ describe('shellsCommand', () => {
             expect((await click(action)).status).toBe(400);
         },
     );
+
+    describe('ocean', () => {
+        it('draws it between the banner and the resources, from the profile shown', async () => {
+            await writeGameInstances('g1', [
+                gameInstanceFixture('u1', { shells: '266242', upgrades: { divingOtters: 12 } }),
+            ]);
+
+            const reply = await openOwn();
+
+            expect(reply.gallery).toEqual(['attachment://ocean.png']);
+            expect(reply.layout?.slice(0, 3)).toEqual([
+                ComponentType.Section,
+                ComponentType.MediaGallery,
+                ComponentType.Separator,
+            ]);
+            expect(reply.files.map((f) => [f.name, f.type])).toEqual([['ocean.png', 'image/png']]);
+            // 12 otters and 266K shells: otters 3 and shells 3, see app/idle/ocean-levels.ts.
+            const expected = renderOcean({ otters: 3, shells: 3 });
+            expect(Buffer.from(await reply.files[0].arrayBuffer()).equals(expected)).toBe(true);
+        });
+
+        it('carries it on every redraw and on the shared copy', async () => {
+            for (const action of [`refresh:u1:u${HASH}`, 'open', `share:u1:u${HASH}`]) {
+                const reply = await click(action);
+                expect(reply.gallery, action).toEqual(['attachment://ocean.png']);
+                expect(
+                    reply.files.map((f) => f.name),
+                    action,
+                ).toEqual(['ocean.png']);
+            }
+        });
+
+        it('edits the deferred reply of the interaction, attaching exactly the new picture', async () => {
+            const reply = await click(`refresh:u1:u${HASH}`);
+
+            expect(reply.edits).toHaveLength(1);
+            expect(reply.edits[0].url).toMatch(/\/webhooks\/[^/]+\/tok\/messages\/@original$/);
+            expect(reply.edits[0].data).toMatchObject({
+                attachments: [{ id: 0, filename: 'ocean.png' }],
+            });
+        });
+
+        it('falls back to an error text in the same reply when the edit fails', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const fetchSpy = vi
+                .spyOn(globalThis, 'fetch')
+                .mockResolvedValueOnce(new Response(null, { status: 500 }))
+                .mockResolvedValue(new Response('{}', { status: 200 }));
+
+            await shellsCommand.handler(
+                mockReq({ guild_id: 'g1', token: 'tok', member: { user: { id: 'u1' } } }),
+                mockRes().res,
+            );
+
+            expect(fetchSpy).toHaveBeenCalledTimes(2);
+            const fallback = JSON.parse(fetchSpy.mock.calls[1][1]!.body as string) as {
+                components: Array<{ content: string }>;
+            };
+            expect(fallback.components[0].content).toContain('Une erreur est survenue');
+        });
+    });
 
     it('shows the currently held role once a threshold is reached', async () => {
         await writeConfig('g1', { shellsRoles: [{ roleId: 'role-1', threshold: '50' }] });

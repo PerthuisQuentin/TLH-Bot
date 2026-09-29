@@ -30,7 +30,7 @@ function gameInstanceFixture(
     return {
         userId,
         resources: { shells },
-        stats: { maxShells: shells },
+        stats: { maxShells: shells, totalCoral: '0' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         autoBuyEnabled: true,
@@ -183,7 +183,7 @@ describe('shopCommand', () => {
         await writeGameInstances('g1', [
             {
                 ...gameInstanceFixture('u1', '1e12', UNLOCKED),
-                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+                stats: { maxShells: '1e12', runMaxShells: '1e12', totalCoral: '0' },
             },
         ]);
 

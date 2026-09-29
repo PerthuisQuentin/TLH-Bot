@@ -50,9 +50,10 @@ Three rules are tuned in `eslint.config.js`, with the reason inline:
 
 - **No SDK in the domain.** `no-restricted-imports` forbids `discord.js`, `@google/genai` and `@openrouter/sdk` in `app/idle/**`, `app/llm/*.ts` and `app/llm/tools/**`. The glob deliberately stops at the root of `app/llm/`: the adapters one folder down (`app/llm/gemini/`, `app/llm/openrouter/`) exist to import their SDK. Adding an adapter means adding its package to that `paths` list.
 - **`app/idle/core/` imports nothing outside itself**, npm packages aside. Two `no-restricted-imports` blocks, because how far `../` reaches depends on depth: a file directly in `core/` escapes on the first `../`, one in `core/heat/` or `core/upgrades/` only on the second.
+- **`app/ocean/` imports nothing outside itself** either, npm packages aside. The scene draws levels; which game state gives which level is decided in `app/idle/`, so a rebalance never reaches the renderer.
 - **Named exports only.** `no-restricted-syntax` rejects `export default` and `export { x as default }` in `app/`, `app.ts`, `commands.ts`, `scripts/` and `test/`. `eslint.config.js` and `vitest.config.ts` are exempt: their tools require a default export.
 
-Not enforced: the full `routes → commands → domain → storage` ordering. Only the SDK and `core/` rules above are.
+Not enforced: the full `routes → commands → domain → storage` ordering. Only the SDK, `core/` and `app/ocean/` rules above are.
 
 ---
 

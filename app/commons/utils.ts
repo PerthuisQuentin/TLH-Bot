@@ -1,15 +1,16 @@
-import {
-    InteractionResponseType,
-    InteractionResponseFlags,
-    MessageComponentTypes,
-} from 'discord-interactions';
+import { InteractionResponseType, InteractionResponseFlags } from 'discord-interactions';
 import type { Response as ExpressResponse } from 'express';
-import { MessageFlags } from 'discord-api-types/v10';
+import { ComponentType, MessageFlags } from 'discord-api-types/v10';
 import type { APIMessageTopLevelComponent } from 'discord-api-types/v10';
+
+/** A file uploaded with a message, shown by a component that names `attachment://<name>`. */
+export type DiscordFile = { name: string; data: Uint8Array<ArrayBuffer>; contentType: string };
 
 type DiscordRequestOptions = {
     method: string;
     body?: unknown;
+    /** Turns the request into `multipart/form-data`, the body going in `payload_json`. */
+    files?: readonly DiscordFile[];
 };
 
 /** Thrown on any non-2xx. Carries the status so callers branch on it, not on the text. */
@@ -29,16 +30,26 @@ export async function DiscordRequest(
     options: DiscordRequestOptions,
 ): Promise<Response> {
     const url = 'https://discord.com/api/v10/' + endpoint;
-    const fetchOptions: RequestInit = {
-        method: options.method,
-        headers: {
-            Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-            'Content-Type': 'application/json; charset=UTF-8',
-            'User-Agent': 'DiscordBot (https://github.com/PerthuisQuentin/TLH-Bot, 1.0.0)',
-        },
+    const headers: Record<string, string> = {
+        Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+        'User-Agent': 'DiscordBot (https://github.com/PerthuisQuentin/TLH-Bot, 1.0.0)',
     };
-    if (options.body !== undefined) {
-        fetchOptions.body = JSON.stringify(options.body);
+    const fetchOptions: RequestInit = { method: options.method, headers };
+    if (options.files?.length) {
+        // No Content-Type of our own: fetch writes the multipart one, boundary included.
+        const form = new FormData();
+        form.append('payload_json', JSON.stringify(options.body ?? {}));
+        options.files.forEach((file, i) => {
+            form.append(
+                `files[${i}]`,
+                new Blob([file.data], { type: file.contentType }),
+                file.name,
+            );
+        });
+        fetchOptions.body = form;
+    } else {
+        headers['Content-Type'] = 'application/json; charset=UTF-8';
+        if (options.body !== undefined) fetchOptions.body = JSON.stringify(options.body);
     }
     const res = await fetch(url, fetchOptions);
     if (!res.ok) {
@@ -74,6 +85,43 @@ export async function InstallGlobalCommands(
  */
 export const USER_MENTIONS_ONLY = { parse: ['users'] } as const;
 
+/** No ping at all, for a panel that names members as a display. */
+export const NO_MENTIONS = { parse: [] } as const;
+
+/**
+ * Rewrites an interaction's deferred reply, or after `replyDeferredUpdate` the message the
+ * clicked component sits on, as a Components V2 message. With files, the edit lists exactly
+ * them as its attachments, which drops whatever the message carried before; without, the
+ * attachments are left as they are.
+ */
+export async function editInteractionComponents(
+    interactionToken: string,
+    components: APIMessageTopLevelComponent[],
+    {
+        files = [],
+        allowedMentions,
+    }: {
+        files?: readonly DiscordFile[];
+        allowedMentions: typeof USER_MENTIONS_ONLY | typeof NO_MENTIONS;
+    },
+): Promise<unknown> {
+    const endpoint = `webhooks/${process.env.APP_ID}/${interactionToken}/messages/@original`;
+    const response = await DiscordRequest(endpoint, {
+        method: 'PATCH',
+        body: {
+            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+            components,
+            allowed_mentions: allowedMentions,
+            // Each id is the index of its `files[n]` part.
+            ...(files.length
+                ? { attachments: files.map((file, id) => ({ id, filename: file.name })) }
+                : {}),
+        },
+        files,
+    });
+    return response.json();
+}
+
 /**
  * Edits an interaction's deferred reply. Components V2, unlike every immediate reply below:
  * the flag makes `content` and `embeds` unusable, so this path is components-only.
@@ -82,16 +130,11 @@ export async function updateInteractionResponse(
     interactionToken: string,
     content: string,
 ): Promise<unknown> {
-    const endpoint = `webhooks/${process.env.APP_ID}/${interactionToken}/messages/@original`;
-    const response = await DiscordRequest(endpoint, {
-        method: 'PATCH',
-        body: {
-            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-            components: [{ type: MessageComponentTypes.TEXT_DISPLAY, content }],
-            allowed_mentions: USER_MENTIONS_ONLY,
-        },
-    });
-    return response.json();
+    return editInteractionComponents(
+        interactionToken,
+        [{ type: ComponentType.TextDisplay, content }],
+        { allowedMentions: USER_MENTIONS_ONLY },
+    );
 }
 
 /**
@@ -187,10 +230,20 @@ export function updateComponents(
  * `updateInteractionResponseOrLog` on the error path. See the defer boundary in
  * `docs/architecture.md`, which is what a rejection on either side actually costs.
  */
-export function replyDeferred(res: ExpressResponse): void {
+export function replyDeferred(res: ExpressResponse, options: { ephemeral?: boolean } = {}): void {
     res.send({
         type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        // On the deferral itself: the edit rewrites the reply this creates.
+        ...(options.ephemeral ? { data: { flags: InteractionResponseFlags.EPHEMERAL } } : {}),
     });
+}
+
+/**
+ * A click's version of `replyDeferred`: acknowledges without a thinking state, and the
+ * edit that follows rewrites the message the component sits on. Same boundary past it.
+ */
+export function replyDeferredUpdate(res: ExpressResponse): void {
+    res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
 }
 
 // ─── Interaction option helpers ───────────────────────────────────────────────

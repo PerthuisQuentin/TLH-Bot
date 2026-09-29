@@ -67,6 +67,7 @@ The goal is that a feature's core behaviour can be read, reasoned about and chan
 - **Command handlers** orchestrate: load data, call domain logic, format a reply. They know Discord's inputs and outputs, not how data is stored or how the AI is called.
 - **Domain** holds the rules and imports neither `discord.js` nor an AI SDK (lint-enforced). `app/idle/` may import the type-only declarations in `app/discord/types.ts`.
 - **`app/idle/core/` imports nothing outside itself**, npm packages aside. `npm run check:core` verifies the build output. An enum is a value, so importing one is a real runtime dependency, unlike `import type`.
+- **`app/ocean/` imports nothing outside itself** either (lint-enforced). It turns integer levels into the `/shells` picture, same levels same bytes; which game state gives which level lives in `app/idle/`.
 - **AI adapters** (`app/llm/gemini/`, `app/llm/openrouter/`) hold everything specific to one backend. The engine and the tools above them stay SDK-free.
 
 The test when adding a feature: _if Discord were replaced by another interface, a REST API or a CLI, would the business logic have to change?_ If yes, the separation is wrong.

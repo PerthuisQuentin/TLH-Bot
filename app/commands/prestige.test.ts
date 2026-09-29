@@ -27,7 +27,7 @@ function fixture(runMaxShells: string, upgrades: Record<string, number> = {}) {
     return {
         userId: 'u1',
         resources: { shells: runMaxShells },
-        stats: { maxShells: runMaxShells, runMaxShells, prestigeCount: 0 },
+        stats: { maxShells: runMaxShells, runMaxShells, prestigeCount: 0, totalCoral: '0' },
         growthRings: { days: 4, lastDate: '2026-09-15' },
         lastActiveAt: new Date(0).toISOString(),
         autoBuyEnabled: true,
@@ -173,6 +173,7 @@ describe('prestigeCommand', () => {
             maxShells: '1000000000000',
             runMaxShells: '0',
             prestigeCount: 1,
+            totalCoral: '36',
         });
         expect(stored.upgrades).toMatchObject({ divingOtters: 0 });
         expect(stored.growthRings).toEqual({ days: 4, lastDate: '2026-09-15' });

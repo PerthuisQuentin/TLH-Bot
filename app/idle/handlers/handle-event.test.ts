@@ -54,7 +54,7 @@ function gameInstanceFixture(
     return {
         userId,
         resources: { shells: overrides.shells ?? '0' },
-        stats: { maxShells: overrides.maxShells ?? '0' },
+        stats: { maxShells: overrides.maxShells ?? '0', totalCoral: '0' },
         growthRings: { days: 0, lastDate: '' },
         lastActiveAt: new Date(0).toISOString(),
         autoBuyEnabled: overrides.autoBuyEnabled ?? true,
