@@ -155,11 +155,41 @@ describe('shopCommand', () => {
         expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
         expect(title(reply)).toBe('🏪 Boutique — Trésors');
         expect(upgradeNames(reply)).toEqual(['🌱 Bouture de corail']);
-        expect(reply.text).toContain('42 🐚');
+        expect(reply.text).toContain('🐚 **42** Coquillages');
         expect(buyButtons(reply, 'coralSeedling').map((b) => b.label)).toEqual([
             expect.stringMatching(/^Acheter · /),
         ]);
         expect(JSON.stringify(reply)).not.toContain('🪸');
+    });
+
+    it('heads every page with the shells balance and the gain per message', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '1500')]);
+
+        const reply = await open();
+
+        expect(reply.text).toMatch(/^🐚 \*\*1\.50K\*\* Coquillages - .+\/msg$/m);
+        expect(reply.text).not.toContain('Corail -');
+    });
+
+    it('adds the coral balance and what is still missing before a prestige', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+
+        const reply = await open();
+
+        expect(reply.text).toMatch(/^🪸 \*\*0\*\* Corail - prestige dans .+ 🐚$/m);
+    });
+
+    it('adds what a prestige would pay once the run peak allows one', async () => {
+        await writeGameInstances('g1', [
+            {
+                ...gameInstanceFixture('u1', '1e12', UNLOCKED),
+                stats: { maxShells: '1e12', runMaxShells: '1e12' },
+            },
+        ]);
+
+        const reply = await open();
+
+        expect(reply.text).toMatch(/^🪸 \*\*0\*\* Corail - \+.+ au prestige$/m);
     });
 
     it('offers the coral aisle once the seedling is bought', async () => {
@@ -189,7 +219,7 @@ describe('shopCommand', () => {
         const reply = await click('page:treasures');
 
         expect(upgradeNames(reply)).toEqual(['🌀 Coquille millénaire', '🐙 Pieuvre intendante']);
-        expect(reply.text).toContain('20 🪸');
+        expect(reply.text).toContain('🪸 **20** Corail');
     });
 
     it('stops offering the treasures page once nothing is left on it', async () => {
@@ -265,14 +295,39 @@ describe('shopCommand', () => {
         expect(title(reply)).toBe('🏪 Boutique — Corail');
     });
 
-    it('opens a page in a new private message for a shortcut from another command', async () => {
+    it('opens a page in place from the navigation row of another command', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', '0', UNLOCKED)]);
 
         const reply = await click('open:coral');
 
-        expect(reply.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
-        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeTruthy();
+        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
         expect(title(reply)).toBe('🏪 Boutique — Corail');
+    });
+
+    it('closes on the navigation row, the shop greyed out and 🪸 Prestige only once open', async () => {
+        await writeGameInstances('g1', [gameInstanceFixture('u1', '0')]);
+        const locked = await open();
+        // Another guild: the store keeps g1 in RAM, so rewriting its file would be ignored.
+        await writeGameInstances('g2', [gameInstanceFixture('u1', '0', UNLOCKED)]);
+        const mock = mockRes();
+        await shopCommand.handler(
+            mockReq({ guild_id: 'g2', member: { user: { id: 'u1' } } }),
+            mock.res,
+        );
+        const unlocked = readPanel(mock.payload);
+
+        const nav = (reply: Reply) =>
+            reply.buttons
+                .filter((b) => !b.id?.startsWith('shop:buy:') && !b.id?.startsWith('shop:page:'))
+                .map((b) => b.id);
+        expect(nav(locked)).toEqual(['shop:refresh:shells', 'shells:open', 'shop:open:shells']);
+        expect(nav(unlocked)).toEqual([
+            'shop:refresh:shells',
+            'shells:open',
+            'shop:open:shells',
+            'prestige:open',
+        ]);
+        expect(locked.buttons.find((b) => b.id === 'shop:open:shells')?.disabled).toBe(true);
     });
 
     it.each(['buy:bogus:1', 'buy:divingOtters:5', 'buy:divingOtters', 'nope'])(

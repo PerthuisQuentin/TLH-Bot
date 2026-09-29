@@ -5,13 +5,9 @@ import {
     ButtonStyle,
     InteractionContextType,
 } from 'discord-api-types/v10';
-import type {
-    APIButtonComponentWithCustomId,
-    APIComponentInContainer,
-    APIMessageTopLevelComponent,
-} from 'discord-api-types/v10';
+import type { APIComponentInContainer, APIMessageTopLevelComponent } from 'discord-api-types/v10';
 import type { Command } from './types.ts';
-import { shopOpenId } from './shop.ts';
+import { ACTION_NAVIGATE, NavPanel, navigationRow } from './navigation.ts';
 import {
     actionRow,
     button,
@@ -44,10 +40,7 @@ const COMMAND_NAME = 'prestige';
 const ACTION_CONFIRM = 'confirm';
 const ACTION_CANCEL = 'cancel';
 const ACTION_SHARE = 'share';
-const ACTION_OPEN = 'open';
-
-/** Opens the preview in a new private message, for a shortcut drawn by another command. */
-export const PRESTIGE_OPEN_ID = componentCustomId(COMMAND_NAME, ACTION_OPEN);
+const ACTION_REFRESH = 'refresh';
 
 const ACCENT_COLOR = 0xf4776a;
 
@@ -79,8 +72,22 @@ function panel(...components: APIComponentInContainer[]): Panel {
     return [container(ACCENT_COLOR, ...components)];
 }
 
-function notEnoughPanel(shellsMissing: string): Panel {
+type Nav = { coralUnlocked: boolean; shopPage?: ShopPage };
+
+/** A reply only its owner sees, closed by the navigation row. */
+function privatePanel(nav: Nav, ...components: APIComponentInContainer[]): Panel {
     return panel(
+        ...components,
+        navigationRow(componentCustomId(COMMAND_NAME, ACTION_REFRESH), {
+            current: NavPanel.PRESTIGE,
+            ...nav,
+        }),
+    );
+}
+
+function notEnoughPanel(shellsMissing: string): Panel {
+    return privatePanel(
+        { coralUnlocked: true },
         text(
             `## 🪸 Prestige\nVotre récolte de ce cycle ne suffit pas encore à faire grandir le récif. Il manque **${shellsMissing}** à votre record depuis le dernier prestige.`,
         ),
@@ -89,19 +96,16 @@ function notEnoughPanel(shellsMissing: string): Panel {
 
 /**
  * Says nothing about coral: to a locked player the currency does not exist yet. That is also
- * why the title carries the seedling's emoji rather than the 🪸 the other replies use.
+ * why the title carries the seedling's emoji rather than the 🪸 the other replies use, and
+ * why the shop button lands on the seedling's aisle.
  */
-function shopButton(page: ShopPage): APIButtonComponentWithCustomId {
-    return button('🏪 Boutique', shopOpenId(page), { style: ButtonStyle.Primary });
-}
-
 function lockedPanel(): Panel {
     const seedling = UPGRADE_REGISTRY[UpgradeId.CORAL_SEEDLING];
-    return panel(
+    return privatePanel(
+        { coralUnlocked: false, shopPage: seedling.shopPage },
         text(
             `## ${seedling.emoji} Prestige\nVos loutres n'ont rien où déposer leur récolte. Procurez-vous ${seedling.emoji} **${seedling.displayName}** dans la boutique, rayon ${SHOP_PAGE_NAMES[seedling.shopPage]}, pour ouvrir le récif.`,
         ),
-        actionRow(shopButton(seedling.shopPage)),
     );
 }
 
@@ -125,7 +129,8 @@ function previewPanel(instance: ReadonlyGameInstance): Panel {
         ...upgradeLines(instance, false),
     ];
 
-    return panel(
+    return privatePanel(
+        { coralUnlocked: true },
         text(
             `## 🪸 Prestige\n` +
                 `Vos loutres prennent leur retraite, et tout ce qu'elles ont ramassé depuis votre ` +
@@ -146,7 +151,10 @@ function previewPanel(instance: ReadonlyGameInstance): Panel {
 }
 
 function cancelledPanel(): Panel {
-    return panel(text(`## 🪸 Prestige\nPrestige annulé, rien n'a changé.`));
+    return privatePanel(
+        { coralUnlocked: true },
+        text(`## 🪸 Prestige\nPrestige annulé, rien n'a changé.`),
+    );
 }
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -185,7 +193,8 @@ async function confirmPrestige(guildId: string, userId: string): Promise<Panel> 
         `Récolte : **${formatBigNum(outcome.income)} 🐚/msg**`,
     ].join(' · ');
 
-    return panel(
+    return privatePanel(
+        { coralUnlocked: true, shopPage: ShopPage.CORAL },
         text(
             `## 🪸 Prestige ${outcome.prestigeCount}\n` +
                 `La récolte de vos loutres s'est déposée sur le récif, qui gagne ` +
@@ -200,7 +209,6 @@ async function confirmPrestige(guildId: string, userId: string): Promise<Panel> 
                 `${ACTION_SHARE}:${outcome.prestigeCount}:${outcome.coral.toString()}`,
             ),
         }),
-        actionRow(shopButton(ShopPage.CORAL)),
     );
 }
 
@@ -238,18 +246,20 @@ function resolveCaller(req: Request, res: Response): Caller | undefined {
 }
 
 async function handlePrestigeCommand(req: Request, res: Response): Promise<void> {
-    await openPreview(req, res);
+    await showPreview(req, res, false);
 }
 
-/** The command and the shortcut alike post the preview as a new private message. */
-async function openPreview(req: Request, res: Response): Promise<void> {
+/** The command posts the preview as a new private message; refresh and navigation redraw theirs. */
+async function showPreview(req: Request, res: Response, inPlace: boolean): Promise<void> {
     const caller = resolveCaller(req, res);
     if (!caller) return;
 
     // The reply is the last statement, so reaching the catch means nothing was sent yet.
     try {
         const instance = await getGameInstance(caller.guildId, caller.userId);
-        replyComponents(res, previewPanel(instance), { ephemeral: true });
+        const preview = previewPanel(instance);
+        if (inPlace) updateComponents(res, preview);
+        else replyComponents(res, preview, { ephemeral: true });
     } catch (error) {
         console.error('Error handling prestige command:', error);
         replyText(res, 'Une erreur est survenue pendant le prestige.', { ephemeral: true });
@@ -266,8 +276,8 @@ async function handlePrestigeComponent(req: Request, res: Response, action: stri
         handleShare(req, res, rawCount, rawCoral);
         return;
     }
-    if (action === ACTION_OPEN) {
-        await openPreview(req, res);
+    if (action === ACTION_NAVIGATE || action === ACTION_REFRESH) {
+        await showPreview(req, res, true);
         return;
     }
     if (action !== ACTION_CONFIRM && action !== ACTION_CANCEL) {

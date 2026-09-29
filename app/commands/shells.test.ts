@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import type { Request } from 'express';
 import { InteractionResponseType, InteractionResponseFlags } from 'discord-interactions';
 import { shellsCommand } from './shells.ts';
-import { prestigeCommand } from './prestige.ts';
 import { mockRes, readPanel } from '../../test/discord-interaction.ts';
 
 let dir: string;
@@ -94,6 +93,11 @@ function block(text: string, heading: string): string | undefined {
     return text.split('### ').find((part) => part.startsWith(heading));
 }
 
+/** The text beside the avatar, above the first heading. */
+function banner(text: string): string {
+    return text.split('### ')[0];
+}
+
 function headings(text: string): string[] {
     return [...text.matchAll(/^### (.+)$/gm)].map((m) => m[1]);
 }
@@ -116,11 +120,14 @@ describe('shellsCommand', () => {
         expect(reply.allowedMentions).toEqual({ parse: [] });
         expect(reply.text).toContain('## 🐚 Profil Coquillages\n<@u1>');
         expect(reply.text).not.toContain('Max historique');
-        // No Récif: a fresh player has not bought the seedling, so the layer does not exist
+        // No coral line: a fresh player has not bought the seedling, so the layer does not exist
         // for them yet. The unlocked layout is covered further down.
-        expect(headings(reply.text)).toEqual(['Rôles', 'Coquillages', 'Upgrades']);
-        expect(block(reply.text, 'Rôles')).toContain('Non classé');
-        expect(block(reply.text, 'Rôles')).toContain('Aucun');
+        expect(headings(reply.text)).toEqual(['Ressources', 'Upgrades']);
+        expect(block(reply.text, 'Ressources')).not.toContain('Corail');
+        expect(block(reply.text, 'Ressources')).toMatch(/^🐚 \*\*0\*\* Coquillages - .+\/msg$/m);
+        expect(banner(reply.text)).toContain('<@u1> · Aucun rôle · Non classé');
+        expect(banner(reply.text)).toContain('Prochain rôle :');
+        expect(banner(reply.text)).not.toContain('Automatisation');
     });
 
     it('shows the growth rings, the cap, and the bonus past it once lifted', async () => {
@@ -134,23 +141,22 @@ describe('shellsCommand', () => {
         ]);
 
         const coquillages = async (userId: string) =>
-            block((await openOwn(userId)).text, 'Coquillages')!;
+            block((await openOwn(userId)).text, 'Ressources')!;
 
-        expect(await coquillages('u1')).toContain('🌀 Stries de croissance : 42 jours — ×1.42');
+        expect(await coquillages('u1')).toContain('🌀 **42** Stries - ×1.42');
         expect(await coquillages('u1')).not.toContain('plafond');
-        expect(await coquillages('u2')).toContain('120 jours — ×2.00 (plafond atteint)');
+        expect(await coquillages('u2')).toContain('🌀 **120** Stries - ×2.00 (plafond atteint)');
 
         const lifted = await coquillages('u3');
-        expect(lifted).toContain('120 jours — ×2.20');
+        expect(lifted).toContain('🌀 **120** Stries - ×2.20');
         expect(lifted).not.toContain('plafond');
     });
 
-    it('hides the reef block entirely until the seedling is bought', async () => {
+    it('hides every coral line until the seedling is bought', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('u1', { shells: '40000' })]);
 
         const reply = await openOwn();
 
-        expect(headings(reply.text)).not.toContain('Récif');
         // Not just the block: the coral upgrades must not surface in the upgrade list either.
         expect(reply.text).not.toContain('Récif nourricier');
         expect(reply.text).not.toContain('Polypes');
@@ -167,12 +173,11 @@ describe('shellsCommand', () => {
             }),
         ]);
 
-        const reef = block((await openOwn()).text, 'Récif');
+        const reef = block((await openOwn()).text, 'Ressources');
 
-        expect(reef).toContain('Corail : 0 🪸');
-        expect(reef).toContain('Aucun prestige');
         // runMaxShells defaults to maxShells, so the gap is measured from 40K, not from 0.
-        expect(reef).toContain('Encore 960K 🐚');
+        expect(reef).toContain('🪸 **0** Corail - prestige dans 960K 🐚');
+        expect(reef).toContain('Aucun prestige');
     });
 
     it('shows the coral a prestige would pay once the run peak covers it', async () => {
@@ -188,12 +193,11 @@ describe('shellsCommand', () => {
             },
         ]);
 
-        const reef = block((await openOwn()).text, 'Récif');
+        const reef = block((await openOwn()).text, 'Ressources');
 
-        expect(reef).toContain('Corail : 7 🪸');
-        expect(reef).toContain('Prestige 3');
         // Computed from runMaxShells (2.5e12), not from the all-time 9.2e12.
-        expect(reef).toContain('46 🪸');
+        expect(reef).toContain('🪸 **7** Corail - +46 au prestige');
+        expect(reef).toContain('Prestige 3');
     });
 
     it('keeps the one-shot seedling out of the upgrade list, bought or not', async () => {
@@ -236,18 +240,16 @@ describe('shellsCommand', () => {
     describe('automation', () => {
         const AUTO_OFF = 'shells:auto-off:u1:';
 
-        it('shows the switch and what it manages once the Pieuvre is bought', async () => {
+        it('shows the switch in the banner once the Pieuvre is bought', async () => {
             await writeGameInstances('g1', [gameInstanceFixture('u1', { upgrades: AUTOMATED })]);
 
-            expect(block((await openOwn()).text, 'Coquillages')).toContain(
-                '🐙 Automatisation : **activée** · Gère 🦦 Loutres plongeuses',
-            );
+            expect(banner((await openOwn()).text)).toContain('🐙 Automatisation : **activée**');
         });
 
         it('says nothing of it, and offers no switch, before the first level', async () => {
             const reply = await openOwn();
 
-            expect(block(reply.text, 'Coquillages')).not.toContain('Automatisation');
+            expect(reply.text).not.toContain('Automatisation');
             expect(reply.buttons.some((b) => b.id?.startsWith('shells:auto-'))).toBe(false);
         });
 
@@ -272,7 +274,7 @@ describe('shellsCommand', () => {
             const reply = await click(`auto-off:u1:u${HASH}`);
 
             expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
-            expect(block(reply.text, 'Coquillages')).toContain('**désactivée**');
+            expect(banner(reply.text)).toContain('Automatisation : **désactivée**');
             expect(reply.buttons.map((b) => b.id)).toContain(`shells:auto-on:u1:u${HASH}`);
             expect(await storedSwitch('u1')).toBe(false);
         });
@@ -327,59 +329,54 @@ describe('shellsCommand', () => {
         );
     });
 
-    it('offers refresh, share and the profile select, carrying the avatar in the ids', async () => {
+    it('offers share, the profile select and the navigation row, carrying the avatar in the ids', async () => {
         const reply = await open({ member: { user: { id: 'u1', avatar: HASH } } });
 
         expect(reply.buttons.map((b) => b.id)).toEqual([
             `shells:share:u1:u${HASH}`,
             `shells:refresh:u1:u${HASH}`,
+            'shells:open',
             'shop:open:shells',
         ]);
+        expect(reply.buttons.find((b) => b.id === 'shells:open')?.disabled).toBe(true);
         expect(reply.selects).toEqual(['shells:view']);
     });
 
-    it('offers the shop shortcut on your own profile only', async () => {
-        const ownIds = (await openOwn('u1')).buttons.map((b) => b.id);
+    it("leaves 👤 Profil live on someone else's profile, to lead back to your own", async () => {
         // u2 looking at u1's profile through the select.
-        const otherIds = (
-            await click('view', { member: { user: { id: 'u2' } }, data: { values: ['u1'] } })
-        ).buttons.map((b) => b.id);
+        const reply = await click('view', {
+            member: { user: { id: 'u2' } },
+            data: { values: ['u1'] },
+        });
 
-        expect(ownIds).toContain('shop:open:shells');
-        expect(otherIds).not.toContain('shop:open:shells');
+        expect(reply.buttons.find((b) => b.id === 'shells:open')?.disabled).toBe(false);
+        expect(reply.buttons.map((b) => b.id)).toContain('shop:open:shells');
     });
 
-    it('offers the prestige shortcut on your own profile only, once the reef is open', async () => {
+    it("offers 🪸 Prestige by the viewer's reef, not the profile's", async () => {
         await writeGameInstances('g1', [
             gameInstanceFixture('u1', { upgrades: { coralSeedling: 1 } }),
+            gameInstanceFixture('u2'),
         ]);
+        const view = async (viewer: string, target: string) =>
+            (
+                await click('view', {
+                    member: { user: { id: viewer } },
+                    data: { values: [target] },
+                })
+            ).buttons.map((b) => b.id);
 
-        const ownIds = (await openOwn('u1')).buttons.map((b) => b.id);
-        // u2 looking at u1's profile through the select.
-        const otherIds = (
-            await click('view', { member: { user: { id: 'u2' } }, data: { values: ['u1'] } })
-        ).buttons.map((b) => b.id);
-
-        expect(ownIds).toContain('prestige:open');
-        expect(otherIds).not.toContain('prestige:open');
+        expect((await openOwn('u1')).buttons.map((b) => b.id)).toContain('prestige:open');
+        expect(await view('u2', 'u1')).not.toContain('prestige:open');
+        expect(await view('u1', 'u2')).toContain('prestige:open');
     });
 
-    it('opens the prestige preview in a new private message from the shortcut', async () => {
-        await writeGameInstances('g1', [
-            gameInstanceFixture('u1', { upgrades: { coralSeedling: 1 } }),
-        ]);
+    it("navigates back to the clicker's own profile in place", async () => {
+        const reply = await click('open', { member: { user: { id: 'u2', avatar: HASH } } });
 
-        const mock = mockRes();
-        await prestigeCommand.onComponent!(
-            mockReq({ guild_id: 'g1', member: { user: { id: 'u1' } } }),
-            mock.res,
-            'open',
-        );
-        const reply = readPanel(mock.payload);
-
-        expect(reply.type).toBe(InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE);
-        expect(reply.flags & InteractionResponseFlags.EPHEMERAL).toBeTruthy();
-        expect(reply.text).toContain('Prestige');
+        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(reply.text).toContain('<@u2>');
+        expect(reply.thumbnail).toBe(`https://cdn.discordapp.com/avatars/u2/${HASH}.png?size=128`);
     });
 
     it('refreshes the profile in place, keeping the avatar from its id', async () => {
@@ -432,6 +429,6 @@ describe('shellsCommand', () => {
         await writeConfig('g1', { shellsRoles: [{ roleId: 'role-1', threshold: '50' }] });
         await writeGameInstances('g1', [gameInstanceFixture('u1', { maxShells: '1000' })]);
 
-        expect(block((await openOwn()).text, 'Rôles')).toContain('<@&role-1>');
+        expect(banner((await openOwn()).text)).toContain('<@u1> · <@&role-1> · #1');
     });
 });

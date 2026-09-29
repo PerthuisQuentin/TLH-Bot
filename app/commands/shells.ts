@@ -8,11 +8,17 @@ import {
 } from 'discord-api-types/v10';
 import type { APIMessageTopLevelComponent } from 'discord-api-types/v10';
 import type { Command } from './types.ts';
-import { PRESTIGE_OPEN_ID } from './prestige.ts';
-import { shopOpenId } from './shop.ts';
-import { ShopPage, UpgradeId } from '../idle/core/types.ts';
-import { getShellsProfile } from '../idle/shells-profile.ts';
-import { flushGameInstances, updateGameInstance } from '../idle/game-instance-storage.ts';
+import { ACTION_NAVIGATE, NavPanel, navigationRow } from './navigation.ts';
+import { ResourceId, UpgradeId } from '../idle/core/types.ts';
+import { formatResource } from '../idle/core/resources.ts';
+import { UPGRADE_REGISTRY } from '../idle/core/upgrades/upgrade-registry.ts';
+import { formatBigNum } from '../idle/core/big-number.ts';
+import { getShellsProfile, type ShellsProfile } from '../idle/shells-profile.ts';
+import {
+    flushGameInstances,
+    getGameInstance,
+    updateGameInstance,
+} from '../idle/game-instance-storage.ts';
 import {
     actionRow,
     button,
@@ -41,7 +47,8 @@ import {
 const COMMAND_NAME = 'shells';
 
 // Refresh and share carry the profile they act on, as `<action>:<userId>:<avatar ref>`: a
-// click brings no avatar of its own. The select brings its pick, with the avatar resolved.
+// click brings no avatar of its own. The select brings its pick, with the avatar resolved,
+// and navigation always lands on the clicker's own profile.
 const ACTION_REFRESH = 'refresh';
 const ACTION_SHARE = 'share';
 const ACTION_VIEW = 'view';
@@ -104,6 +111,44 @@ async function setAutomation(guildId: string, userId: string, enabled: boolean):
     return applied;
 }
 
+/** Who the member is beside their avatar: role and rank, the next role, the automation switch. */
+function bannerLines(userId: string, profile: ShellsProfile): string[] {
+    const octopus = UPGRADE_REGISTRY[UpgradeId.STEWARD_OCTOPUS];
+    return [
+        `<@${userId}> · ${profile.currentRoleText} · ${profile.rankText}`,
+        `Prochain rôle : ${profile.nextRoleText}`,
+        // Null until the Pieuvre's first level: nothing to announce yet.
+        ...(profile.automationEnabled === null
+            ? []
+            : [
+                  `${octopus.emoji} Automatisation : **${profile.automationEnabled ? 'activée' : 'désactivée'}**`,
+              ]),
+    ];
+}
+
+/**
+ * One `<emoji> **amount** Name - detail` line per resource. The coral lines are dropped
+ * entirely while the layer is locked, so nothing announces the mechanic.
+ */
+function resourceLines(profile: ShellsProfile): string[] {
+    const days = profile.growthRingDays;
+    const preview = profile.prestigePreview;
+    return [
+        `🐚 **${formatBigNum(profile.shells)}** Coquillages - ${formatBigNum(profile.shellsPerMessage)}/msg`,
+        `🌀 **${days}** Strie${days > 1 ? 's' : ''} - ×${profile.growthRingsMultiplier.toFixed(2)}${profile.growthRingsCapped ? ' (plafond atteint)' : ''}`,
+        ...(profile.coralUnlocked
+            ? [
+                  `🪸 **${formatBigNum(profile.coral)}** Corail - ${
+                      preview.canPrestige
+                          ? `+${formatBigNum(preview.coral)} au prestige`
+                          : `prestige dans ${formatResource(preview.shellsMissing, ResourceId.SHELLS)}`
+                  }`,
+                  profile.prestigeText,
+              ]
+            : []),
+    ];
+}
+
 /**
  * Private, the panel closes with its controls; shared, it is a read-only snapshot naming who
  * posted it.
@@ -123,24 +168,10 @@ async function shellsPanel(
     const body = [
         section(
             thumbnail(avatarUrl(target.avatar, target.userId, guildId)),
-            text(`## 🐚 Profil Coquillages\n<@${target.userId}>`),
+            text(`## 🐚 Profil Coquillages\n${bannerLines(target.userId, profile).join('\n')}`),
         ),
         separator(),
-        text(
-            `### Rôles\nRang : ${profile.rankText}\nActuel : ${profile.currentRoleText}\nProchain : ${profile.nextRoleText}`,
-        ),
-        text(
-            `### Coquillages\n${profile.balanceText}\nPar message : ${profile.incomePerMessageText}\nPar réaction : ${profile.incomePerReactionText}\n${profile.growthRingsText}${profile.automationText ? `\n${profile.automationText}` : ''}`,
-        ),
-        // Dropped entirely rather than left empty while the layer is locked: an empty
-        // "Récif" heading announces the mechanic just as loudly as its contents would.
-        ...(profile.coralUnlocked
-            ? [
-                  text(
-                      `### Récif\nCorail : ${profile.coralText}\n${profile.prestigeText}\n${profile.nextPrestigeText}`,
-                  ),
-              ]
-            : []),
+        text(`### Ressources\n${resourceLines(profile).join('\n')}`),
         text(`### Upgrades\n${profile.upgradeLines.join('\n')}`),
         separator(),
         shareFooter(footerLine, {
@@ -152,25 +183,18 @@ async function shellsPanel(
     if (sharedBy) return [container(ACCENT_COLOR, ...body)];
 
     const own = target.userId === viewerId;
+    // The navigation acts on whoever clicks, so its prestige button follows their reef.
+    const viewerCoralUnlocked =
+        own || !viewerId
+            ? profile.coralUnlocked
+            : (await getGameInstance(guildId, viewerId)).coralUnlocked;
     return [
         container(
             ACCENT_COLOR,
             ...body,
-            actionRow(
-                button('🔄 Rafraîchir', targetCustomId(ACTION_REFRESH, target)),
-                // Shortcuts act on the clicker, so they only make sense on your own profile.
-                ...(own
-                    ? [
-                          button('🏪 Boutique', shopOpenId(ShopPage.SHELLS), {
-                              style: ButtonStyle.Primary,
-                          }),
-                      ]
-                    : []),
-                ...(own && profile.coralUnlocked
-                    ? [button('🪸 Prestige', PRESTIGE_OPEN_ID, { style: ButtonStyle.Primary })]
-                    : []),
-                ...(own && profile.automationEnabled !== null
-                    ? [
+            ...(own && profile.automationEnabled !== null
+                ? [
+                      actionRow(
                           profile.automationEnabled
                               ? button(
                                     '🐙 Couper l’automatisation',
@@ -181,13 +205,18 @@ async function shellsPanel(
                                     targetCustomId(ACTION_AUTO_ON, target),
                                     { style: ButtonStyle.Success },
                                 ),
-                      ]
-                    : []),
-            ),
+                      ),
+                  ]
+                : []),
             actionRow({
                 type: ComponentType.UserSelect,
                 custom_id: componentCustomId(COMMAND_NAME, ACTION_VIEW),
                 placeholder: '👤 Voir le profil de…',
+            }),
+            // On someone else's profile, 👤 Profil stays live: it leads back to your own.
+            navigationRow(targetCustomId(ACTION_REFRESH, target), {
+                current: own ? NavPanel.PROFILE : null,
+                coralUnlocked: viewerCoralUnlocked,
             }),
         ),
     ];
@@ -219,10 +248,13 @@ async function handleShellsCommand(req: Request, res: Response): Promise<void> {
 async function handleShellsComponent(req: Request, res: Response, action: string): Promise<void> {
     const body = req.body as InteractionBody;
     const [kind, rawTarget, rawAvatar] = action.split(':');
+    const callerId = callerIdOf(body);
 
     let target: ProfileTarget;
     if (TARGETED_ACTIONS.includes(kind) && rawTarget) {
         target = { userId: rawTarget, avatar: decodeAvatarRef(rawAvatar) };
+    } else if (action === ACTION_NAVIGATE && callerId) {
+        target = { userId: callerId, avatar: avatarOf(body, callerId) };
     } else if (kind === ACTION_VIEW && body.data?.values?.[0]) {
         const userId = body.data.values[0];
         target = { userId, avatar: avatarOf(body, userId) };
@@ -235,34 +267,33 @@ async function handleShellsComponent(req: Request, res: Response, action: string
     try {
         const { guild_id } = body;
         if (!requireGuild(res, guild_id)) return;
-        const clickerId = callerIdOf(body);
 
         if (kind === ACTION_SHARE) {
-            if (!clickerId) {
+            if (!callerId) {
                 replyText(res, 'Impossible de déterminer l’utilisateur.', { ephemeral: true });
                 return;
             }
-            const panel = await shellsPanel(guild_id, target, clickerId, clickerId);
+            const panel = await shellsPanel(guild_id, target, callerId, callerId);
             replyComponents(res, panel, { suppressMentions: true });
             return;
         }
 
         if (kind === ACTION_AUTO_ON || kind === ACTION_AUTO_OFF) {
             // The button only shows on your own profile; a forged id cannot reach someone else's.
-            if (clickerId !== target.userId) {
+            if (callerId !== target.userId) {
                 replyText(res, 'Vous ne pouvez régler que votre propre automatisation.', {
                     ephemeral: true,
                 });
                 return;
             }
             // Worded without naming the Pieuvre: what lies behind the seedling stays hidden.
-            if (!(await setAutomation(guild_id, clickerId, kind === ACTION_AUTO_ON))) {
+            if (!(await setAutomation(guild_id, callerId, kind === ACTION_AUTO_ON))) {
                 replyText(res, 'Vous n’avez encore rien à automatiser.', { ephemeral: true });
                 return;
             }
         }
 
-        const panel = await shellsPanel(guild_id, target, clickerId);
+        const panel = await shellsPanel(guild_id, target, callerId);
         updateComponents(res, panel, { suppressMentions: true });
     } catch (error) {
         console.error('Error handling shells click:', error);

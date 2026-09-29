@@ -11,6 +11,7 @@ import type {
     APIMessageTopLevelComponent,
 } from 'discord-api-types/v10';
 import type { Command } from './types.ts';
+import { ACTION_NAVIGATE, NavPanel, navigationRow } from './navigation.ts';
 import {
     ALL_UPGRADE_CLASSES,
     ALL_UPGRADE_IDS,
@@ -29,9 +30,9 @@ import {
     updateGameInstance,
     flushGameInstances,
 } from '../idle/game-instance-storage.ts';
-import { bnCeil } from '../idle/core/big-number.ts';
+import { bnCeil, formatBigNum } from '../idle/core/big-number.ts';
 import type { BigNum } from '../idle/core/big-number.ts';
-import { formatResource } from '../idle/core/resources.ts';
+import { formatResource, RESOURCE_META } from '../idle/core/resources.ts';
 import { SHOP_PAGE_NAMES } from '../idle/core/shop-pages.ts';
 import type { ReadonlyGameInstance } from '../idle/core/game-instance.ts';
 import type { ReadonlyUpgrade } from '../idle/core/upgrades/base-upgrade.ts';
@@ -39,12 +40,12 @@ import { ResourceId, ShopPage, UpgradeId } from '../idle/core/types.ts';
 
 const COMMAND_NAME = 'shop';
 
-// `buy:<upgradeId>:<quantity>`, `page:<page>`, `refresh:<page>`, `open:<page>`: the panel keeps
-// no state of its own, and a purchase redraws the page its upgrade is sold on.
+// `buy:<upgradeId>:<quantity>`, `page:<page>`, `refresh:<page>`, and `open:<page>` from the
+// navigation row: the panel keeps no state of its own, and a purchase redraws the page its
+// upgrade is sold on.
 const ACTION_BUY = 'buy';
 const ACTION_PAGE = 'page';
 const ACTION_REFRESH = 'refresh';
-const ACTION_OPEN = 'open';
 
 const QUANTITY_MAX = 'max';
 const QUANTITIES = ['1', '10', QUANTITY_MAX];
@@ -65,11 +66,6 @@ const PAGE_EMOJIS: Record<ShopPage, string> = {
 const SHOP_PAGES: ShopPage[] = [...new Set(ALL_UPGRADE_CLASSES.map((c) => c.shopPage))];
 
 type Panel = APIMessageTopLevelComponent[];
-
-/** Opens the shop on `page` in a new private message, for a shortcut drawn by another command. */
-export function shopOpenId(page: ShopPage): string {
-    return componentCustomId(COMMAND_NAME, `${ACTION_OPEN}:${page}`);
-}
 
 function resolvePage(requested: string | undefined): ShopPage {
     return SHOP_PAGES.find((id) => id === requested) ?? SHOP_PAGES[0];
@@ -228,15 +224,36 @@ function upgradeBlock(
     ];
 }
 
+/**
+ * Every resource the player holds, whatever the aisle, as `/shells` writes them: one
+ * `<emoji> **amount** Name - detail` line each.
+ */
+function resourceLines(instance: ReadonlyGameInstance): string[] {
+    const line = (id: ResourceId, detail: string) =>
+        `${RESOURCE_META[id].emoji} **${formatBigNum(instance.resources[id])}** ${RESOURCE_META[id].displayName} - ${detail}`;
+    const lines = [
+        line(ResourceId.SHELLS, `${formatBigNum(instance.income[ResourceId.SHELLS])}/msg`),
+    ];
+    // Left out while locked: the coral line would announce the layer the seedling hides.
+    if (instance.coralUnlocked) {
+        const preview = instance.previewPrestige();
+        lines.push(
+            line(
+                ResourceId.CORAL,
+                preview.canPrestige
+                    ? `+${formatBigNum(preview.coral)} au prestige`
+                    : `prestige dans ${formatResource(preview.shellsMissing, ResourceId.SHELLS)}`,
+            ),
+        );
+    }
+    return lines;
+}
+
 function shopPanel(instance: ReadonlyGameInstance, page: ShopPage, banner?: string): Panel {
     const upgrades = onSale(instance, page);
-    // Every currency the page prices in, so a page mixing them shows each balance.
-    const balances = [...new Set(upgrades.map((upgrade) => upgrade.costResourceId))]
-        .map((id) => `**${formatResource(instance.resources[id], id)}**`)
-        .join(' · ');
+    const header = resourceLines(instance);
     // Reachable once every treasure is bought: the page stays a valid place to land.
-    const header =
-        upgrades.length > 0 ? `Vous avez ${balances}` : "*Rien à vendre ici pour l'instant.*";
+    if (upgrades.length === 0) header.push("*Rien à vendre ici pour l'instant.*");
 
     // An aisle with nothing to sell gets no button, so a locked player is never shown one
     // they cannot enter; the current one stays, greyed out, to say where they are.
@@ -253,15 +270,17 @@ function shopPanel(instance: ReadonlyGameInstance, page: ShopPage, banner?: stri
     return [
         container(
             ACCENT_COLOR,
-            text(`## 🏪 Boutique — ${SHOP_PAGE_NAMES[page]}\n${header}`),
+            text(`## 🏪 Boutique — ${SHOP_PAGE_NAMES[page]}\n${header.join('\n')}`),
             ...(banner ? [text(banner)] : []),
             separator(),
             ...upgrades.flatMap((upgrade) => upgradeBlock(upgrade, instance)),
             ...(upgrades.length > 0 ? [separator()] : []),
-            actionRow(
-                ...pageButtons,
-                button('🔄', componentCustomId(COMMAND_NAME, `${ACTION_REFRESH}:${page}`)),
-            ),
+            actionRow(...pageButtons),
+            navigationRow(componentCustomId(COMMAND_NAME, `${ACTION_REFRESH}:${page}`), {
+                current: NavPanel.SHOP,
+                coralUnlocked: instance.coralUnlocked,
+                shopPage: page,
+            }),
         ),
     ];
 }
@@ -314,7 +333,8 @@ async function handleShopCommand(req: Request, res: Response): Promise<void> {
 async function handleShopComponent(req: Request, res: Response, action: string): Promise<void> {
     const [kind, arg, rawQuantity] = action.split(':');
 
-    const isPageAction = kind === ACTION_PAGE || kind === ACTION_REFRESH || kind === ACTION_OPEN;
+    const isPageAction =
+        kind === ACTION_PAGE || kind === ACTION_REFRESH || kind === ACTION_NAVIGATE;
     const isBuy =
         kind === ACTION_BUY &&
         ALL_UPGRADE_IDS.includes(arg as UpgradeId) &&
@@ -340,10 +360,7 @@ async function handleShopComponent(req: Request, res: Response, action: string):
         }
 
         const instance = await getGameInstance(caller.guildId, caller.userId);
-        const panel = shopPanel(instance, landingPage(instance, arg));
-        // A shortcut from another command opens a new message and leaves its own in place.
-        if (kind === ACTION_OPEN) replyComponents(res, panel, { ephemeral: true });
-        else updateComponents(res, panel);
+        updateComponents(res, shopPanel(instance, landingPage(instance, arg)));
     } catch (error) {
         console.error('Error handling shop click:', error);
         replyText(res, 'Une erreur est survenue dans la boutique.', { ephemeral: true });

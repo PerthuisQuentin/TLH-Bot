@@ -46,6 +46,9 @@ async function readInstance(guildId: string): Promise<Record<string, never>> {
 
 const body = (guildId: string) => ({ guild_id: guildId, member: { user: { id: 'u1' } } });
 
+/** The navigation row closing every private reply, reef open: `/prestige` itself greyed out. */
+const NAV = ['prestige:refresh', 'shells:open', 'shop:open:shells', 'prestige:open'];
+
 async function preview(guildId: string) {
     const mock = mockRes();
     await prestigeCommand.handler({ body: body(guildId) } as unknown as Request, mock.res);
@@ -80,7 +83,7 @@ describe('prestigeCommand', () => {
 
         expect(reply.flags & InteractionResponseFlags.IS_COMPONENTS_V2).toBeTruthy();
         expect(reply.text).toContain('500K 🐚');
-        expect(reply.buttons).toEqual([]);
+        expect(reply.buttons.map((b) => b.id)).toEqual(NAV);
     });
 
     it('declines without naming coral while the seedling is unbought', async () => {
@@ -90,8 +93,12 @@ describe('prestigeCommand', () => {
             expect(reply.text).toContain('Bouture de corail');
             // Including the title: 🪸 there would name the currency the refusal is hiding.
             expect(reply.text).not.toContain('🪸');
-            // Straight to the aisle that sells it.
-            expect(reply.buttons.map((b) => b.id)).toEqual(['shop:open:treasures']);
+            // No 🪸 Prestige in the row, and the shop opens straight on the aisle that sells it.
+            expect(reply.buttons.map((b) => b.id)).toEqual([
+                'prestige:refresh',
+                'shells:open',
+                'shop:open:treasures',
+            ]);
         }
 
         const stored = await readInstance('g1');
@@ -117,7 +124,12 @@ describe('prestigeCommand', () => {
         expect(reply.text).toContain('36 🪸');
         expect(reply.text).toMatch(/perdez[\s\S]*🦦 Loutres plongeuses — niveau \*\*40\*\*/);
         expect(reply.text).toMatch(/gardez[\s\S]*🫧 Récif nourricier — niveau \*\*2\*\*/);
-        expect(reply.buttons.map((b) => b.id)).toEqual(['prestige:confirm', 'prestige:cancel']);
+        expect(reply.buttons.map((b) => b.id)).toEqual([
+            'prestige:confirm',
+            'prestige:cancel',
+            ...NAV,
+        ]);
+        expect(reply.buttons.find((b) => b.id === 'prestige:open')?.disabled).toBe(true);
 
         const stored = await readInstance('g1');
         expect(stored.resources).toEqual({ shells: '1e12' });
@@ -144,8 +156,15 @@ describe('prestigeCommand', () => {
         expect(reply.flags & InteractionResponseFlags.IS_COMPONENTS_V2).toBeTruthy();
         expect(reply.text).toContain('🪸 Prestige 1');
         expect(reply.text).toContain('36 🪸');
-        // Confirm and cancel are gone; only the result's Share is left, carrying what it reports.
-        expect(reply.buttons.map((b) => b.id)).toEqual(['prestige:share:1:36', 'shop:open:coral']);
+        // Confirm and cancel are gone; Share carries what it reports, and the shop opens on the
+        // aisle the coral is spent in.
+        expect(reply.buttons.map((b) => b.id)).toEqual([
+            'prestige:share:1:36',
+            'prestige:refresh',
+            'shells:open',
+            'shop:open:coral',
+            'prestige:open',
+        ]);
 
         const stored = await readInstance('g1');
         expect(stored.resources).toEqual({ shells: '0', coral: '36' });
@@ -187,9 +206,19 @@ describe('prestigeCommand', () => {
 
         expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
         expect(reply.text).toContain('annulé');
-        expect(reply.buttons).toEqual([]);
+        expect(reply.buttons.map((b) => b.id)).toEqual(NAV);
         const stored = await readInstance('g1');
         expect(stored.resources).toEqual({ shells: '1e12' });
+    });
+
+    it.each(['refresh', 'open'])('redraws the preview in place (%s)', async (action) => {
+        await seed('g1', fixture('1e12', { divingOtters: 40 }));
+
+        const reply = await click('g1', action);
+
+        expect(reply.type).toBe(InteractionResponseType.UPDATE_MESSAGE);
+        expect(reply.text).toContain('36 🪸');
+        expect(reply.buttons.map((b) => b.id)).toContain('prestige:confirm');
     });
 
     it('shares the event publicly, without the private balances', async () => {
