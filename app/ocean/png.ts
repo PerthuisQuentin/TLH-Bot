@@ -1,7 +1,21 @@
-import { crc32, deflateSync } from 'node:zlib';
+import { deflateSync } from 'node:zlib';
 
 const SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const COLOR_TYPE_RGB = 2;
+
+// Own CRC-32 rather than `zlib.crc32`, which only exists from Node 20.15: production runs 18.
+const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+});
+
+/** The CRC-32 PNG chunks carry (ISO 3309, the one zlib computes). */
+export function crc32(data: Uint8Array): number {
+    let crc = 0xffffffff;
+    for (const byte of data) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+}
 
 function chunk(type: string, data: Buffer): Buffer {
     const length = Buffer.alloc(4);

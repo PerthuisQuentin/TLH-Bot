@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
-import { encodePng } from './png.ts';
+import { crc32, encodePng } from './png.ts';
 
 /** The IHDR size and the unfiltered pixel rows of a PNG `encodePng` wrote. */
 function decode(png: Buffer): { width: number; height: number; rows: number[][] } {
@@ -14,6 +14,17 @@ function decode(png: Buffer): { width: number; height: number; rows: number[][] 
     ]);
     return { width, height, rows };
 }
+
+describe('crc32', () => {
+    // Reference values of CRC-32/ISO-HDLC, the variant PNG and zlib use.
+    it.each([
+        ['', 0],
+        ['123456789', 0xcbf43926],
+        ['The quick brown fox jumps over the lazy dog', 0x414fa339],
+    ])('matches the reference for %j', (input, expected) => {
+        expect(crc32(Buffer.from(input, 'latin1'))).toBe(expected);
+    });
+});
 
 describe('encodePng', () => {
     it('starts with the PNG signature and an RGB header', () => {
