@@ -6,7 +6,7 @@
   "main": "dist/app.js",
   "type": "module",
   "engines": {
-    "node": ">=18.x"
+    "node": "22.x"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

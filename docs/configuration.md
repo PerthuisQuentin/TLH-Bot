@@ -27,7 +27,7 @@ The deployed bot reads no file at all: the host injects these variables into the
 
 ## Prerequisites
 
-- Node.js ≥ 18 (developed on 24).
+- Node.js 22 (developed on 24). The code relies on APIs Node 18 lacks, `zlib.crc32` among them (from 22.2), and a Node 18 host crashes at boot.
 - A Discord application with a bot user.
 - A Gemini API key, or an OpenRouter key with `AI_PROVIDER=openrouter`.
 - A World Weather Online key.
@@ -69,6 +69,8 @@ Four automated checks must come back clean: `npx tsc --noEmit`, `npm run lint`, 
 `SIGTERM` and `SIGINT` run one shutdown path, and the order is the point: intake stops first (the HTTP server, then the gateway client) so nothing can dirty a file again, and only then is every dirty file flushed to disk. Each step is bounded at 3 s and swallows its own error, so a stuck step can neither eat the grace period nor skip the flush behind it. A forced exit fires after 10 s overall. An uncaught exception takes the same path but exits non-zero.
 
 On Railway, `railway.json` sets both halves of that contract. `drainingSeconds` (the delay between `SIGTERM` and `SIGKILL`) is 15, above the 10 s forced exit: with a shorter one the old deployment is killed mid-flush, exits 137, shows as _Crashed_ and loses the writes still held in RAM. `startCommand` runs `node` directly, because `npm start` does not forward `SIGTERM` to the app. A value set in the service's Settings pane is overridden by this file.
+
+**The Node version on Railway** comes from `engines.node` in `package.json`, `22.x`. Both of Railway's builders read it: Nixpacks, which only takes a major version and falls back to Node 18 without one, and Railpack. A `NIXPACKS_NODE_VERSION` or `RAILPACK_NODE_VERSION` variable in the service would override it: leave both unset, so the repo stays the one place that decides. The build log shows the version it installed.
 
 ---
 
