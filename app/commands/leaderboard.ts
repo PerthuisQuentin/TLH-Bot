@@ -55,6 +55,7 @@ const SORT_OPTIONS: Record<LeaderboardSort, { label: string; emoji: string }> = 
     [LeaderboardSort.CURRENT]: { label: 'Classement par solde actuel', emoji: '🐚' },
     [LeaderboardSort.INCOME]: { label: 'Classement par revenu par message', emoji: '💬' },
     [LeaderboardSort.RINGS]: { label: 'Classement par stries de croissance', emoji: '🌀' },
+    [LeaderboardSort.JACKPOTS]: { label: 'Classement par jackpots', emoji: '🎰' },
 };
 
 type Panel = APIMessageTopLevelComponent[];

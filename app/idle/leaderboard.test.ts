@@ -60,6 +60,36 @@ describe('Leaderboard sorting', () => {
         ]);
     });
 
+    it('sorts by JACKPOTS descending, ties to the earlier last jackpot, then by record', () => {
+        const withJackpots = (userId: string, maxShells: string, count: number, at?: string) =>
+            new GameInstance({
+                userId,
+                resources: { [ResourceId.SHELLS]: '0' },
+                stats: { maxShells, totalCoral: '0', jackpotCount: count, lastJackpotAt: at },
+                growthRings: { days: 0, lastDate: '' },
+                lastActiveAt: new Date().toISOString(),
+                autoBuyEnabled: true,
+                upgrades: {},
+            });
+        const board = new Leaderboard(
+            [
+                withJackpots('none', '999', 0),
+                withJackpots('twoLate', '0', 2, '2026-10-01T00:00:00.000Z'),
+                withJackpots('noneBig', '9999', 0),
+                withJackpots('one', '0', 1, '2026-06-01T00:00:00.000Z'),
+                withJackpots('twoEarly', '0', 2, '2026-09-01T00:00:00.000Z'),
+            ],
+            LeaderboardSort.JACKPOTS,
+        );
+        expect(board.getPage(1, 10).entries.map((e) => e.userId)).toEqual([
+            'twoEarly',
+            'twoLate',
+            'one',
+            'noneBig',
+            'none',
+        ]);
+    });
+
     it('carries the ring days and the effective multiplier on each entry', () => {
         const board = new Leaderboard([makeInstance('u1', '0', '0', 0, 150)]);
         expect(board.getUserEntry('u1')).toMatchObject({

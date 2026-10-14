@@ -106,7 +106,9 @@ The whole shells game state, one entry per player. See [shells.md](./shells.md) 
             "maxShells": "912004",
             "runMaxShells": "912004",
             "prestigeCount": 0,
-            "totalCoral": "0"
+            "totalCoral": "0",
+            "jackpotCount": 1,
+            "lastJackpotAt": "2026-08-09T21:03:54.120Z"
         },
         "growthRings": { "days": 4, "lastDate": "2026-08-10" },
         "lastActiveAt": "2026-08-10T18:42:11.003Z",
@@ -127,6 +129,8 @@ The whole shells game state, one entry per player. See [shells.md](./shells.md) 
 | `stats.runMaxShells`   | string  | Peak balance since the last prestige. Optional; **a file without it reads it back as `maxShells`**, not as 0, because a player with no prestige has run since the beginning.  |
 | `stats.prestigeCount`  | number  | Prestiges performed. Optional, defaults to 0.                                                                                                                                 |
 | `stats.totalCoral`     | string  | Every coral ever credited. Spending leaves it, so it only grows; the reef of the `/shells` ocean scene reads it. Required, `"0"` for a new player.                            |
+| `stats.jackpotCount`   | number  | Jackpots won. Optional, defaults to 0.                                                                                                                                        |
+| `stats.lastJackpotAt`  | string  | ISO timestamp of the last jackpot. Absent until the first one.                                                                                                                |
 | `growthRings.days`     | number  | Active days, not necessarily consecutive. Never goes down.                                                                                                                    |
 | `growthRings.lastDate` | string  | `YYYY-MM-DD`, Europe/Paris.                                                                                                                                                   |
 | `lastActiveAt`         | string  | ISO timestamp passive income has been credited up to — the last earning event, minus the fraction of a shell that event did not pay for. Passive income integrates from here. |
@@ -135,9 +139,9 @@ The whole shells game state, one entry per player. See [shells.md](./shells.md) 
 
 There is no `income` field. The income is derived on load from `upgrades` and `growthRings` (`GameInstance.computeIncome`), so a rebalance applies to every player with no migration and nothing stored can lag behind.
 
-The prestige fields land in the file the first time a player is written after the upgrade, and
+The prestige and jackpot fields land in the file the first time a player is written after the upgrade, and
 an older file is accepted as-is until then: the constructor's defaults are exactly right for a
-player who has never prestiged. What the mechanic does with them: [shells.md](./shells.md#prestige).
+player who has never prestiged nor hit a jackpot. What the mechanic does with them: [shells.md](./shells.md#prestige).
 
 **Shell amounts are JSON strings.** Balances reach 10^30 and beyond, so a native `number` would silently lose precision. They are parsed through `app/idle/core/big-number.ts` (a decimal.js wrapper) and rendered with `formatBigNum`.
 

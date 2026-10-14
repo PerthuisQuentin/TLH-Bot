@@ -174,6 +174,7 @@ describe('prestigeCommand', () => {
             runMaxShells: '0',
             prestigeCount: 1,
             totalCoral: '36',
+            jackpotCount: 0,
         });
         expect(stored.upgrades).toMatchObject({ divingOtters: 0 });
         expect(stored.growthRings).toEqual({ days: 4, lastDate: '2026-09-15' });

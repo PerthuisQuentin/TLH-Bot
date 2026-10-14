@@ -4,3 +4,4 @@ files/
 prod-files/
 dist/
 coverage/
+.vscode/settings.json

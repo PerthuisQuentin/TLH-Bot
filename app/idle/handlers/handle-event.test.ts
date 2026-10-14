@@ -157,6 +157,17 @@ describe('handleDiscordEvent — jackpot', () => {
         expect(result.jackpot?.multiplier).toBe(JACKPOT_MULTIPLIER);
         expect(result.jackpot?.amount.gt(0)).toBe(true);
     });
+
+    it('records the jackpot in the player stats', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const guildId = 'g-jackpot-stats';
+
+        await handleDiscordEvent(makeEvent({ guildId, userId: 'u1', channelId: 'c1' }));
+        const { stats } = await getGameInstance(guildId, 'u1');
+
+        expect(stats.jackpotCount).toBe(1);
+        expect(stats.lastJackpotAt).not.toBeNull();
+    });
 });
 
 describe('handleDiscordEvent — auto-buy', () => {

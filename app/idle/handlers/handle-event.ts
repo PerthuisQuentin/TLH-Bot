@@ -69,7 +69,7 @@ export async function handleDiscordEvent(event: DiscordEvent): Promise<DiscordEv
         // Jackpot — no heat, messages only
         const jackpotGained =
             event.activityType === ChannelActivityType.Message && rollJackpot()
-                ? gameInstance.applyShellsGain(JACKPOT_MULTIPLIER)
+                ? gameInstance.applyJackpot()
                 : null;
 
         // Last, once every credit has landed and the run peak has seen it.
