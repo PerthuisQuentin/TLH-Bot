@@ -7,6 +7,7 @@ export enum LeaderboardSort {
     CURRENT = 'current',
     INCOME = 'income',
     RINGS = 'rings',
+    JACKPOTS = 'jackpots',
 }
 
 export type LeaderboardEntry = {
@@ -17,6 +18,8 @@ export type LeaderboardEntry = {
     shellsPerMessage: BigNum;
     growthRingDays: number;
     growthRingsMultiplier: number;
+    jackpotCount: number;
+    lastJackpotAt: Date | null;
 };
 
 type PaginatedLeaderboard = {
@@ -29,6 +32,11 @@ type PaginatedLeaderboard = {
 };
 
 const DEFAULT_PAGE_SIZE = 10;
+
+// A player without a jackpot sorts after any date; `Infinity` would give NaN on a tie.
+function lastJackpotTime(instance: ReadonlyGameInstance): number {
+    return instance.stats.lastJackpotAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+}
 
 export class Leaderboard {
     private readonly _entries: LeaderboardEntry[];
@@ -53,6 +61,13 @@ export class Leaderboard {
                     b.growthRings.days - a.growthRings.days ||
                     bnCompare(b.stats.maxShells, a.stats.maxShells)
                 );
+            // Whoever reached the count first stays ahead; players without one fall back to the record.
+            case LeaderboardSort.JACKPOTS:
+                return (
+                    b.stats.jackpotCount - a.stats.jackpotCount ||
+                    lastJackpotTime(a) - lastJackpotTime(b) ||
+                    bnCompare(b.stats.maxShells, a.stats.maxShells)
+                );
             case LeaderboardSort.MAX:
                 return bnCompare(b.stats.maxShells, a.stats.maxShells);
         }
@@ -72,6 +87,8 @@ export class Leaderboard {
                 shellsPerMessage: instance.income[ResourceId.SHELLS],
                 growthRingDays: instance.growthRings.days,
                 growthRingsMultiplier: instance.growthRingsMultiplier,
+                jackpotCount: instance.stats.jackpotCount,
+                lastJackpotAt: instance.stats.lastJackpotAt,
             }));
     }
 

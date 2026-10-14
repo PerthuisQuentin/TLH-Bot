@@ -15,6 +15,7 @@ import {
 } from './growth-rings.ts';
 import { computePassiveShells, passiveCreditedUntil } from './passive-income.ts';
 import { previewPrestige, type PrestigePreview } from './prestige/prestige-config.ts';
+import { JACKPOT_MULTIPLIER } from './jackpot.ts';
 
 export const DEFAULT_SHELLS_PER_MESSAGE = 10;
 
@@ -27,15 +28,19 @@ type StatsJson = {
     runMaxShells?: string;
     prestigeCount?: number;
     totalCoral: string;
+    jackpotCount?: number;
+    lastJackpotAt?: string;
 };
 
-// The two prestige fields are optional so every file written before prestige existed still
+// The prestige and jackpot fields are optional so every file written before they existed still
 // validates. What they default to is decided in the constructor, not here.
 const StatsJsonSchema = z.object({
     maxShells: z.string(),
     runMaxShells: z.string().optional(),
     prestigeCount: z.number().optional(),
     totalCoral: z.string(),
+    jackpotCount: z.number().optional(),
+    lastJackpotAt: z.string().optional(),
 });
 
 type StatsData = {
@@ -44,6 +49,9 @@ type StatsData = {
     prestigeCount: number;
     /** Every coral ever credited. Spending leaves it, so it only grows. */
     totalCoral: BigNum;
+    jackpotCount: number;
+    /** `null` until the first jackpot. */
+    lastJackpotAt: Date | null;
 };
 
 export type GameInstanceJson = {
@@ -100,6 +108,8 @@ export class GameInstance {
             runMaxShells: bn(data.stats.runMaxShells ?? data.stats.maxShells),
             prestigeCount: data.stats.prestigeCount ?? 0,
             totalCoral: bn(data.stats.totalCoral),
+            jackpotCount: data.stats.jackpotCount ?? 0,
+            lastJackpotAt: data.stats.lastJackpotAt ? new Date(data.stats.lastJackpotAt) : null,
         };
         this._growthRings = new GrowthRings(data.growthRings);
         this._lastActiveAt = new Date(data.lastActiveAt);
@@ -284,6 +294,14 @@ export class GameInstance {
         return amount;
     }
 
+    /** Pays the jackpot and records it in the stats. */
+    applyJackpot(now: Date = new Date()): BigNum {
+        const amount = this.applyShellsGain(JACKPOT_MULTIPLIER);
+        this._stats.jackpotCount += 1;
+        this._stats.lastJackpotAt = now;
+        return amount;
+    }
+
     applyPassiveIncome(): BigNum {
         const now = new Date();
         const income = this._income[ResourceId.SHELLS];
@@ -335,6 +353,10 @@ export class GameInstance {
                 runMaxShells: this._stats.runMaxShells.toString(),
                 prestigeCount: this._stats.prestigeCount,
                 totalCoral: this._stats.totalCoral.toString(),
+                jackpotCount: this._stats.jackpotCount,
+                ...(this._stats.lastJackpotAt && {
+                    lastJackpotAt: this._stats.lastJackpotAt.toISOString(),
+                }),
             },
             growthRings: this._growthRings.toJson(),
             lastActiveAt: this._lastActiveAt.toISOString(),
@@ -350,7 +372,13 @@ export class GameInstance {
         return new GameInstance({
             userId,
             resources: { [ResourceId.SHELLS]: '0' },
-            stats: { maxShells: '0', runMaxShells: '0', prestigeCount: 0, totalCoral: '0' },
+            stats: {
+                maxShells: '0',
+                runMaxShells: '0',
+                prestigeCount: 0,
+                totalCoral: '0',
+                jackpotCount: 0,
+            },
             growthRings: GrowthRings.newInstance().toJson(),
             lastActiveAt: now.toISOString(),
             // On, so the first level works the moment it is bought.
@@ -438,6 +466,7 @@ export type ReadonlyGameInstance = Readonly<
         GameInstance,
         | 'buyUpgrade'
         | 'applyShellsGain'
+        | 'applyJackpot'
         | 'applyPassiveIncome'
         | 'addGrowthRing'
         | 'computeIncome'

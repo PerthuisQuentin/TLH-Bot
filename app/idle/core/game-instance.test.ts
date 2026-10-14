@@ -661,6 +661,38 @@ describe('stats.totalCoral', () => {
     });
 });
 
+describe('applyJackpot', () => {
+    it('credits the jackpot and records it in the stats', () => {
+        const instance = new GameInstance(makeJson());
+        const at = new Date('2026-10-14T12:00:00.000Z');
+
+        const first = instance.applyJackpot(at);
+        const second = instance.applyJackpot(at);
+
+        expect(instance.stats.jackpotCount).toBe(2);
+        expect(instance.stats.lastJackpotAt?.toISOString()).toBe(at.toISOString());
+        expect(instance.resources[ResourceId.SHELLS].toString()).toBe(first.add(second).toString());
+    });
+
+    it('reads a file written before the jackpot stats as no jackpot yet', () => {
+        const instance = new GameInstance(makeJson());
+
+        expect(instance.stats.jackpotCount).toBe(0);
+        expect(instance.stats.lastJackpotAt).toBeNull();
+        expect(instance.toJson().stats.lastJackpotAt).toBeUndefined();
+    });
+
+    it('survives a serialize/deserialize cycle', () => {
+        const instance = new GameInstance(makeJson());
+        instance.applyJackpot(new Date('2026-10-14T12:00:00.000Z'));
+
+        const roundTripped = new GameInstance(instance.toJson());
+
+        expect(roundTripped.toJson().stats).toEqual(instance.toJson().stats);
+        expect(roundTripped.toJson().stats.lastJackpotAt).toBe('2026-10-14T12:00:00.000Z');
+    });
+});
+
 describe('toJson / constructor round-trip', () => {
     it('reproduces the same observable state after a serialize/deserialize cycle', () => {
         const original = new GameInstance(

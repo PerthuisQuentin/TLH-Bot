@@ -103,6 +103,27 @@ describe('leaderboardTool.execute', () => {
         expect(response).toContain('#2 <@p0> — 🌀 5 j (×1.05)');
     });
 
+    it('ranks by jackpots with the date of the last one under sort jackpots', async () => {
+        await writeGameInstances('g1', [
+            gameInstanceFixture('p0', '1000'),
+            {
+                ...gameInstanceFixture('p1', '10'),
+                stats: {
+                    maxShells: '10',
+                    totalCoral: '0',
+                    jackpotCount: 3,
+                    lastJackpotAt: '2026-10-12T18:32:50.108Z',
+                },
+            },
+        ]);
+
+        const response = await leaderboardTool.execute({ sort: 'jackpots' }, { guildId: 'g1' });
+
+        expect(response).toContain('tri : jackpots');
+        expect(response).toContain('#1 <@p1> — 🎰 3 · dernier le 12/10/2026');
+        expect(response).toContain('#2 <@p0> — 🎰 0');
+    });
+
     it('keeps the record-first line for the other sorts', async () => {
         await writeGameInstances('g1', [gameInstanceFixture('p0', '100', 5)]);
 

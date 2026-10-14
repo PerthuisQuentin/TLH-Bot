@@ -6,6 +6,12 @@ function formatLeaderboardEntry(entry: LeaderboardEntry, sort: LeaderboardSort):
     if (sort === LeaderboardSort.RINGS) {
         return `#${entry.rank} <@${entry.userId}> — 🌀 ${entry.growthRingDays} j (×${entry.growthRingsMultiplier.toFixed(2)}) · ${formatBigNum(entry.maxShells)} 🐚`;
     }
+    if (sort === LeaderboardSort.JACKPOTS) {
+        const last = entry.lastJackpotAt
+            ? ` · dernier le ${entry.lastJackpotAt.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
+            : '';
+        return `#${entry.rank} <@${entry.userId}> — 🎰 ${entry.jackpotCount}${last}`;
+    }
     return `#${entry.rank} <@${entry.userId}> — ${formatBigNum(entry.maxShells)} 🐚 *(${formatBigNum(entry.shells)} · +${formatBigNum(entry.shellsPerMessage)}/msg)*`;
 }
 

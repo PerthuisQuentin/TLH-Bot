@@ -8,17 +8,18 @@ Everything here reads the game rules from `app/idle/core/`, so a new upgrade or 
 
 `sim-common.ts` is not a tool: it holds what the simulations and the sandbox share, the CLI parsing, the table renderer and the naive player. Which level to buy next is not decided there but by the game's own purchase planner, `app/idle/core/purchase-planner.ts`, so the simulations and the in-game auto-buy rank purchases the same way.
 
-| Script                 | Purpose                                                                                                                                                                             | State                                    |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `analyze-upgrade.ts`   | Level-by-level cost / gain / payback table for one upgrade.                                                                                                                         | Ready.                                   |
-| `simulate-heat.ts`     | Replays heat scenarios against the real decay constants.                                                                                                                            | Ready.                                   |
-| `simulate-idle.ts`     | Simulates the progression curve over days.                                                                                                                                          | Ready.                                   |
-| `simulate-prestige.ts` | Simulates the prestige loop: coral, run lengths, coral upgrades.                                                                                                                    | Ready. Drives the shipped curves.        |
-| `sandbox.ts`           | Plays the idle game interactively on a compressed clock.                                                                                                                            | Ready. `npm run sandbox`.                |
-| `add-total-coral.ts`   | One-shot: backfills `stats.totalCoral` (coral balance plus the cost of every coral-priced level owned) on every stored player. Dry run by default, `--apply` to write, bot stopped. | One-shot, delete once run everywhere.    |
-| `render-ocean.ts`      | Renders the `/shells` ocean scene: contact sheets per level, or one scene by its key.                                                                                               | Ready.                                   |
-| `check-core-purity.ts` | Fails if `app/idle/core/` depends on a package outside its allowlist.                                                                                                               | Ready. Run through `npm run check:core`. |
-| `add-auto-buy-flag.ts` | One-shot: adds `autoBuyEnabled: true` to every stored player. Dry run by default, `--apply` to write, bot stopped.                                                                  | One-shot, delete once run everywhere.    |
+| Script                 | Purpose                                                                                                                                                                             | State                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `analyze-upgrade.ts`   | Level-by-level cost / gain / payback table for one upgrade.                                                                                                                         | Ready.                                                  |
+| `simulate-heat.ts`     | Replays heat scenarios against the real decay constants.                                                                                                                            | Ready.                                                  |
+| `simulate-idle.ts`     | Simulates the progression curve over days.                                                                                                                                          | Ready.                                                  |
+| `simulate-prestige.ts` | Simulates the prestige loop: coral, run lengths, coral upgrades.                                                                                                                    | Ready. Drives the shipped curves.                       |
+| `sandbox.ts`           | Plays the idle game interactively on a compressed clock.                                                                                                                            | Ready. `npm run sandbox`.                               |
+| `add-total-coral.ts`   | One-shot: backfills `stats.totalCoral` (coral balance plus the cost of every coral-priced level owned) on every stored player. Dry run by default, `--apply` to write, bot stopped. | One-shot, delete once run everywhere.                   |
+| `render-ocean.ts`      | Renders the `/shells` ocean scene: contact sheets per level, or one scene by its key.                                                                                               | Ready.                                                  |
+| `check-core-purity.ts` | Fails if `app/idle/core/` depends on a package outside its allowlist.                                                                                                               | Ready. Run through `npm run check:core`.                |
+| `add-auto-buy-flag.ts` | One-shot: adds `autoBuyEnabled: true` to every stored player. Dry run by default, `--apply` to write, bot stopped.                                                                  | One-shot, delete once run everywhere.                   |
+| `dump-bot-messages.ts` | One-shot: dumps every message the bot posted since a date to `bot-messages.json`, the source for backfilling the jackpot stats. Read-only, over REST.                               | One-shot, delete once the jackpot stats are backfilled. |
 
 ---
 
@@ -222,3 +223,18 @@ tsx scripts/render-ocean.ts --out=/some/dir
 Without `--levels`, it writes one `sheet-<level>.png` per level, sweeping it from its minimum to its maximum with the others held low, plus `sheet-all.png`, where every level rises together. Frames read left to right, then top to bottom; the gauge under each gives the level.
 
 The pinned hashes in `app/ocean/render.test.ts` fail on any visible change to the scene. Review the sheets before updating one.
+
+---
+
+## `dump-bot-messages.ts`
+
+Walks every channel and thread of every guild the bot is in (archived threads included) and writes every message the bot posted to `bot-messages.json` at the project root, gitignored: guild, channel, message ID, date and text. It exists to backfill `stats.jackpotCount` and `stats.lastJackpotAt`: the jackpot announcements are the only record of the jackpots won before those fields existed.
+
+```bash
+tsx --env-file=.env.prod scripts/dump-bot-messages.ts
+tsx --env-file=.env.prod scripts/dump-bot-messages.ts --since=2026-06-17 --guild=<id> --out=bot-messages.json
+```
+
+It only reads, over REST with no gateway login, so it runs next to the live bot. `--since` defaults to the day the jackpot shipped. A channel the bot cannot read is skipped and listed under `skipped` in the output. It pages through every message of every channel, so expect minutes, not seconds.
+
+Telling a jackpot announcement from a role promotion: both open on `<@userId>`. From 2026-09-08 each carries its own marker (🎉 jackpot, 🏅 promotion, see [shells.md](./shells.md#announcement-markers)); before that, a promotion names the role (`Loutre …`), and anything else opening on a mention is a jackpot.
